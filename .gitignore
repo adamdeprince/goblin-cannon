@@ -1,0 +1,9 @@
+build/
+.venv/
+cmake-build-*/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe

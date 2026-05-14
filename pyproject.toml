@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wbhf-radio-tools-private"
+version = "0.0.0"
+description = "Private Python tooling for local WBHF radio control and market-data demos."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+  "Private :: Do Not Upload",
+  "Programming Language :: Python :: 3",
+]
+dependencies = [
+  "grpcio>=1.66",
+  "grpcio-tools>=1.66",
+  "websockets>=12",
+  "tomli>=2; python_version < '3.11'",
+]
+
+[tool.setuptools]
+py-modules = []
+
+[tool.wbhf-radio-tools]
+private = true
+publish = false
+pypi_upload_guard = "The invalid Trove classifier 'Private :: Do Not Upload' is intentional."
