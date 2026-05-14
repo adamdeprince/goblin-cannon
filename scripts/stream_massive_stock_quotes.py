@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import os
 import sys
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from market_config import (
     SYMBOL_MIN_BYTE,
     TOTAL_SYMBOL_COUNT,
     Instrument,
+    ShadowBidConfig,
     ensure_python_grpc_stubs,
     load_demo_config,
     midpoint_to_units,
@@ -29,6 +31,7 @@ from market_config import (
     validate_market_symbols,
 )
 from update_demo_stock_bank import resolve_front_futures
+from market_shm import MarketDataShmProducer
 
 
 BASE254_RADIX = 254
@@ -74,6 +77,70 @@ class BankCache:
             return None
         value = self.prices_units[index]
         return value if value > 0 else None
+
+
+@dataclass
+class ShadowPriceState:
+    prev_units: int | None = None
+    prev_time_ms: float | None = None
+    last_sent_units: int | None = None
+    bank_generation: int = 0
+
+
+class ShadowBidder:
+    def __init__(self, config: ShadowBidConfig, instruments: list[Instrument]) -> None:
+        if config.k_cents <= 0:
+            raise ValueError("shadow_bid.k_cents must be positive")
+        if config.velocity_h_ms < 0:
+            raise ValueError("shadow_bid.velocity_h_ms must be non-negative")
+        self.config = config
+        self.by_symbol = {instrument.radio_symbol: instrument for instrument in instruments}
+        self.state: dict[int, ShadowPriceState] = {
+            instrument.radio_symbol: ShadowPriceState() for instrument in instruments
+        }
+
+    def sync_bank(self, cache: BankCache, instrument: Instrument) -> None:
+        state = self.state[instrument.radio_symbol]
+        if state.bank_generation == cache.generation and state.last_sent_units is not None:
+            return
+        base = cache.base_for_symbol(instrument.radio_symbol)
+        if base is None:
+            return
+        state.last_sent_units = base
+        state.bank_generation = cache.generation
+
+    def record_received(self, instrument: Instrument, units: int, now_ms: float) -> None:
+        state = self.state[instrument.radio_symbol]
+        state.prev_units = units
+        state.prev_time_ms = now_ms
+
+    def record_sent(self, instrument: Instrument, units: int) -> None:
+        self.state[instrument.radio_symbol].last_sent_units = units
+
+    def compute_bid_cents(self,
+                          instrument: Instrument,
+                          units_now: int,
+                          billable_bytes: int,
+                          now_ms: float) -> int:
+        if billable_bytes <= 0:
+            raise ValueError("billable_bytes must be positive")
+        if units_now <= 0:
+            return int(math.ceil(self.config.k_cents))
+
+        state = self.state[instrument.radio_symbol]
+        if state.last_sent_units is None or state.prev_units is None:
+            return max(1, int(math.ceil(self.config.k_cents)))
+        if state.last_sent_units <= 0 or state.prev_units <= 0:
+            return max(1, int(math.ceil(self.config.k_cents)))
+
+        dt_ms = 0.0 if state.prev_time_ms is None else max(0.0, now_ms - state.prev_time_ms)
+        last_sent_term = abs(math.log(units_now) - math.log(state.last_sent_units))
+        if dt_ms > 0.0:
+            velocity_term = self.config.velocity_h_ms * abs(math.log(units_now) - math.log(state.prev_units)) / dt_ms
+        else:
+            velocity_term = 0.0
+        raw_bid = self.config.k_cents * instrument.weight * (last_sent_term + velocity_term) / billable_bytes
+        return max(1, int(math.ceil(raw_bid)))
 
 
 def zigzag_encode_i64(value: int) -> int:
@@ -165,26 +232,27 @@ async def refresh_bank_forever(
         await asyncio.sleep(interval_seconds)
 
 
-async def enqueue_payload(stub: Any, pb2: Any, payload: bytes, grpc_timeout: float, bid_cents: int = 100) -> bool:
-    try:
-        ack = await stub.EnqueueMessage(pb2.TransmitMessage(payload=payload, bid_cents=bid_cents), timeout=grpc_timeout)
-        if not ack.ok:
-            print(f"transmitter rejected message: {ack.message}", file=sys.stderr)
-            return False
-        return True
-    except Exception as exc:  # noqa: BLE001 - backpressure or outage drops this quote.
-        print(f"transmitter enqueue failed: {exc}", file=sys.stderr)
-        return False
+class MarketDataPublisher:
+    def __init__(self, producer: MarketDataShmProducer) -> None:
+        self.producer = producer
+        self.dropped = 0
+
+    def publish(self, payload: bytes, bid_cents: int) -> bool:
+        accepted = self.producer.try_push(payload, bid_cents)
+        if not accepted:
+            self.dropped += 1
+            if self.dropped == 1 or self.dropped % 1000 == 0:
+                print(f"market shared-memory ring dropped {self.dropped} updates", file=sys.stderr)
+        return accepted
 
 
 async def stream_feed_once(
     spec: FeedSpec,
     api_key: str,
     cache: BankCache,
-    stub: Any,
-    pb2: Any,
+    bidder: ShadowBidder,
+    publisher: MarketDataPublisher,
     auth_timeout: float,
-    grpc_timeout: float,
 ) -> None:
     if websockets is None:
         raise RuntimeError("websockets is required. Install with: python3 -m pip install websockets")
@@ -207,29 +275,41 @@ async def stream_feed_once(
                 units = midpoint_to_units(event.get(spec.bid_field), event.get(spec.ask_field), instrument)
                 if units is None:
                     continue
+                now_ms = asyncio.get_running_loop().time() * 1000.0
                 if not cache.ready:
+                    bidder.record_received(instrument, units, now_ms)
                     skipped_no_bank += 1
                     if skipped_no_bank == 1 or skipped_no_bank % 1000 == 0:
                         print(f"{spec.name}: skipped {skipped_no_bank} quote updates waiting for bank data")
                     continue
+                bidder.sync_bank(cache, instrument)
                 base = cache.base_for_symbol(instrument.radio_symbol)
                 if base is None:
+                    bidder.record_received(instrument, units, now_ms)
                     continue
                 delta = units - base
                 try:
                     payload = encode_bank_symbol_delta(cache.bank, instrument.radio_symbol, delta)
                 except OverflowError as exc:
                     print(f"{spec.name}: skipping {instrument.symbol}: {exc}", file=sys.stderr)
+                    bidder.record_received(instrument, units, now_ms)
                     continue
-                await enqueue_payload(stub, pb2, payload, grpc_timeout)
+                if bidder.state[instrument.radio_symbol].last_sent_units == units:
+                    bidder.record_received(instrument, units, now_ms)
+                    continue
+                bid_cents = bidder.compute_bid_cents(instrument, units, len(payload), now_ms)
+                accepted = publisher.publish(payload, bid_cents)
+                bidder.record_received(instrument, units, now_ms)
+                if accepted:
+                    bidder.record_sent(instrument, units)
 
 
 async def stream_feed_forever(
     spec: FeedSpec,
     api_key: str,
     cache: BankCache,
-    stub: Any,
-    pb2: Any,
+    bidder: ShadowBidder,
+    publisher: MarketDataPublisher,
     args: argparse.Namespace,
 ) -> None:
     while True:
@@ -238,10 +318,9 @@ async def stream_feed_forever(
                 spec,
                 api_key,
                 cache,
-                stub,
-                pb2,
+                bidder,
+                publisher,
                 args.auth_timeout,
-                args.grpc_timeout,
             )
         except Exception as exc:  # noqa: BLE001 - reconnect unless the process is stopped.
             print(f"{spec.name}: websocket disconnected: {exc}", file=sys.stderr)
@@ -256,8 +335,12 @@ async def run(args: argparse.Namespace) -> None:
     config = load_demo_config(args.config)
     transmitter_address = args.transmitter or config.transmitter_address
     clients = read_clients_constant()
-    validate_market_symbols(config.instruments, clients)
-    instruments = resolve_front_futures(config.instruments, config, api_key, args.http_timeout)
+    selected_instruments = config.instruments
+    if args.asset_class:
+        allowed = {asset_class.lower() for asset_class in args.asset_class}
+        selected_instruments = [instrument for instrument in selected_instruments if instrument.asset_class in allowed]
+    validate_market_symbols(selected_instruments, clients)
+    instruments = resolve_front_futures(selected_instruments, config, api_key, args.http_timeout)
     market_symbol_count = TOTAL_SYMBOL_COUNT - clients
 
     try:
@@ -267,6 +350,8 @@ async def run(args: argparse.Namespace) -> None:
 
     pb2, pb2_grpc = ensure_python_grpc_stubs()
     cache = BankCache(args.bank, instruments, market_symbol_count)
+    bidder = ShadowBidder(config.shadow_bid, instruments)
+    publisher = MarketDataPublisher(MarketDataShmProducer(args.market_shm_path, args.market_shm_timeout))
     specs = [
         FeedSpec(
             name="stocks",
@@ -316,8 +401,11 @@ async def run(args: argparse.Namespace) -> None:
         tasks = [
             asyncio.create_task(refresh_bank_forever(stub, pb2, cache, args.bank_refresh_seconds, args.grpc_timeout))
         ]
-        tasks.extend(asyncio.create_task(stream_feed_forever(spec, api_key, cache, stub, pb2, args)) for spec in specs)
-        await asyncio.gather(*tasks)
+        tasks.extend(asyncio.create_task(stream_feed_forever(spec, api_key, cache, bidder, publisher, args)) for spec in specs)
+        try:
+            await asyncio.gather(*tasks)
+        finally:
+            publisher.producer.close()
 
 
 def parse_args() -> argparse.Namespace:
@@ -327,12 +415,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("bank", type=int, choices=(0, 1), help="bank delimiter to use for emitted messages")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="instrument config TOML")
     parser.add_argument("--transmitter", help="transmitter gRPC address; overrides config")
+    parser.add_argument("--market-shm-path", type=Path, default=Path("/dev/shm/wbhf_market_data_ring"))
+    parser.add_argument("--market-shm-timeout", type=float, default=5.0)
     parser.add_argument("--stock-websocket-url", help="Massive stocks websocket URL; overrides config")
     parser.add_argument("--future-websocket-url", help="Massive futures websocket URL; overrides config")
     parser.add_argument("--forex-websocket-url", help="Massive forex websocket URL; overrides config")
     parser.add_argument("--crypto-websocket-url", help="Massive crypto websocket URL; overrides config")
+    parser.add_argument(
+        "--asset-class",
+        action="append",
+        choices=("stock", "future", "currency", "crypto"),
+        help="limit streaming to one asset class; can be repeated",
+    )
     parser.add_argument("--http-timeout", type=float, default=3.0, help="Massive REST timeout for front futures")
-    parser.add_argument("--grpc-timeout", type=float, default=0.05, help="per-message gRPC timeout in seconds")
+    parser.add_argument("--grpc-timeout", type=float, default=0.05, help="bank-control gRPC timeout in seconds")
     parser.add_argument("--auth-timeout", type=float, default=10.0, help="websocket auth timeout in seconds")
     parser.add_argument("--bank-refresh-seconds", type=float, default=1.0, help="bank snapshot polling interval")
     parser.add_argument("--reconnect-seconds", type=float, default=1.0, help="delay before websocket reconnect")

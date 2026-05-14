@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <numeric>
 #include <stdexcept>
 #include <utility>
 
@@ -87,6 +88,23 @@ float branch_metric(std::span<const Observation> observations,
 
   confidence = confidence_count == 0U ? 0.0F : confidence_sum / static_cast<float>(confidence_count);
   return metric;
+}
+
+std::size_t default_traceback_bits(const PuncturedConvolutionalCodeConfig& config) noexcept {
+  return std::max<std::size_t>(5U * config.constraint_length, 24U);
+}
+
+void validate_streaming_puncture_pattern(const PuncturedConvolutionalCodeConfig& config) {
+  const auto period = config.puncture_pattern.size() / std::gcd<std::size_t>(config.puncture_pattern.size(), 2U);
+  std::size_t mother_index = 0;
+  for (std::size_t step = 0; step < period; ++step) {
+    const auto keep0 = config.puncture_pattern[mother_index % config.puncture_pattern.size()] != 0U;
+    const auto keep1 = config.puncture_pattern[(mother_index + 1U) % config.puncture_pattern.size()] != 0U;
+    if (!keep0 && !keep1) {
+      throw std::invalid_argument("streaming Viterbi requires each input bit to retain at least one coded bit");
+    }
+    mother_index = (mother_index + 2U) % config.puncture_pattern.size();
+  }
 }
 
 } // namespace
@@ -265,6 +283,149 @@ ViterbiDecodeResult SoftViterbiDecoder::decode(std::span<const SoftBit> coded_bi
 ViterbiDecodeResult SoftViterbiDecoder::decode_bytes(std::span<const SoftBit> coded_bits,
                                                      std::size_t output_bytes) const {
   return decode(coded_bits, output_bytes * 8U);
+}
+
+StreamingSoftViterbiDecoder::StreamingSoftViterbiDecoder(PuncturedConvolutionalCodeConfig config,
+                                                         std::size_t traceback_bits)
+    : config_(std::move(config)),
+      traceback_bits_(traceback_bits == 0U ? default_traceback_bits(config_) : traceback_bits),
+      states_(1U << (config_.constraint_length - 1U)),
+      state_mask_(states_ - 1U),
+      full_mask_((1U << config_.constraint_length) - 1U) {
+  validate(config_);
+  validate_streaming_puncture_pattern(config_);
+  if (traceback_bits_ < 8U) {
+    throw std::invalid_argument("streaming Viterbi traceback_bits must be at least 8");
+  }
+  reset();
+}
+
+void StreamingSoftViterbiDecoder::reset() {
+  constexpr float inf = std::numeric_limits<float>::infinity();
+  mother_bit_index_ = 0;
+  pending_.clear();
+  metrics_.assign(states_, inf);
+  next_metrics_.assign(states_, inf);
+  metrics_[0] = 0.0F;
+  history_.clear();
+}
+
+std::size_t StreamingSoftViterbiDecoder::observations_required_for_next_bit() const noexcept {
+  std::size_t required = 0;
+  for (std::uint8_t mother = 0; mother < 2U; ++mother) {
+    required += config_.puncture_pattern[(mother_bit_index_ + mother) % config_.puncture_pattern.size()] != 0U
+                    ? 1U
+                    : 0U;
+  }
+  return required;
+}
+
+void StreamingSoftViterbiDecoder::process_bit(std::span<const SoftBit> observations_in) {
+  std::array<Observation, 2> observation_storage{};
+  for (std::size_t i = 0; i < observations_in.size(); ++i) {
+    observation_storage[i] = {.mother_index = static_cast<std::uint8_t>(i),
+                              .bit = observations_in[i]};
+  }
+
+  if (observations_in.size() == 1U) {
+    const auto keep0 = config_.puncture_pattern[mother_bit_index_ % config_.puncture_pattern.size()] != 0U;
+    observation_storage[0].mother_index = keep0 ? 0U : 1U;
+  }
+
+  constexpr float inf = std::numeric_limits<float>::infinity();
+  std::fill(next_metrics_.begin(), next_metrics_.end(), inf);
+  std::vector<Decision> decisions(states_);
+
+  const auto observations = std::span<const Observation>(observation_storage).first(observations_in.size());
+  for (std::uint32_t previous = 0; previous < states_; ++previous) {
+    if (!std::isfinite(metrics_[previous])) {
+      continue;
+    }
+    for (std::uint8_t bit = 0; bit < 2U; ++bit) {
+      const auto reg = ((previous << 1U) | bit) & full_mask_;
+      const auto next_state = reg & state_mask_;
+      const auto expected0 = parity(reg & config_.generator0);
+      const auto expected1 = parity(reg & config_.generator1);
+      float confidence = 0.0F;
+      const auto metric = branch_metric(observations, expected0, expected1, confidence);
+      const auto candidate = metrics_[previous] + metric;
+      if (candidate < next_metrics_[next_state]) {
+        next_metrics_[next_state] = candidate;
+        decisions[next_state] = {.previous_state = static_cast<std::uint16_t>(previous),
+                                 .bit = bit,
+                                 .confidence = confidence,
+                                 .valid = true};
+      }
+    }
+  }
+
+  metrics_.swap(next_metrics_);
+  const auto best = std::min_element(metrics_.begin(), metrics_.end());
+  if (best != metrics_.end() && std::isfinite(*best) && *best > 1024.0F) {
+    const auto offset = *best;
+    for (auto& metric : metrics_) {
+      if (std::isfinite(metric)) {
+        metric -= offset;
+      }
+    }
+  }
+  history_.push_back(std::move(decisions));
+  mother_bit_index_ += 2U;
+}
+
+void StreamingSoftViterbiDecoder::emit_ready_bytes(std::vector<Token>& out) {
+  while (history_.size() >= traceback_bits_ + 8U) {
+    const auto best = std::min_element(metrics_.begin(), metrics_.end());
+    if (best == metrics_.end() || !std::isfinite(*best)) {
+      throw std::runtime_error("streaming Viterbi decoder could not find a valid path");
+    }
+
+    auto state = static_cast<std::uint32_t>(std::distance(metrics_.begin(), best));
+    std::vector<SoftBit> bits(history_.size());
+    for (std::size_t step = history_.size(); step-- > 0U;) {
+      const auto decision = history_[step][state];
+      if (!decision.valid) {
+        throw std::runtime_error("streaming Viterbi traceback encountered an invalid decision");
+      }
+      bits[step] = {.value = decision.bit,
+                    .certain = decision.confidence >= config_.decoded_bit_confidence_threshold,
+                    .confidence = decision.confidence};
+      state = decision.previous_state;
+    }
+
+    std::uint8_t value = 0;
+    bool certain = true;
+    float confidence = 1.0F;
+    for (std::size_t bit = 0; bit < 8U; ++bit) {
+      const auto soft = bits[bit];
+      value = static_cast<std::uint8_t>((value << 1U) | (soft.value & 1U));
+      confidence = std::min(confidence, soft.confidence);
+      certain = certain && soft.certain && soft.confidence >= config_.decoded_bit_confidence_threshold;
+    }
+    out.push_back({.value = value, .certain = certain, .confidence = confidence});
+    history_.erase(history_.begin(), history_.begin() + 8);
+  }
+}
+
+std::vector<Token> StreamingSoftViterbiDecoder::push(std::span<const SoftBit> coded_bits) {
+  pending_.insert(pending_.end(), coded_bits.begin(), coded_bits.end());
+
+  std::vector<Token> out;
+  std::size_t pending_offset = 0;
+  while (true) {
+    const auto required = observations_required_for_next_bit();
+    if (pending_.size() - pending_offset < required) {
+      break;
+    }
+    process_bit(std::span<const SoftBit>(pending_.data() + pending_offset, required));
+    pending_offset += required;
+    emit_ready_bytes(out);
+  }
+
+  if (pending_offset != 0U) {
+    pending_.erase(pending_.begin(), pending_.begin() + static_cast<std::ptrdiff_t>(pending_offset));
+  }
+  return out;
 }
 
 std::vector<std::uint8_t> convolutional_encode_bytes(std::span<const std::uint8_t> bytes,

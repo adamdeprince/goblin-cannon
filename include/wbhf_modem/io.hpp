@@ -64,7 +64,8 @@ class FileIqSink final : public IqSink {
 public:
   FileIqSink(const std::filesystem::path& path,
              SampleFormat format = SampleFormat::sc16_iq,
-             float scale = 0.95F);
+             float scale = 0.95F,
+             std::size_t pipe_capacity_bytes = 0);
   ~FileIqSink() override;
 
   FileIqSink(const FileIqSink&) = delete;
@@ -72,6 +73,7 @@ public:
 
   std::size_t write(std::span<const Complex> samples) override;
   void flush() override;
+  [[nodiscard]] std::size_t queued_bytes() const;
 
 private:
   SampleFormat format_;
@@ -85,13 +87,15 @@ class FileIqSource final : public IqSource {
 public:
   FileIqSource(const std::filesystem::path& path,
                SampleFormat format = SampleFormat::sc16_iq,
-               float scale = 0.95F);
+               float scale = 0.95F,
+               std::size_t pipe_capacity_bytes = 0);
   ~FileIqSource() override;
 
   FileIqSource(const FileIqSource&) = delete;
   FileIqSource& operator=(const FileIqSource&) = delete;
 
   std::size_t read(std::span<Complex> samples) override;
+  [[nodiscard]] std::size_t readable_bytes() const;
 
 private:
   SampleFormat format_;

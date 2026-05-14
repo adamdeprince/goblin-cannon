@@ -191,12 +191,14 @@ public:
   bool apply_pending_restart();
   bool apply_active_bank();
   [[nodiscard]] RealtimeTransmitResult push_samples(std::span<Complex> out);
+  void set_consumed_message_observer(DelimitedMessageObserver* observer) noexcept;
 
 private:
   std::shared_ptr<TransmitterControlState> control_;
   SpscRingBuffer<DelimitedMessage>& input_;
   std::unique_ptr<RealtimeTransmitter> transmitter_;
   std::uint64_t observed_bank_generation_ = static_cast<std::uint64_t>(-1);
+  DelimitedMessageObserver* observer_ = nullptr;
 };
 
 struct ReceiverControlServerConfig {

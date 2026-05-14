@@ -503,12 +503,54 @@ public:
           return {grpc::StatusCode::FAILED_PRECONDITION, "client receiver heartbeat is stale"};
         }
       }
-      if (!transmit_queue_->try_push(std::move(message))) {
-        return {grpc::StatusCode::RESOURCE_EXHAUSTED, "transmitter transmit queue is full"};
+      if (!log_queue_) {
+        if (!transmit_queue_->try_push(std::move(message))) {
+          return {grpc::StatusCode::RESOURCE_EXHAUSTED, "transmitter transmit queue is full"};
+        }
+        response->set_ok(true);
+        response->set_message("message enqueued");
+        response->set_generation(control_->active_bank().generation);
+        return grpc::Status::OK;
       }
-      log_enqueued_message(std::move(payload), bid_cents);
+
+      const auto bid_client_id = payload.size() >= 2U && is_client_symbol_byte(payload[1])
+          ? client_symbol_to_id(payload[1])
+          : static_cast<std::uint8_t>(0U);
+      BidMessage bid_message{.payload = payload,
+                             .bid_price = bid_cents,
+                             .client_id = bid_client_id,
+                             .has_client_id = false,
+                             .reply_ip = {},
+                             .reply_port = 0};
+      BidMessageIntakeResult intake_result;
+      {
+        std::scoped_lock lock(enqueue_intake_mutex_);
+        if (log_queue_mutex_) {
+          std::scoped_lock log_lock(*log_queue_mutex_);
+          intake_result = enqueue_intake_.submit(std::move(bid_message), *transmit_queue_, *log_queue_);
+        } else {
+          intake_result = enqueue_intake_.submit(std::move(bid_message), *transmit_queue_, *log_queue_);
+        }
+      }
+      if (intake_result.log_backpressure) {
+        return {grpc::StatusCode::RESOURCE_EXHAUSTED, "transmitter log queue is full"};
+      }
+      if (!intake_result.transmitted && !intake_result.queued_for_arbitration) {
+        if (intake_result.transmit_backpressure &&
+            intake_result.pending_bids == 0U &&
+            intake_result.logged_records == 0U) {
+          return {grpc::StatusCode::RESOURCE_EXHAUSTED, "transmitter transmit queue is full"};
+        }
+        response->set_ok(false);
+        response->set_message("message rejected by bid arbitration");
+        response->set_generation(control_->active_bank().generation);
+        return grpc::Status::OK;
+      }
+      if (intake_result.transmitted) {
+        log_enqueued_message(std::move(payload), bid_cents);
+      }
       response->set_ok(true);
-      response->set_message("message enqueued");
+      response->set_message(intake_result.transmitted ? "message enqueued" : "message queued for arbitration");
       response->set_generation(control_->active_bank().generation);
       return grpc::Status::OK;
     } catch (const std::exception& exception) {
@@ -676,6 +718,8 @@ private:
   std::function<std::optional<PriceBank>(std::uint8_t)> bank_price_provider_;
   std::array<std::uint64_t, Clients> client_expected_latency_ns_ = {};
   std::shared_ptr<ClientBudgetAccounting> accounting_;
+  BidMessageTransmitIntake enqueue_intake_;
+  std::mutex enqueue_intake_mutex_;
 };
 
 std::string host_from_listen_address(const std::string& listen_address) {
@@ -1149,6 +1193,7 @@ bool ControlledRealtimeTransmitter::apply_pending_restart() {
     return false;
   }
   transmitter_ = std::make_unique<RealtimeTransmitter>(restart->pipeline, input_);
+  transmitter_->set_consumed_message_observer(observer_);
   observed_bank_generation_ = static_cast<std::uint64_t>(-1);
   apply_active_bank();
   return true;
@@ -1174,6 +1219,13 @@ RealtimeTransmitResult ControlledRealtimeTransmitter::push_samples(std::span<Com
   }
   apply_active_bank();
   return transmitter_->push_samples(out);
+}
+
+void ControlledRealtimeTransmitter::set_consumed_message_observer(DelimitedMessageObserver* observer) noexcept {
+  observer_ = observer;
+  if (transmitter_ != nullptr) {
+    transmitter_->set_consumed_message_observer(observer_);
+  }
 }
 
 class ReceiverControlServer::Impl {

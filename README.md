@@ -147,7 +147,16 @@ scripts/update_demo_bank.py 0
 scripts/stream_massive_quotes.py 0
 ```
 
-`update_demo_bank.py` fetches current quote midpoints for every configured stock, front future, currency, and crypto pair, converts them into configured integer units, updates transmitter bank state through gRPC, then asks the transmitter to run `BankSwitch`; receivers learn the new bank cache over `ReceiverSession`. For currencies and crypto, both bank seeding and live streaming require bid/ask midpoint data. `stream_massive_quotes.py` subscribes to Massive stock, futures, forex, and crypto quote websockets and sends only the delta from the active banked base price over the transmitter gRPC queue. It waits until the active bank has nonzero bases before sending quote deltas.
+`update_demo_bank.py` fetches current quote midpoints for every configured stock, front future, currency, and crypto pair, converts them into configured integer units, updates transmitter bank state through gRPC, then asks the transmitter to run `BankSwitch`; receivers learn the new bank cache over `ReceiverSession`. For currencies and crypto, both bank seeding and live streaming require bid/ask midpoint data. `stream_massive_quotes.py` subscribes to Massive stock, futures, forex, and crypto quote websockets and writes market-data deltas into a small shared-memory SPSC ring, not the gRPC control plane. The sender drains that ring into the same one-winner bid auction used by client UDP messages, so market updates that cannot occupy the next radio slot compete as short-lived candidates and lower bids are discarded. It waits until the active bank has nonzero bases before sending quote deltas.
+
+Market-data shadow bids are computed from `[shadow_bid]` and per-instrument `weight` in `config/demo_instruments.toml`:
+
+```text
+shadow = K * W[i] * (abs(log(P_now) - log(P_last_sent))
+         + H * abs(log(P_now) - log(P_prev)) / dt_ms) / billable_bytes
+```
+
+When `P_last_sent` or `P_prev` is not known, the bridge uses `K` as the bid. Public market symbols are not charged against client budgets; their shadow bids only decide which candidate uses the next radio slot.
 
 For local hand testing, build the examples and start a loopback receiver/transmitter pair:
 
@@ -253,13 +262,13 @@ build/wbhf_radio_sender \
   --sample-format s16_stereo_iq
 ```
 
-For local FIFO testing, `scripts/start_pipe_radios.py` creates a named pipe, starts the sender and receiver, then calls `scripts/configure_local_radios.py` to push matching control state over gRPC. The default radio condition is 64QAM at 48 kHz sample rate, 48 kHz configured bandwidth, an explicit 24 ksym/s symbol rate to keep the modem at 2 samples/symbol, and 8x receiver oversampling as a CPU/headroom stress setting. By default the configurator updates the AES key on both processes, sets receiver permissions to market symbols plus `client_id`, seeds bank `0` on the sender, lets the receiver learn the bank over `ReceiverSession`, sets the sender to use bank `0`, and sends matching restart parameters. After configuration, the launcher starts `scripts/stream_massive_quotes.py 0` so Massive websocket midpoints are encoded and enqueued to the transmitter:
+For local FIFO testing, `scripts/start_pipe_radios.py` creates a named pipe, starts the sender and receiver, then calls `scripts/configure_local_radios.py` to push matching control state over gRPC. The default radio condition is 64QAM at 48 kHz sample rate, 48 kHz configured bandwidth, an explicit 24 ksym/s symbol rate to keep the modem at 2 samples/symbol, and 8x receiver oversampling as a CPU/headroom stress setting. By default the configurator updates the AES key on both processes, sets receiver permissions to market symbols plus `client_id`, seeds bank `0` on the sender, lets the receiver learn the bank over `ReceiverSession`, sets the sender to use bank `0`, and sends matching restart parameters. After configuration, the launcher starts `scripts/stream_massive_quotes.py 0` so Massive websocket midpoints are encoded into `/dev/shm/wbhf_market_data_ring` and consumed by the transmitter:
 
 ```sh
 scripts/start_pipe_radios.py --quote-destination-port 9001 --enqueue-test-message
 ```
 
-The default FIFO is `/tmp/wbhf_iq.pipe`, the default quote UDP target is `127.0.0.1:9001`, and the default sample format is interleaved little-endian signed 16-bit IQ (`sc16_iq`). Set `MASSIVE_KEY` before running the full demo, or pass `--no-market-stream` to run only the pipe radios. The sender drains its bounded JSONL log ring to `/tmp/wbhf_transmitter.log` by default and reads client latency and budget expectations from `config/client_latencies.conf` and `config/client_budgets.conf`.
+The default FIFO is `/tmp/wbhf_iq.pipe`, the default quote UDP target is `127.0.0.1:9001`, the default market shared-memory ring is `/dev/shm/wbhf_market_data_ring` with 256 burst-handoff slots, and the default sample format is interleaved little-endian signed 16-bit IQ (`sc16_iq`). The FIFO launcher uses direct POSIX file-descriptor I/O, 64-sample chunks, a 4096-byte pipe-capacity request, and sender pacing at the configured 48 kHz sample rate so the pipe cannot hide seconds of stale simulated IQ. Set `MASSIVE_KEY` before running the full demo, or pass `--no-market-stream` to run only the pipe radios. The sender drains its bounded JSONL log ring to `/tmp/wbhf_transmitter.log` by default and reads client latency and budget expectations from `config/client_latencies.conf` and `config/client_budgets.conf`.
 
 For an end-to-end software stack latency measurement, run:
 
@@ -267,7 +276,15 @@ For an end-to-end software stack latency measurement, run:
 MASSIVE_KEY=... scripts/benchmark_stack_latency.py --messages 16
 ```
 
-The benchmark starts the same FIFO radio pair with QAM64, 48 kHz bandwidth, and 8x receiver oversampling, waits for Massive-backed market enqueue flow, sends tagged client UDP messages into the transmitter, tails the JSONL log for receiver-reported client wire messages, and prints latency percentiles. Use `--no-market-stream` for a local-only smoke benchmark that skips the Massive websocket requirement.
+The benchmark starts the same FIFO radio pair with QAM64, 48 kHz bandwidth, and 8x receiver oversampling, waits for Massive-backed market shared-memory flow, sends tagged client UDP messages into the transmitter, tails the JSONL log for receiver-reported client wire messages, and prints latency percentiles. The JSONL stream includes `udp_ingress`, `udp_decision`, `transmitter_framer`, `receiver_client_message`, and periodic `iq_transport`/`rx_iq` telemetry so the benchmark can split enqueue, framer, radio, and report latency. Use `--no-market-stream` for a local-only smoke benchmark that skips the Massive websocket requirement.
+
+For a market-data bid-loss measurement, run:
+
+```sh
+MASSIVE_KEY=... scripts/benchmark_market_bid_loss.py --duration-seconds 60
+```
+
+That benchmark connects the FIFO sender/receiver pair, starts Massive websocket flow through the shared-memory market ring, tails transmitter JSONL decisions, and reports the fraction of market candidates rejected by the next-slot bid auction.
 
 ## Scope
 

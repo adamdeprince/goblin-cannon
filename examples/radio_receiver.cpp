@@ -40,6 +40,8 @@ struct Args {
   wbhf_modem::SampleFormat sample_format = wbhf_modem::SampleFormat::s16_stereo_iq;
   std::size_t chunk_samples = 256;
   float scale = 0.95F;
+  std::size_t pipe_capacity_bytes = 4096;
+  std::uint64_t iq_trace_interval_ms = 1000;
 };
 
 std::uint64_t epoch_nanos() {
@@ -293,6 +295,10 @@ Args parse_args(int argc, char** argv) {
       args.chunk_samples = static_cast<std::size_t>(std::stoul(value));
     } else if (key == "--scale") {
       args.scale = std::stof(value);
+    } else if (key == "--pipe-capacity-bytes") {
+      args.pipe_capacity_bytes = static_cast<std::size_t>(std::stoul(value));
+    } else if (key == "--iq-trace-interval-ms") {
+      args.iq_trace_interval_ms = static_cast<std::uint64_t>(std::stoull(value));
     } else {
       throw std::invalid_argument("unknown argument: " + key);
     }
@@ -332,7 +338,7 @@ int main(int argc, char** argv) {
     QuotePacketEmitter quote_emitter(receiver_control, quote_sink);
     ReceiverMessageObserver message_observer(quote_emitter, session_events);
     receiver.set_decoded_message_observer(&message_observer);
-    FileIqSource source(args.iq_input, args.sample_format, args.scale);
+    FileIqSource source(args.iq_input, args.sample_format, args.scale, args.pipe_capacity_bytes);
 
     receiver_server.start();
     std::thread session_thread([&] {
@@ -346,6 +352,8 @@ int main(int argc, char** argv) {
 
     std::vector<Complex> samples(args.chunk_samples);
     std::uint64_t decoded_messages = 0;
+    std::uint64_t consumed_samples = 0;
+    auto last_iq_trace = std::chrono::steady_clock::now();
     try {
       while (running.load()) {
         const auto n = source.read(samples);
@@ -354,6 +362,7 @@ int main(int argc, char** argv) {
           continue;
         }
         const auto result = receiver.push_samples(std::span<const Complex>(samples).first(n));
+        consumed_samples += result.consumed_samples;
         if (result.lock_lost) {
           session_events->push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::signal_event,
                                                     .timestamp_ns = epoch_nanos(),
@@ -373,6 +382,17 @@ int main(int argc, char** argv) {
         DelimitedMessage message;
         while (rx_messages.try_pop(message)) {
           ++decoded_messages;
+        }
+        if (args.iq_trace_interval_ms != 0U &&
+            std::chrono::steady_clock::now() - last_iq_trace >=
+                std::chrono::milliseconds(args.iq_trace_interval_ms)) {
+          session_events->push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::signal_event,
+                                                    .timestamp_ns = epoch_nanos(),
+                                                    .event_type = "rx_iq",
+                                                    .detail = "readable_bytes",
+                                                    .metric = static_cast<double>(source.readable_bytes()),
+                                                    .count = consumed_samples});
+          last_iq_trace = std::chrono::steady_clock::now();
         }
       }
     } catch (...) {

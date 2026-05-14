@@ -43,8 +43,10 @@ enum class LogEventType {
   udp_ingress,
   udp_decision,
   transmitter_enqueue,
+  transmitter_framer,
   receiver_client_message,
   receiver_signal,
+  iq_transport,
   budget_refund,
 };
 
@@ -130,12 +132,14 @@ public:
   void set_active_bank(std::uint8_t bank);
   void clear_active_bank_override() noexcept;
   [[nodiscard]] std::optional<std::uint8_t> active_bank_override() const noexcept { return active_bank_override_; }
+  void set_consumed_message_observer(DelimitedMessageObserver* observer) noexcept { observer_ = observer; }
   void reset();
 
 private:
   std::vector<std::uint8_t> current_;
   std::size_t current_offset_ = 0;
   std::optional<std::uint8_t> active_bank_override_ = std::nullopt;
+  DelimitedMessageObserver* observer_ = nullptr;
 };
 
 class BidMessageTransmitIntake {
@@ -228,6 +232,7 @@ public:
   void set_active_bank(std::uint8_t bank);
   void clear_active_bank_override() noexcept;
   [[nodiscard]] std::optional<std::uint8_t> active_bank_override() const noexcept;
+  void set_consumed_message_observer(DelimitedMessageObserver* observer) noexcept;
 
 private:
   void ensure_symbol_block(RealtimeTransmitResult& result);
@@ -256,7 +261,6 @@ public:
   void set_decoded_message_observer(DelimitedMessageObserver* observer) noexcept;
 
 private:
-  void try_decode_bytes(RealtimeReceiveResult& result);
   void reset_coded_stream();
   [[nodiscard]] bool process_decoded_tokens(std::span<const Token> tokens, RealtimeReceiveResult& result);
   [[nodiscard]] bool accept_sync_timestamp_byte(const Token& token, RealtimeReceiveResult& result);
@@ -265,12 +269,10 @@ private:
   RealtimePipelineConfig config_;
   SpscRingBuffer<DelimitedMessage>& output_;
   MessageStreamDeframer deframer_;
-  SoftViterbiDecoder viterbi_;
+  StreamingSoftViterbiDecoder viterbi_;
   Aes128CtrBitXor bit_xor_;
   RfStreamReceiver rf_;
   Constellation constellation_;
-  std::vector<SoftBit> coded_bits_;
-  std::size_t emitted_bytes_ = 0;
   std::array<std::uint8_t, 8> sync_timestamp_bytes_{};
   std::size_t sync_timestamp_offset_ = 0;
   bool sync_timestamp_validated_ = false;

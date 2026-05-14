@@ -34,6 +34,7 @@ class Instrument:
     minimum_price_increment: Decimal
     unit: str
     massive_symbol: str
+    weight: float
     front: bool = False
     description: str = ""
 
@@ -48,10 +49,17 @@ class MassiveConfig:
 
 
 @dataclass(frozen=True)
+class ShadowBidConfig:
+    k_cents: float = 10_000.0
+    velocity_h_ms: float = 5_000.0
+
+
+@dataclass(frozen=True)
 class DemoConfig:
     receiver_address: str
     transmitter_address: str
     massive: MassiveConfig
+    shadow_bid: ShadowBidConfig
     instruments: list[Instrument]
 
 
@@ -82,6 +90,76 @@ def default_massive_symbol(asset_class: str, symbol: str) -> str:
     return symbol
 
 
+def default_weight(asset_class: str, symbol: str) -> float:
+    if asset_class == "stock":
+        return {
+            "SPY": 5.0,
+            "QQQ": 5.0,
+            "NVDA": 4.5,
+            "AAPL": 4.0,
+            "MSFT": 4.0,
+            "TSLA": 3.5,
+            "AMZN": 3.5,
+            "META": 3.0,
+            "GOOGL": 3.0,
+            "SMH": 3.0,
+            "AVGO": 3.0,
+            "AMD": 2.5,
+            "IWM": 2.5,
+            "JPM": 2.0,
+            "XOM": 1.8,
+            "TLT": 1.8,
+            "GLD": 1.5,
+        }.get(symbol, 1.0)
+    if asset_class == "future":
+        return {
+            "ES": 5.0,
+            "NQ": 5.0,
+            "RTY": 2.5,
+            "YM": 2.0,
+            "ZN": 3.0,
+            "ZF": 2.5,
+            "ZT": 2.0,
+            "ZB": 2.0,
+            "CL": 2.5,
+            "GC": 2.0,
+            "HG": 1.5,
+            "6E": 3.0,
+            "6B": 2.0,
+            "6J": 2.0,
+        }.get(symbol, 1.0)
+    if asset_class == "currency":
+        return {
+            "EUR-USD": 4.0,
+            "USD-JPY": 3.5,
+            "GBP-USD": 3.0,
+            "EUR-GBP": 2.0,
+            "USD-CHF": 2.0,
+            "USD-CNH": 2.0,
+            "AUD-USD": 2.0,
+            "USD-CAD": 2.0,
+        }.get(symbol, 1.0)
+    if asset_class == "crypto":
+        return {
+            "BTC-USD": 3.0,
+            "ETH-USD": 2.5,
+            "BTC-USDT": 2.5,
+            "ETH-USDT": 2.0,
+            "BTC-EUR": 1.8,
+            "ETH-EUR": 1.5,
+            "SOL-USD": 1.5,
+            "BNB-USD": 1.2,
+            "XRP-USD": 1.0,
+            "DOGE-USD": 1.0,
+            "ADA-USD": 1.0,
+            "AVAX-USD": 1.0,
+            "LINK-USD": 1.0,
+            "BCH-USD": 1.0,
+            "LTC-USD": 1.0,
+        }.get(symbol, 1.0)
+    return 1.0
+
+
 def load_demo_config(path: Path = DEFAULT_CONFIG) -> DemoConfig:
     with path.open("rb") as f:
         data = tomllib.load(f)
@@ -94,6 +172,11 @@ def load_demo_config(path: Path = DEFAULT_CONFIG) -> DemoConfig:
         future_websocket_url=str(massive_raw.get("future_websocket_url", "wss://socket.massive.com/futures")),
         forex_websocket_url=str(massive_raw.get("forex_websocket_url", "wss://socket.massive.com/forex")),
         crypto_websocket_url=str(massive_raw.get("crypto_websocket_url", "wss://socket.massive.com/crypto")),
+    )
+    shadow_raw = data.get("shadow_bid", {})
+    shadow_bid = ShadowBidConfig(
+        k_cents=float(shadow_raw.get("k_cents", 10_000.0)),
+        velocity_h_ms=float(shadow_raw.get("velocity_h_ms", 5_000.0)),
     )
 
     instruments: list[Instrument] = []
@@ -109,6 +192,7 @@ def load_demo_config(path: Path = DEFAULT_CONFIG) -> DemoConfig:
                 minimum_price_increment=parse_increment(raw["minimum_price_increment"], symbol),
                 unit=str(raw.get("unit", "")),
                 massive_symbol=massive_symbol,
+                weight=float(raw.get("weight", default_weight(asset_class, symbol))),
                 front=bool(raw.get("front", False)),
                 description=str(raw.get("description", "")),
             )
@@ -118,6 +202,7 @@ def load_demo_config(path: Path = DEFAULT_CONFIG) -> DemoConfig:
         receiver_address=str(control.get("receiver_address", "127.0.0.1:50051")),
         transmitter_address=str(control.get("transmitter_address", "127.0.0.1:50052")),
         massive=massive,
+        shadow_bid=shadow_bid,
         instruments=instruments,
     )
 

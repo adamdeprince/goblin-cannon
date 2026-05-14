@@ -60,6 +60,39 @@ private:
   PuncturedConvolutionalCodeConfig config_;
 };
 
+class StreamingSoftViterbiDecoder {
+public:
+  explicit StreamingSoftViterbiDecoder(PuncturedConvolutionalCodeConfig config = {},
+                                       std::size_t traceback_bits = 0);
+
+  [[nodiscard]] const PuncturedConvolutionalCodeConfig& config() const noexcept { return config_; }
+  [[nodiscard]] std::vector<Token> push(std::span<const SoftBit> coded_bits);
+  void reset();
+
+private:
+  struct Decision {
+    std::uint16_t previous_state = 0;
+    std::uint8_t bit = 0;
+    float confidence = 0.0F;
+    bool valid = false;
+  };
+
+  [[nodiscard]] std::size_t observations_required_for_next_bit() const noexcept;
+  void process_bit(std::span<const SoftBit> observations);
+  void emit_ready_bytes(std::vector<Token>& out);
+
+  PuncturedConvolutionalCodeConfig config_;
+  std::size_t traceback_bits_ = 0;
+  std::uint32_t states_ = 0;
+  std::uint32_t state_mask_ = 0;
+  std::uint32_t full_mask_ = 0;
+  std::size_t mother_bit_index_ = 0;
+  std::vector<SoftBit> pending_;
+  std::vector<float> metrics_;
+  std::vector<float> next_metrics_;
+  std::vector<std::vector<Decision>> history_;
+};
+
 class Aes128CtrBitXor {
 public:
   explicit Aes128CtrBitXor(Aes128Key key, Aes128CtrCounter counter = {});

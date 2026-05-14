@@ -19,6 +19,7 @@ add_library(wbhf_modem
   src/frame.cpp
   src/integer_codec.cpp
   src/io.cpp
+  src/market_data_shm.cpp
   src/message_stream.cpp
   src/modem.cpp
   src/quote_udp.cpp

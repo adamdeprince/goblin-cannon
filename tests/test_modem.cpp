@@ -5,6 +5,7 @@
 #include "wbhf_modem/crypto.hpp"
 #include "wbhf_modem/integer_codec.hpp"
 #include "wbhf_modem/io.hpp"
+#include "wbhf_modem/market_data_shm.hpp"
 #include "wbhf_modem/modem.hpp"
 #include "wbhf_modem/message_stream.hpp"
 #include "wbhf_modem/quote_udp.hpp"
@@ -868,6 +869,54 @@ void test_bid_message_transmit_intake() {
         "bid intake did not log sent winner");
 }
 
+void test_market_data_shared_memory_ring() {
+  const auto suffix = std::chrono::steady_clock::now().time_since_epoch().count();
+  const auto path = std::filesystem::temp_directory_path() /
+                    ("wbhf_market_data_shm_test_" + std::to_string(suffix));
+  std::filesystem::remove(path);
+
+  MarketDataShmConfig config;
+  config.path = path;
+  config.capacity = 2;
+  config.payload_bytes = 16;
+  MarketDataShmConsumer consumer(config);
+  MarketDataShmProducer producer(path);
+
+  const std::array<std::uint8_t, 3> payload = {0, 2, 3};
+  check(producer.try_push(payload, 123U), "market shared-memory producer did not push payload");
+  BidMessage message;
+  check(consumer.try_pop(message), "market shared-memory consumer did not pop payload");
+  check(message.payload == std::vector<std::uint8_t>(payload.begin(), payload.end()) &&
+            message.bid_price == 123U && !message.has_client_id,
+        "market shared-memory payload mismatch");
+
+  const std::array<std::uint8_t, 2> low = {0, 4};
+  const std::array<std::uint8_t, 2> high = {1, 5};
+  const std::array<std::uint8_t, 2> overflow = {0, 6};
+  check(producer.try_push(low, 100U), "market shared-memory low push failed");
+  check(producer.try_push(high, 300U), "market shared-memory high push failed");
+  check(!producer.try_push(overflow, 1U), "market shared-memory did not reject full ring");
+  check(producer.stats().dropped_full == 1U, "market shared-memory full-drop stat mismatch");
+
+  BidMessageTransmitIntake intake;
+  SpscRingBuffer<DelimitedMessage> transmit_queue(1);
+  SpscRingBuffer<BidMessageLogRecord> log_queue(8);
+  check(transmit_queue.try_push(make_message(0, 1, 99)), "failed to seed market auction transmit queue");
+
+  while (consumer.try_pop(message)) {
+    (void)intake.submit(std::move(message), transmit_queue, log_queue);
+  }
+  DelimitedMessage transmitted;
+  check(transmit_queue.try_pop(transmitted), "failed to clear seeded market transmit queue");
+  const auto pumped = intake.pump(transmit_queue, log_queue);
+  check(pumped.transmitted, "market shared-memory auction did not transmit winner");
+  check(transmit_queue.try_pop(transmitted), "market shared-memory auction winner missing");
+  check(transmitted.bytes == std::vector<std::uint8_t>(high.begin(), high.end()),
+        "market shared-memory auction chose wrong winner");
+
+  std::filesystem::remove(path);
+}
+
 void test_client_udp_message_handler() {
   check(client_id_to_symbol(0) == 256U - Clients, "client symbol base mismatch");
   check(client_id_to_symbol(Clients - 1U) == 255U, "last client symbol mismatch");
@@ -1272,6 +1321,26 @@ void exercise_convolutional_round_trip(PuncturedConvolutionalCodeConfig config) 
   for (std::size_t i = 0; i < payload.size(); ++i) {
     check(decoded.bytes[i].value == payload[i], "Viterbi round trip byte mismatch");
     check(decoded.bytes[i].certain, "Viterbi clean round trip should be certain");
+  }
+
+  std::vector<std::uint8_t> stream_payload = payload;
+  stream_payload.insert(stream_payload.end(), 16U, 0U);
+  auto stream_coded = convolutional_encode_bytes(stream_payload, config);
+  auto stream_scrambled = aes128_ctr_xor_bits(stream_coded, key);
+  auto stream_soft = hard_bits_to_soft(stream_scrambled);
+  auto stream_descrambled = aes128_ctr_descramble_soft_bits(stream_soft, key);
+  StreamingSoftViterbiDecoder streaming_decoder(config);
+  std::vector<Token> stream_tokens;
+  for (std::size_t offset = 0; offset < stream_descrambled.size();) {
+    const auto n = std::min<std::size_t>(7U, stream_descrambled.size() - offset);
+    auto next = streaming_decoder.push(std::span<const SoftBit>(stream_descrambled).subspan(offset, n));
+    stream_tokens.insert(stream_tokens.end(), next.begin(), next.end());
+    offset += n;
+  }
+  check(stream_tokens.size() >= payload.size(), "streaming Viterbi did not emit enough delayed bytes");
+  for (std::size_t i = 0; i < payload.size(); ++i) {
+    check(stream_tokens[i].value == payload[i], "streaming Viterbi round trip byte mismatch");
+    check(stream_tokens[i].certain, "streaming Viterbi clean round trip should be certain");
   }
 }
 
@@ -2159,6 +2228,7 @@ int main() {
   test_message_stream_delimiters_across_payload_frames();
   test_message_framer_active_bank_override();
   test_bid_message_transmit_intake();
+  test_market_data_shared_memory_ring();
   test_client_udp_message_handler();
   test_client_budget_accounting();
   test_client_udp_budget_rejection();

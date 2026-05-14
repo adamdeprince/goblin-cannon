@@ -2,10 +2,17 @@
 
 #include <algorithm>
 #include <bit>
+#include <cerrno>
 #include <cstring>
-#include <fstream>
 #include <limits>
 #include <stdexcept>
+#include <string>
+#include <system_error>
+
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace wbhf_modem {
 
@@ -39,16 +46,108 @@ float get_f32(std::span<const std::uint8_t> in) {
   return value;
 }
 
+std::string errno_message(const std::string& prefix) {
+  return prefix + ": " + std::strerror(errno);
+}
+
+int open_fd(const std::filesystem::path& path, int flags, const char* role) {
+#ifdef O_CLOEXEC
+  flags |= O_CLOEXEC;
+#endif
+  int fd = -1;
+  do {
+    fd = ::open(path.c_str(), flags, 0666);
+  } while (fd < 0 && errno == EINTR);
+  if (fd < 0) {
+    throw std::runtime_error(errno_message("failed to open IQ " + std::string(role) + ": " + path.string()));
+  }
+#ifndef O_CLOEXEC
+  (void)::fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+  return fd;
+}
+
+void close_fd(int fd) noexcept {
+  if (fd < 0) {
+    return;
+  }
+  while (::close(fd) != 0 && errno == EINTR) {
+  }
+}
+
+bool is_fifo_fd(int fd) {
+  struct stat st {};
+  if (::fstat(fd, &st) != 0) {
+    throw std::runtime_error(errno_message("failed to stat IQ file descriptor"));
+  }
+  return S_ISFIFO(st.st_mode);
+}
+
+void set_pipe_capacity_if_fifo(int fd, std::size_t capacity_bytes) {
+  if (capacity_bytes == 0U || !is_fifo_fd(fd)) {
+    return;
+  }
+#ifdef F_SETPIPE_SZ
+  const auto requested = static_cast<int>(std::min<std::size_t>(
+      capacity_bytes,
+      static_cast<std::size_t>(std::numeric_limits<int>::max())));
+  if (::fcntl(fd, F_SETPIPE_SZ, requested) < 0) {
+    throw std::runtime_error(errno_message("failed to set FIFO pipe capacity"));
+  }
+#else
+  (void)fd;
+  throw std::runtime_error("FIFO pipe capacity control is not supported on this platform");
+#endif
+}
+
+void write_all(int fd, std::span<const std::uint8_t> bytes) {
+  std::size_t offset = 0;
+  while (offset < bytes.size()) {
+    const auto remaining = bytes.size() - offset;
+    const auto written = ::write(fd, bytes.data() + offset, remaining);
+    if (written < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      throw std::runtime_error(errno_message("failed to write IQ samples"));
+    }
+    if (written == 0) {
+      throw std::runtime_error("failed to write IQ samples: zero-byte write");
+    }
+    offset += static_cast<std::size_t>(written);
+  }
+}
+
+std::size_t pending_pipe_bytes(int fd) {
+  int bytes = 0;
+  if (::ioctl(fd, FIONREAD, &bytes) != 0 || bytes < 0) {
+    return 0U;
+  }
+  return static_cast<std::size_t>(bytes);
+}
+
 } // namespace
 
 struct FileIqSink::Impl {
-  explicit Impl(const std::filesystem::path& path) : stream(path, std::ios::binary) {}
-  std::ofstream stream;
+  explicit Impl(const std::filesystem::path& path, std::size_t pipe_capacity_bytes)
+      : fd(open_fd(path, O_WRONLY | O_CREAT | O_TRUNC, "sink")) {
+    set_pipe_capacity_if_fifo(fd, pipe_capacity_bytes);
+  }
+
+  ~Impl() { close_fd(fd); }
+
+  int fd = -1;
 };
 
 struct FileIqSource::Impl {
-  explicit Impl(const std::filesystem::path& path) : stream(path, std::ios::binary) {}
-  std::ifstream stream;
+  explicit Impl(const std::filesystem::path& path, std::size_t pipe_capacity_bytes)
+      : fd(open_fd(path, O_RDONLY, "source")) {
+    set_pipe_capacity_if_fifo(fd, pipe_capacity_bytes);
+  }
+
+  ~Impl() { close_fd(fd); }
+
+  int fd = -1;
 };
 
 CallbackIqSink::CallbackIqSink(WriteCallback write, FlushCallback flush)
@@ -78,17 +177,15 @@ std::size_t CallbackIqSource::read(std::span<Complex> samples) {
   return read_(samples);
 }
 
-FileIqSink::FileIqSink(const std::filesystem::path& path, SampleFormat format, float scale)
+FileIqSink::FileIqSink(const std::filesystem::path& path,
+                       SampleFormat format,
+                       float scale,
+                       std::size_t pipe_capacity_bytes)
     : format_(format), scale_(scale), impl_(nullptr) {
   if (scale_ <= 0.0F) {
     throw std::invalid_argument("scale must be positive");
   }
-  impl_ = new Impl(path);
-  if (!impl_->stream) {
-    delete impl_;
-    impl_ = nullptr;
-    throw std::runtime_error("failed to open IQ sink: " + path.string());
-  }
+  impl_ = new Impl(path, pipe_capacity_bytes);
 }
 
 FileIqSink::~FileIqSink() {
@@ -99,29 +196,27 @@ std::size_t FileIqSink::write(std::span<const Complex> samples) {
   const auto bytes_per_sample = encoded_sample_size_bytes(format_);
   buffer_.resize(samples.size() * bytes_per_sample);
   const auto bytes = encode_samples(samples, format_, scale_, buffer_);
-  impl_->stream.write(reinterpret_cast<const char*>(buffer_.data()), static_cast<std::streamsize>(bytes));
-  if (!impl_->stream) {
-    throw std::runtime_error("failed to write IQ samples");
-  }
+  write_all(impl_->fd, std::span<const std::uint8_t>(buffer_.data(), bytes));
   return samples.size();
 }
 
 void FileIqSink::flush() {
-  impl_->stream.flush();
 }
 
-FileIqSource::FileIqSource(const std::filesystem::path& path, SampleFormat format, float scale)
+std::size_t FileIqSink::queued_bytes() const {
+  return impl_ == nullptr ? 0U : pending_pipe_bytes(impl_->fd);
+}
+
+FileIqSource::FileIqSource(const std::filesystem::path& path,
+                           SampleFormat format,
+                           float scale,
+                           std::size_t pipe_capacity_bytes)
     : format_(format), inverse_scale_(1.0F), impl_(nullptr) {
   if (scale <= 0.0F) {
     throw std::invalid_argument("scale must be positive");
   }
   inverse_scale_ = 1.0F / scale;
-  impl_ = new Impl(path);
-  if (!impl_->stream) {
-    delete impl_;
-    impl_ = nullptr;
-    throw std::runtime_error("failed to open IQ source: " + path.string());
-  }
+  impl_ = new Impl(path, pipe_capacity_bytes);
 }
 
 FileIqSource::~FileIqSource() {
@@ -130,13 +225,31 @@ FileIqSource::~FileIqSource() {
 
 std::size_t FileIqSource::read(std::span<Complex> samples) {
   const auto bytes_per_sample = encoded_sample_size_bytes(format_);
-  buffer_.resize(samples.size() * bytes_per_sample);
-  impl_->stream.read(reinterpret_cast<char*>(buffer_.data()), static_cast<std::streamsize>(buffer_.size()));
-  const auto bytes = static_cast<std::size_t>(impl_->stream.gcount());
-  if (bytes == 0U && impl_->stream.eof()) {
-    impl_->stream.clear();
+  const auto previous_pending = buffer_.size();
+  buffer_.resize(previous_pending + samples.size() * bytes_per_sample);
+  ssize_t read_bytes = 0;
+  do {
+    read_bytes = ::read(impl_->fd,
+                        buffer_.data() + previous_pending,
+                        buffer_.size() - previous_pending);
+  } while (read_bytes < 0 && errno == EINTR);
+  if (read_bytes < 0) {
+    throw std::runtime_error(errno_message("failed to read IQ samples"));
   }
-  return decode_samples(std::span<const std::uint8_t>(buffer_.data(), bytes), format_, inverse_scale_, samples);
+  buffer_.resize(previous_pending + static_cast<std::size_t>(read_bytes));
+  const auto complete_bytes = (buffer_.size() / bytes_per_sample) * bytes_per_sample;
+  const auto decoded = decode_samples(std::span<const std::uint8_t>(buffer_.data(), complete_bytes),
+                                      format_,
+                                      inverse_scale_,
+                                      samples);
+  if (complete_bytes != 0U) {
+    buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(complete_bytes));
+  }
+  return decoded;
+}
+
+std::size_t FileIqSource::readable_bytes() const {
+  return impl_ == nullptr ? 0U : pending_pipe_bytes(impl_->fd) + buffer_.size();
 }
 
 std::size_t encoded_sample_size_bytes(SampleFormat format) {

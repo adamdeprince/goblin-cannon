@@ -4,6 +4,8 @@
 #include "wbhf_modem/client_udp.hpp"
 #include "wbhf_modem/control_server.hpp"
 #include "wbhf_modem/io.hpp"
+#include "wbhf_modem/market_data_shm.hpp"
+#include "wbhf_modem/symbols.hpp"
 
 #include <array>
 #include <atomic>
@@ -21,6 +23,7 @@
 #include <string>
 #include <thread>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -41,7 +44,13 @@ struct Args {
   std::filesystem::path latency_config_file;
   std::filesystem::path budget_config_file = "config/client_budgets.conf";
   std::filesystem::path client_udp_config_file;
+  std::filesystem::path market_shm_path;
   std::size_t log_capacity = 65536;
+  std::size_t pipe_capacity_bytes = 4096;
+  std::uint32_t market_shm_capacity = 256;
+  std::uint32_t market_shm_payload_bytes = 64;
+  double pace_sample_rate_hz = 0.0;
+  std::uint64_t iq_trace_interval_ms = 1000;
 };
 
 const char* event_type_name(wbhf_modem::LogEventType event_type) noexcept {
@@ -52,10 +61,14 @@ const char* event_type_name(wbhf_modem::LogEventType event_type) noexcept {
     return "udp_decision";
   case wbhf_modem::LogEventType::transmitter_enqueue:
     return "transmitter_enqueue";
+  case wbhf_modem::LogEventType::transmitter_framer:
+    return "transmitter_framer";
   case wbhf_modem::LogEventType::receiver_client_message:
     return "receiver_client_message";
   case wbhf_modem::LogEventType::receiver_signal:
     return "receiver_signal";
+  case wbhf_modem::LogEventType::iq_transport:
+    return "iq_transport";
   case wbhf_modem::LogEventType::budget_refund:
     return "budget_refund";
   }
@@ -84,6 +97,25 @@ const char* status_name(wbhf_modem::BidMessageLogStatus status) noexcept {
   return "unknown";
 }
 
+wbhf_modem::ClientUdpStatusCode client_status_code_for_log(wbhf_modem::BidMessageLogStatus status) noexcept {
+  switch (status) {
+  case wbhf_modem::BidMessageLogStatus::sent:
+    return wbhf_modem::ClientUdpStatusCode::message_sent;
+  case wbhf_modem::BidMessageLogStatus::rejected:
+    return wbhf_modem::ClientUdpStatusCode::insufficient_bid;
+  case wbhf_modem::BidMessageLogStatus::invalid_message_format:
+    return wbhf_modem::ClientUdpStatusCode::invalid_message_format;
+  case wbhf_modem::BidMessageLogStatus::budget_exhausted:
+    return wbhf_modem::ClientUdpStatusCode::insufficient_budget;
+  case wbhf_modem::BidMessageLogStatus::unauthorized_source:
+  case wbhf_modem::BidMessageLogStatus::expired_refunded:
+  case wbhf_modem::BidMessageLogStatus::delivery_matched:
+  case wbhf_modem::BidMessageLogStatus::delivery_unmatched:
+    break;
+  }
+  return wbhf_modem::ClientUdpStatusCode::invalid_message_format;
+}
+
 std::string payload_hex(const std::vector<std::uint8_t>& payload) {
   std::ostringstream out;
   out << std::hex << std::setfill('0');
@@ -97,6 +129,84 @@ std::uint64_t epoch_nanos() {
   const auto now = std::chrono::system_clock::now().time_since_epoch();
   return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
 }
+
+class SamplePacer {
+public:
+  explicit SamplePacer(double sample_rate_hz)
+      : sample_rate_hz_(sample_rate_hz),
+        start_(std::chrono::steady_clock::now()) {}
+
+  void wait_until(std::uint64_t produced_samples) {
+    if (sample_rate_hz_ <= 0.0) {
+      return;
+    }
+    const auto elapsed_ns = static_cast<std::int64_t>(
+        (static_cast<long double>(produced_samples) * 1'000'000'000.0L) /
+        static_cast<long double>(sample_rate_hz_));
+    const auto target = start_ + std::chrono::nanoseconds(elapsed_ns);
+    const auto now = std::chrono::steady_clock::now();
+    if (target > now) {
+      std::this_thread::sleep_until(target);
+    } else if (now - target > std::chrono::milliseconds(100)) {
+      start_ = now - std::chrono::nanoseconds(elapsed_ns);
+    }
+  }
+
+private:
+  double sample_rate_hz_ = 0.0;
+  std::chrono::steady_clock::time_point start_;
+};
+
+class TransmitFramerTraceObserver final : public wbhf_modem::DelimitedMessageObserver {
+public:
+  TransmitFramerTraceObserver(std::shared_ptr<wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>> log_queue,
+                              std::shared_ptr<std::mutex> log_queue_mutex)
+      : log_queue_(std::move(log_queue)),
+        log_queue_mutex_(std::move(log_queue_mutex)) {}
+
+  void on_delimited_message(const wbhf_modem::DelimitedMessage& message) override {
+    wbhf_modem::BidMessageLogRecord record;
+    record.event_type = wbhf_modem::LogEventType::transmitter_framer;
+    record.local_timestamp_ns = epoch_nanos();
+    record.payload = message.bytes;
+    record.status = wbhf_modem::BidMessageLogStatus::sent;
+    if (message.bytes.size() >= 2U && wbhf_modem::is_client_symbol_byte(message.bytes[1])) {
+      record.client_id = wbhf_modem::client_symbol_to_id(message.bytes[1]);
+      record.has_client_id = true;
+    }
+    std::scoped_lock lock(*log_queue_mutex_);
+    (void)log_queue_->try_push(std::move(record));
+  }
+
+private:
+  std::shared_ptr<wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>> log_queue_;
+  std::shared_ptr<std::mutex> log_queue_mutex_;
+};
+
+class ClientBidStatusObserver final : public wbhf_modem::BidMessageLogObserver {
+public:
+  explicit ClientBidStatusObserver(std::shared_ptr<wbhf_modem::ClientUdpStatusSink> status_sink)
+      : status_sink_(std::move(status_sink)) {}
+
+  void on_bid_message_log(const wbhf_modem::BidMessageLogRecord& record) override {
+    if (!status_sink_ || record.event_type != wbhf_modem::LogEventType::udp_decision) {
+      return;
+    }
+    if (record.reply_ip.empty() || record.reply_port == 0U) {
+      return;
+    }
+    if (record.status == wbhf_modem::BidMessageLogStatus::unauthorized_source) {
+      return;
+    }
+    status_sink_->send_client_status({.ip = record.reply_ip, .port = record.reply_port},
+                                     client_status_code_for_log(record.status),
+                                     static_cast<std::uint32_t>(record.bid_price),
+                                     static_cast<std::uint32_t>(record.winning_bid_price));
+  }
+
+private:
+  std::shared_ptr<wbhf_modem::ClientUdpStatusSink> status_sink_;
+};
 
 std::string json_escape(std::string_view value) {
   std::ostringstream out;
@@ -221,8 +331,20 @@ Args parse_args(int argc, char** argv) {
       args.budget_config_file = value;
     } else if (key == "--client-udp-config") {
       args.client_udp_config_file = value;
+    } else if (key == "--market-shm-path") {
+      args.market_shm_path = value;
+    } else if (key == "--market-shm-capacity") {
+      args.market_shm_capacity = static_cast<std::uint32_t>(std::stoul(value));
+    } else if (key == "--market-shm-payload-bytes") {
+      args.market_shm_payload_bytes = static_cast<std::uint32_t>(std::stoul(value));
     } else if (key == "--log-capacity") {
       args.log_capacity = static_cast<std::size_t>(std::stoul(value));
+    } else if (key == "--pipe-capacity-bytes") {
+      args.pipe_capacity_bytes = static_cast<std::size_t>(std::stoul(value));
+    } else if (key == "--pace-sample-rate-hz") {
+      args.pace_sample_rate_hz = std::stod(value);
+    } else if (key == "--iq-trace-interval-ms") {
+      args.iq_trace_interval_ms = static_cast<std::uint64_t>(std::stoull(value));
     } else {
       throw std::invalid_argument("unknown argument: " + key);
     }
@@ -232,6 +354,15 @@ Args parse_args(int argc, char** argv) {
   }
   if (args.log_capacity == 0U) {
     throw std::invalid_argument("log-capacity must be positive");
+  }
+  if (args.market_shm_capacity == 0U) {
+    throw std::invalid_argument("market-shm-capacity must be positive");
+  }
+  if (args.market_shm_payload_bytes < 2U) {
+    throw std::invalid_argument("market-shm-payload-bytes must be at least 2");
+  }
+  if (args.pace_sample_rate_hz < 0.0) {
+    throw std::invalid_argument("pace-sample-rate-hz must be non-negative");
   }
   return args;
 }
@@ -249,6 +380,9 @@ int main(int argc, char** argv) {
     auto tx_queue = std::make_shared<SpscRingBuffer<DelimitedMessage>>(4096);
     auto log_queue = std::make_shared<SpscRingBuffer<BidMessageLogRecord>>(args.log_capacity);
     auto log_queue_mutex = std::make_shared<std::mutex>();
+    BidMessageTransmitIntake shared_bid_intake;
+    auto client_status_sink = std::make_shared<KernelClientUdpStatusSink>();
+    ClientBidStatusObserver client_status_observer(client_status_sink);
     auto transmitter_control = std::make_shared<TransmitterControlState>();
     ClientExpectedLatenciesNs expected_latencies{};
     expected_latencies.fill(5'000'000U);
@@ -269,6 +403,8 @@ int main(int argc, char** argv) {
          .client_expected_latency_ns = expected_latencies,
          .accounting = accounting});
     ControlledRealtimeTransmitter transmitter(transmitter_control, *tx_queue);
+    TransmitFramerTraceObserver framer_trace(log_queue, log_queue_mutex);
+    transmitter.set_consumed_message_observer(&framer_trace);
 
     transmitter_server.start();
     std::cout << "transmitter gRPC: " << transmitter_server.bound_address() << '\n'
@@ -280,8 +416,14 @@ int main(int argc, char** argv) {
               << '\n'
               << "budget config: " << args.budget_config_file
               << '\n';
+    if (!args.market_shm_path.empty()) {
+      std::cout << "market data shared memory: " << args.market_shm_path
+                << " capacity=" << args.market_shm_capacity
+                << " payload_bytes=" << args.market_shm_payload_bytes << '\n';
+    }
 
-    FileIqSink sink(args.iq_output, args.sample_format, args.scale);
+    FileIqSink sink(args.iq_output, args.sample_format, args.scale, args.pipe_capacity_bytes);
+    SamplePacer pacer(args.pace_sample_rate_hz);
     std::thread log_thread([&] {
       log_writer_loop(*log_queue, args.log_file);
     });
@@ -300,24 +442,66 @@ int main(int argc, char** argv) {
     std::thread client_udp_thread;
     if (!args.client_udp_config_file.empty()) {
       ClientUdpIngressConfig client_udp_config = load_client_udp_ingress_config(args.client_udp_config_file);
-      auto status_sink = std::make_shared<KernelClientUdpStatusSink>();
       auto socket = std::make_unique<ClientUdpIngressSocket>(client_udp_config,
-                                                             status_sink,
+                                                             client_status_sink,
                                                              transmitter_control,
                                                              accounting);
       client_udp_thread = std::thread([&, socket = std::move(socket)] mutable {
-        BidMessageTransmitIntake intake;
         while (running.load()) {
-          const auto received = socket->poll_once(intake, *tx_queue, *log_queue);
-          const auto pumped = socket->pump_pending(intake, *tx_queue, *log_queue);
+          ClientUdpHandleResult received;
+          BidMessageIntakeResult pumped;
+          {
+            std::scoped_lock lock(*log_queue_mutex);
+            received = socket->poll_once(shared_bid_intake, *tx_queue, *log_queue);
+            pumped = socket->pump_pending(shared_bid_intake, *tx_queue, *log_queue);
+          }
           if (!received.accepted && !received.rejected && !pumped.transmitted && !pumped.budget_rejected) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
           }
         }
       });
     }
+    std::thread market_shm_thread;
+    if (!args.market_shm_path.empty()) {
+      MarketDataShmConfig market_config;
+      market_config.path = args.market_shm_path;
+      market_config.capacity = args.market_shm_capacity;
+      market_config.payload_bytes = args.market_shm_payload_bytes;
+      auto consumer = std::make_unique<MarketDataShmConsumer>(market_config);
+      market_shm_thread = std::thread([&, consumer = std::move(consumer)] mutable {
+        while (running.load()) {
+          bool did_work = false;
+          {
+            std::scoped_lock lock(*log_queue_mutex);
+            BidMessage message;
+            std::uint32_t drained = 0;
+            while (drained < args.market_shm_capacity && consumer->try_pop(message)) {
+              const auto result = shared_bid_intake.submit(std::move(message),
+                                                           *tx_queue,
+                                                           *log_queue,
+                                                           &client_status_observer,
+                                                           accounting.get());
+              did_work = true;
+              did_work = did_work || result.transmitted || result.queued_for_arbitration ||
+                         result.logged_records != 0U || result.budget_rejected;
+              ++drained;
+            }
+            const auto pumped = shared_bid_intake.pump(*tx_queue,
+                                                       *log_queue,
+                                                       &client_status_observer,
+                                                       accounting.get());
+            did_work = did_work || pumped.transmitted || pumped.budget_rejected ||
+                       pumped.logged_records != 0U;
+          }
+          if (!did_work) {
+            std::this_thread::sleep_for(std::chrono::microseconds(250));
+          }
+        }
+      });
+    }
     std::vector<Complex> samples(args.chunk_samples);
     std::uint64_t produced_samples = 0;
+    auto last_iq_trace = std::chrono::steady_clock::now();
     try {
       while (running.load()) {
         const auto tx = transmitter.push_samples(samples);
@@ -326,8 +510,28 @@ int main(int argc, char** argv) {
           continue;
         }
         const auto out = std::span<const Complex>(samples).first(tx.produced_samples);
+        const auto write_start = std::chrono::steady_clock::now();
         produced_samples += sink.write(out);
+        const auto write_stop = std::chrono::steady_clock::now();
         sink.flush();
+        pacer.wait_until(produced_samples);
+
+        if (args.iq_trace_interval_ms != 0U &&
+            std::chrono::steady_clock::now() - last_iq_trace >=
+                std::chrono::milliseconds(args.iq_trace_interval_ms)) {
+          BidMessageLogRecord record;
+          record.event_type = LogEventType::iq_transport;
+          record.local_timestamp_ns = epoch_nanos();
+          record.status = BidMessageLogStatus::sent;
+          record.event_name = "tx_iq";
+          record.count = produced_samples;
+          record.metric = static_cast<double>(sink.queued_bytes());
+          record.observed_latency_ns = static_cast<std::uint64_t>(
+              std::chrono::duration_cast<std::chrono::nanoseconds>(write_stop - write_start).count());
+          std::scoped_lock lock(*log_queue_mutex);
+          (void)log_queue->try_push(std::move(record));
+          last_iq_trace = std::chrono::steady_clock::now();
+        }
       }
     } catch (...) {
       running.store(false);
@@ -337,6 +541,9 @@ int main(int argc, char** argv) {
       }
       if (client_udp_thread.joinable()) {
         client_udp_thread.join();
+      }
+      if (market_shm_thread.joinable()) {
+        market_shm_thread.join();
       }
       if (log_thread.joinable()) {
         log_thread.join();
@@ -352,6 +559,9 @@ int main(int argc, char** argv) {
     }
     if (client_udp_thread.joinable()) {
       client_udp_thread.join();
+    }
+    if (market_shm_thread.joinable()) {
+      market_shm_thread.join();
     }
     if (log_thread.joinable()) {
       log_thread.join();

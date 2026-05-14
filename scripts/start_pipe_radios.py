@@ -59,14 +59,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quote-destination-ip", default="127.0.0.1")
     parser.add_argument("--quote-destination-port", type=int, default=9001)
     parser.add_argument("--sample-format", default="sc16_iq")
-    parser.add_argument("--chunk-samples", type=int, default=256)
+    parser.add_argument("--chunk-samples", type=int, default=64)
     parser.add_argument("--modulation", default="64qam")
     parser.add_argument("--bandwidth-hz", type=float, default=48000.0)
+    parser.add_argument("--sample-rate-hz", type=float, default=48000.0)
     parser.add_argument("--symbol-rate-hz", type=float, default=24000.0)
+    parser.add_argument("--pipe-capacity-bytes", type=int, default=4096)
+    parser.add_argument("--no-pace-sender", action="store_true")
+    parser.add_argument("--iq-trace-interval-ms", type=int, default=1000)
     parser.add_argument("--market-bank", type=int, choices=(0, 1), default=0)
     parser.add_argument("--no-market-stream", action="store_true", help="do not start the Massive websocket bridge")
+    parser.add_argument("--market-shm-path", type=Path, default=Path("/dev/shm/wbhf_market_data_ring"))
+    parser.add_argument("--market-shm-capacity", type=int, default=256)
+    parser.add_argument("--market-shm-payload-bytes", type=int, default=64)
+    parser.add_argument("--keep-market-shm", action="store_true")
     parser.add_argument("--market-grpc-timeout", type=float, default=0.05)
     parser.add_argument("--bank-refresh-seconds", type=float, default=1.0)
+    parser.add_argument("--market-asset-class", action="append", choices=("stock", "future", "currency", "crypto"))
     parser.add_argument("--transmitter-log-file", type=Path, default=Path("/tmp/wbhf_transmitter.log"))
     parser.add_argument("--transmitter-log-capacity", type=int, default=65536)
     parser.add_argument("--client-latency-config", type=Path, default=REPO_ROOT / "config" / "client_latencies.conf")
@@ -81,6 +90,10 @@ def main() -> int:
     args = parse_args()
     if args.transmitter_log_capacity <= 0:
         raise RuntimeError("--transmitter-log-capacity must be positive")
+    if args.market_shm_capacity <= 0:
+        raise RuntimeError("--market-shm-capacity must be positive")
+    if args.market_shm_payload_bytes < 2:
+        raise RuntimeError("--market-shm-payload-bytes must be at least 2")
     sender = args.build_dir / "wbhf_radio_sender"
     receiver = args.build_dir / "wbhf_radio_receiver"
     if not sender.exists() or not receiver.exists():
@@ -110,6 +123,10 @@ def main() -> int:
         args.sample_format,
         "--chunk-samples",
         str(args.chunk_samples),
+        "--pipe-capacity-bytes",
+        str(args.pipe_capacity_bytes),
+        "--iq-trace-interval-ms",
+        str(args.iq_trace_interval_ms),
     ]
     sender_cmd = [
         str(sender),
@@ -121,6 +138,12 @@ def main() -> int:
         args.sample_format,
         "--chunk-samples",
         str(args.chunk_samples),
+        "--pipe-capacity-bytes",
+        str(args.pipe_capacity_bytes),
+        "--pace-sample-rate-hz",
+        "0" if args.no_pace_sender else str(args.sample_rate_hz),
+        "--iq-trace-interval-ms",
+        str(args.iq_trace_interval_ms),
         "--log-file",
         str(args.transmitter_log_file),
         "--log-capacity",
@@ -129,6 +152,12 @@ def main() -> int:
         str(args.client_latency_config),
         "--budget-config",
         str(args.client_budget_config),
+        "--market-shm-path",
+        str(args.market_shm_path),
+        "--market-shm-capacity",
+        str(args.market_shm_capacity),
+        "--market-shm-payload-bytes",
+        str(args.market_shm_payload_bytes),
     ]
     if args.client_udp_config:
         sender_cmd.extend(["--client-udp-config", str(args.client_udp_config)])
@@ -143,6 +172,8 @@ def main() -> int:
         args.modulation,
         "--bandwidth-hz",
         str(args.bandwidth_hz),
+        "--sample-rate-hz",
+        str(args.sample_rate_hz),
         "--symbol-rate-hz",
         str(args.symbol_rate_hz),
         "--active-bank",
@@ -162,7 +193,12 @@ def main() -> int:
         str(args.market_grpc_timeout),
         "--bank-refresh-seconds",
         str(args.bank_refresh_seconds),
+        "--market-shm-path",
+        str(args.market_shm_path),
     ]
+    if args.market_asset_class:
+        for asset_class in args.market_asset_class:
+            market_cmd.extend(["--asset-class", asset_class])
 
     def stop_on_signal(signum: int, _frame: object) -> None:
         print(f"received signal {signum}, stopping radios")
@@ -183,7 +219,8 @@ def main() -> int:
         print(
             f"pipe radios running: fifo={args.fifo} receiver={args.receiver} "
             f"transmitter={args.transmitter} quote_udp={args.quote_destination_ip}:{args.quote_destination_port} "
-            f"market_stream={'off' if args.no_market_stream else 'on'} log={args.transmitter_log_file}"
+            f"market_stream={'off' if args.no_market_stream else 'on'} "
+            f"market_shm={args.market_shm_path} log={args.transmitter_log_file}"
         )
         while all(process.poll() is None for process in processes):
             time.sleep(0.5)
@@ -193,6 +230,11 @@ def main() -> int:
         if not args.keep_fifo:
             try:
                 args.fifo.unlink()
+            except FileNotFoundError:
+                pass
+        if not args.keep_market_shm:
+            try:
+                args.market_shm_path.unlink()
             except FileNotFoundError:
                 pass
 

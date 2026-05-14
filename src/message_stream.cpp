@@ -148,6 +148,9 @@ MessageFrameEncodeResult MessageStreamFramer::next_payload_frame(SpscRingBuffer<
       if (active_bank_override_.has_value()) {
         current_.front() = *active_bank_override_;
       }
+      if (observer_ != nullptr) {
+        observer_->on_delimited_message(DelimitedMessage{.bytes = current_});
+      }
       current_offset_ = 0;
       ++result.consumed_messages;
     }
@@ -525,6 +528,10 @@ std::optional<std::uint8_t> RealtimeTransmitter::active_bank_override() const no
   return framer_.active_bank_override();
 }
 
+void RealtimeTransmitter::set_consumed_message_observer(DelimitedMessageObserver* observer) noexcept {
+  framer_.set_consumed_message_observer(observer);
+}
+
 RealtimeReceiver::RealtimeReceiver(RealtimePipelineConfig config, SpscRingBuffer<DelimitedMessage>& output)
     : config_(std::move(config)),
       output_(output),
@@ -538,9 +545,8 @@ RealtimeReceiver::RealtimeReceiver(RealtimePipelineConfig config, SpscRingBuffer
 
 void RealtimeReceiver::reset_coded_stream() {
   deframer_.reset();
+  viterbi_.reset();
   bit_xor_ = Aes128CtrBitXor(config_.aes_key, config_.ctr_counter);
-  coded_bits_.clear();
-  emitted_bytes_ = 0;
   sync_timestamp_bytes_ = {};
   sync_timestamp_offset_ = 0;
   sync_timestamp_validated_ = !config_.sync_timestamp.enabled;
@@ -551,8 +557,7 @@ void RealtimeReceiver::reject_stream(RealtimeReceiveResult& result) {
   result.replay_rejected = true;
   stream_aborted_ = true;
   deframer_.reset();
-  coded_bits_.clear();
-  emitted_bytes_ = 0;
+  viterbi_.reset();
   sync_timestamp_bytes_ = {};
   sync_timestamp_offset_ = 0;
   sync_timestamp_validated_ = false;
@@ -608,34 +613,6 @@ bool RealtimeReceiver::process_decoded_tokens(std::span<const Token> tokens, Rea
   return !decoded_messages.output_backpressure;
 }
 
-void RealtimeReceiver::try_decode_bytes(RealtimeReceiveResult& result) {
-  if (stream_aborted_) {
-    result.replay_rejected = true;
-    return;
-  }
-
-  std::size_t possible_bytes = emitted_bytes_;
-  while (convolutional_coded_bits_for_input_bytes(possible_bytes + 1U, config_.convolutional) <= coded_bits_.size()) {
-    ++possible_bytes;
-  }
-  if (possible_bytes == emitted_bytes_) {
-    return;
-  }
-
-  const auto needed_bits = convolutional_coded_bits_for_input_bytes(possible_bytes, config_.convolutional);
-  const auto decoded = viterbi_.decode_bytes(std::span<const SoftBit>(coded_bits_).first(needed_bits), possible_bytes);
-  std::vector<Token> new_bytes;
-  new_bytes.reserve(possible_bytes - emitted_bytes_);
-  for (std::size_t i = emitted_bytes_; i < decoded.bytes.size(); ++i) {
-    new_bytes.push_back(decoded.bytes[i]);
-  }
-  emitted_bytes_ = possible_bytes;
-  result.decoded_bytes += new_bytes.size();
-  if (!new_bytes.empty()) {
-    (void)process_decoded_tokens(new_bytes, result);
-  }
-}
-
 RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> samples) {
   RealtimeReceiveResult result;
   std::array<RfStreamSymbol, 512> symbols{};
@@ -654,6 +631,8 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
     }
 
     std::array<std::uint8_t, max_bits_per_symbol> bits{};
+    std::vector<SoftBit> new_coded_bits;
+    new_coded_bits.reserve(decoded.produced_symbols * constellation_.bits_per_symbol());
     for (std::size_t i = 0; i < decoded.produced_symbols; ++i) {
       constellation_.symbol_to_bits(symbols[i].value,
                                     std::span<std::uint8_t>(bits).first(constellation_.bits_per_symbol()));
@@ -661,10 +640,18 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
         const SoftBit soft{.value = bits[bit],
                            .certain = symbols[i].certain,
                            .confidence = symbols[i].confidence};
-        coded_bits_.push_back(bit_xor_.xor_soft_bit(soft));
+        new_coded_bits.push_back(bit_xor_.xor_soft_bit(soft));
       }
     }
-    try_decode_bytes(result);
+    if (stream_aborted_) {
+      result.replay_rejected = true;
+    } else if (!new_coded_bits.empty()) {
+      const auto decoded_tokens = viterbi_.push(new_coded_bits);
+      result.decoded_bytes += decoded_tokens.size();
+      if (!decoded_tokens.empty()) {
+        (void)process_decoded_tokens(decoded_tokens, result);
+      }
+    }
     if (result.output_backpressure || result.replay_rejected || decoded.consumed_samples == 0U) {
       break;
     }

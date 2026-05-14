@@ -158,6 +158,7 @@ def send_client_messages(args: argparse.Namespace, clients: int) -> dict[str, di
                 "sequence": sequence,
                 "app_send_ns": timestamp,
                 "tx_sent_ns": 0,
+                "tx_framer_ns": 0,
                 "receiver_ts_ns": 0,
                 "tx_report_ns": 0,
             }
@@ -186,6 +187,8 @@ def collect_results(process: subprocess.Popen[object],
                     entry["tx_sent_ns"] = int(record.get("ts_ns", 0))
                 elif status in {"budget_exhausted", "rejected"}:
                     entry["rejected_ns"] = int(record.get("ts_ns", 0))
+            elif event == "transmitter_framer":
+                entry["tx_framer_ns"] = int(record.get("ts_ns", 0))
             elif event == "receiver_client_message":
                 entry["receiver_ts_ns"] = int(record.get("receiver_ts_ns", 0))
                 entry["tx_report_ns"] = int(record.get("ts_ns", 0))
@@ -211,6 +214,16 @@ def summarize(sent: dict[str, dict[str, int]], result_path: Path | None) -> dict
         for item in sent.values()
         if item["tx_sent_ns"]
     ]
+    tx_sent_to_framer = [
+        item["tx_framer_ns"] - item["tx_sent_ns"]
+        for item in sent.values()
+        if item["tx_sent_ns"] and item["tx_framer_ns"]
+    ]
+    framer_to_receiver = [
+        item["receiver_ts_ns"] - item["tx_framer_ns"]
+        for item in sent.values()
+        if item["tx_framer_ns"] and item["receiver_ts_ns"]
+    ]
 
     def stats(values: list[int]) -> dict[str, float]:
         return {
@@ -227,6 +240,8 @@ def summarize(sent: dict[str, dict[str, int]], result_path: Path | None) -> dict
         "app_send_to_transmitter_report": stats(app_to_report),
         "app_send_to_receiver_timestamp": stats(app_to_receiver),
         "transmitter_sent_to_receiver_timestamp": stats(tx_to_receiver),
+        "transmitter_sent_log_to_framer": stats(tx_sent_to_framer),
+        "transmitter_framer_to_receiver_timestamp": stats(framer_to_receiver),
         "receiver_timestamp_to_transmitter_report": stats(receiver_to_report),
         "app_send_to_transmitter_sent_log": stats(enqueue_delay),
     }
@@ -257,7 +272,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--send-interval-ms", type=float, default=1000.0)
     parser.add_argument("--modulation", default="64qam")
     parser.add_argument("--bandwidth-hz", type=float, default=48000.0)
+    parser.add_argument("--sample-rate-hz", type=float, default=48000.0)
     parser.add_argument("--symbol-rate-hz", type=float, default=24000.0)
+    parser.add_argument("--chunk-samples", type=int, default=64)
+    parser.add_argument("--pipe-capacity-bytes", type=int, default=4096)
+    parser.add_argument("--no-pace-sender", action="store_true")
     parser.add_argument("--market-events-required", type=int, default=1)
     parser.add_argument("--market-flow-timeout", type=float, default=45.0)
     parser.add_argument("--startup-warmup-seconds", type=float, default=3.0)
@@ -307,8 +326,14 @@ def main() -> int:
         args.modulation,
         "--bandwidth-hz",
         str(args.bandwidth_hz),
+        "--sample-rate-hz",
+        str(args.sample_rate_hz),
         "--symbol-rate-hz",
         str(args.symbol_rate_hz),
+        "--chunk-samples",
+        str(args.chunk_samples),
+        "--pipe-capacity-bytes",
+        str(args.pipe_capacity_bytes),
         "--market-bank",
         str(args.bank),
         "--transmitter-log-file",
@@ -321,6 +346,8 @@ def main() -> int:
     ]
     if args.no_market_stream:
         cmd.append("--no-market-stream")
+    if args.no_pace_sender:
+        cmd.append("--no-pace-sender")
 
     process: subprocess.Popen[object] | None = None
     try:

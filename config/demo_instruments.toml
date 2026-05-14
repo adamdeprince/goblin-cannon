@@ -9,6 +9,13 @@ future_websocket_url = "wss://socket.massive.com/futures"
 forex_websocket_url = "wss://socket.massive.com/forex"
 crypto_websocket_url = "wss://socket.massive.com/crypto"
 
+[shadow_bid]
+# K is both the fallback bid, in cents, when P_prev or P_last_sent is unknown,
+# and the scale factor in the log-return shadow-bid formula. H is in
+# milliseconds and weights the most recent quote velocity term.
+k_cents = 10000
+velocity_h_ms = 5000
+
 # Prices stored in radio banks are integer units of each instrument's
 # minimum_price_increment. Stocks use 1/200 USD so half-penny quote midpoints
 # are exact. Currency pairs use pipettes: 1/100000 for non-JPY pairs and
@@ -19,6 +26,7 @@ crypto_websocket_url = "wss://socket.massive.com/crypto"
 asset_class = "stock"
 symbol = "SPY"
 radio_symbol = 2
+weight = 5.0
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -26,6 +34,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "QQQ"
 radio_symbol = 3
+weight = 5.0
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -33,6 +42,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "IWM"
 radio_symbol = 4
+weight = 2.5
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -40,6 +50,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "SMH"
 radio_symbol = 5
+weight = 3.0
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -47,6 +58,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "TLT"
 radio_symbol = 6
+weight = 1.8
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -54,6 +66,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "GLD"
 radio_symbol = 7
+weight = 1.5
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -61,6 +74,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "NVDA"
 radio_symbol = 8
+weight = 4.5
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -68,6 +82,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "MSFT"
 radio_symbol = 9
+weight = 4.0
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -75,6 +90,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "AAPL"
 radio_symbol = 10
+weight = 4.0
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -82,6 +98,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "AMZN"
 radio_symbol = 11
+weight = 3.5
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -89,6 +106,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "META"
 radio_symbol = 12
+weight = 3.0
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -96,6 +114,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "GOOGL"
 radio_symbol = 13
+weight = 3.0
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -103,6 +122,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "TSLA"
 radio_symbol = 14
+weight = 3.5
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -110,6 +130,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "AVGO"
 radio_symbol = 15
+weight = 3.0
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -117,6 +138,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "AMD"
 radio_symbol = 16
+weight = 2.5
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -124,6 +146,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "JPM"
 radio_symbol = 17
+weight = 2.0
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -131,6 +154,7 @@ minimum_price_increment = { numerator = 1, denominator = 200 }
 asset_class = "stock"
 symbol = "XOM"
 radio_symbol = 18
+weight = 1.8
 unit = "half_penny"
 minimum_price_increment = { numerator = 1, denominator = 200 }
 
@@ -139,6 +163,7 @@ asset_class = "future"
 symbol = "ES"
 description = "front E-mini S&P 500"
 radio_symbol = 19
+weight = 5.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 4 }
@@ -148,6 +173,7 @@ asset_class = "future"
 symbol = "NQ"
 description = "front E-mini Nasdaq-100"
 radio_symbol = 20
+weight = 5.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 4 }
@@ -157,6 +183,7 @@ asset_class = "future"
 symbol = "RTY"
 description = "front Russell 2000"
 radio_symbol = 21
+weight = 2.5
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 10 }
@@ -166,6 +193,7 @@ asset_class = "future"
 symbol = "YM"
 description = "front Dow"
 radio_symbol = 22
+weight = 2.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 1 }
@@ -175,6 +203,7 @@ asset_class = "future"
 symbol = "ZT"
 description = "front 2Y Treasury"
 radio_symbol = 23
+weight = 2.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 256 }
@@ -184,6 +213,7 @@ asset_class = "future"
 symbol = "ZF"
 description = "front 5Y Treasury"
 radio_symbol = 24
+weight = 2.5
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 128 }
@@ -193,6 +223,7 @@ asset_class = "future"
 symbol = "ZN"
 description = "front 10Y Treasury"
 radio_symbol = 25
+weight = 3.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 64 }
@@ -202,6 +233,7 @@ asset_class = "future"
 symbol = "ZB"
 description = "front 30Y Treasury"
 radio_symbol = 26
+weight = 2.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 32 }
@@ -211,6 +243,7 @@ asset_class = "future"
 symbol = "CL"
 description = "front WTI crude"
 radio_symbol = 27
+weight = 2.5
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 100 }
@@ -220,6 +253,7 @@ asset_class = "future"
 symbol = "GC"
 description = "front gold"
 radio_symbol = 28
+weight = 2.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 10 }
@@ -229,6 +263,7 @@ asset_class = "future"
 symbol = "HG"
 description = "front copper"
 radio_symbol = 29
+weight = 1.5
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 2000 }
@@ -238,6 +273,7 @@ asset_class = "future"
 symbol = "6E"
 description = "front EUR/USD futures"
 radio_symbol = 30
+weight = 3.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 20000 }
@@ -247,6 +283,7 @@ asset_class = "future"
 symbol = "6B"
 description = "front GBP/USD futures"
 radio_symbol = 31
+weight = 2.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 10000 }
@@ -256,6 +293,7 @@ asset_class = "future"
 symbol = "6J"
 description = "front JPY/USD futures"
 radio_symbol = 32
+weight = 2.0
 front = true
 unit = "tick"
 minimum_price_increment = { numerator = 1, denominator = 2000000 }
@@ -265,6 +303,7 @@ asset_class = "currency"
 symbol = "EUR-USD"
 massive_symbol = "EUR/USD"
 radio_symbol = 33
+weight = 4.0
 unit = "pipette"
 minimum_price_increment = { numerator = 1, denominator = 100000 }
 
@@ -273,6 +312,7 @@ asset_class = "currency"
 symbol = "GBP-USD"
 massive_symbol = "GBP/USD"
 radio_symbol = 34
+weight = 3.0
 unit = "pipette"
 minimum_price_increment = { numerator = 1, denominator = 100000 }
 
@@ -281,6 +321,7 @@ asset_class = "currency"
 symbol = "USD-JPY"
 massive_symbol = "USD/JPY"
 radio_symbol = 35
+weight = 3.5
 unit = "pipette"
 minimum_price_increment = { numerator = 1, denominator = 1000 }
 
@@ -289,6 +330,7 @@ asset_class = "currency"
 symbol = "EUR-GBP"
 massive_symbol = "EUR/GBP"
 radio_symbol = 36
+weight = 2.0
 unit = "pipette"
 minimum_price_increment = { numerator = 1, denominator = 100000 }
 
@@ -297,6 +339,7 @@ asset_class = "currency"
 symbol = "USD-CHF"
 massive_symbol = "USD/CHF"
 radio_symbol = 37
+weight = 2.0
 unit = "pipette"
 minimum_price_increment = { numerator = 1, denominator = 100000 }
 
@@ -305,6 +348,7 @@ asset_class = "currency"
 symbol = "USD-CNH"
 massive_symbol = "USD/CNH"
 radio_symbol = 38
+weight = 2.0
 unit = "pipette"
 minimum_price_increment = { numerator = 1, denominator = 100000 }
 
@@ -313,6 +357,7 @@ asset_class = "currency"
 symbol = "AUD-USD"
 massive_symbol = "AUD/USD"
 radio_symbol = 39
+weight = 2.0
 unit = "pipette"
 minimum_price_increment = { numerator = 1, denominator = 100000 }
 
@@ -321,6 +366,7 @@ asset_class = "currency"
 symbol = "USD-CAD"
 massive_symbol = "USD/CAD"
 radio_symbol = 40
+weight = 2.0
 unit = "pipette"
 minimum_price_increment = { numerator = 1, denominator = 100000 }
 
@@ -328,6 +374,7 @@ minimum_price_increment = { numerator = 1, denominator = 100000 }
 asset_class = "crypto"
 symbol = "BTC-USD"
 radio_symbol = 41
+weight = 3.0
 unit = "usd_cent"
 minimum_price_increment = { numerator = 1, denominator = 100 }
 
@@ -335,6 +382,7 @@ minimum_price_increment = { numerator = 1, denominator = 100 }
 asset_class = "crypto"
 symbol = "ETH-USD"
 radio_symbol = 42
+weight = 2.5
 unit = "usd_cent"
 minimum_price_increment = { numerator = 1, denominator = 100 }
 
@@ -342,6 +390,7 @@ minimum_price_increment = { numerator = 1, denominator = 100 }
 asset_class = "crypto"
 symbol = "SOL-USD"
 radio_symbol = 43
+weight = 1.5
 unit = "usd_1e-4"
 minimum_price_increment = { numerator = 1, denominator = 10000 }
 
@@ -349,6 +398,7 @@ minimum_price_increment = { numerator = 1, denominator = 10000 }
 asset_class = "crypto"
 symbol = "XRP-USD"
 radio_symbol = 44
+weight = 1.0
 unit = "usd_1e-6"
 minimum_price_increment = { numerator = 1, denominator = 1000000 }
 
@@ -356,6 +406,7 @@ minimum_price_increment = { numerator = 1, denominator = 1000000 }
 asset_class = "crypto"
 symbol = "BNB-USD"
 radio_symbol = 45
+weight = 1.2
 unit = "usd_cent"
 minimum_price_increment = { numerator = 1, denominator = 100 }
 
@@ -363,6 +414,7 @@ minimum_price_increment = { numerator = 1, denominator = 100 }
 asset_class = "crypto"
 symbol = "DOGE-USD"
 radio_symbol = 46
+weight = 1.0
 unit = "usd_1e-6"
 minimum_price_increment = { numerator = 1, denominator = 1000000 }
 
@@ -370,6 +422,7 @@ minimum_price_increment = { numerator = 1, denominator = 1000000 }
 asset_class = "crypto"
 symbol = "ADA-USD"
 radio_symbol = 47
+weight = 1.0
 unit = "usd_1e-6"
 minimum_price_increment = { numerator = 1, denominator = 1000000 }
 
@@ -377,6 +430,7 @@ minimum_price_increment = { numerator = 1, denominator = 1000000 }
 asset_class = "crypto"
 symbol = "AVAX-USD"
 radio_symbol = 48
+weight = 1.0
 unit = "usd_1e-4"
 minimum_price_increment = { numerator = 1, denominator = 10000 }
 
@@ -384,6 +438,7 @@ minimum_price_increment = { numerator = 1, denominator = 10000 }
 asset_class = "crypto"
 symbol = "LINK-USD"
 radio_symbol = 49
+weight = 1.0
 unit = "usd_1e-4"
 minimum_price_increment = { numerator = 1, denominator = 10000 }
 
@@ -391,6 +446,7 @@ minimum_price_increment = { numerator = 1, denominator = 10000 }
 asset_class = "crypto"
 symbol = "BCH-USD"
 radio_symbol = 50
+weight = 1.0
 unit = "usd_cent"
 minimum_price_increment = { numerator = 1, denominator = 100 }
 
@@ -398,6 +454,7 @@ minimum_price_increment = { numerator = 1, denominator = 100 }
 asset_class = "crypto"
 symbol = "LTC-USD"
 radio_symbol = 51
+weight = 1.0
 unit = "usd_cent"
 minimum_price_increment = { numerator = 1, denominator = 100 }
 
@@ -405,6 +462,7 @@ minimum_price_increment = { numerator = 1, denominator = 100 }
 asset_class = "crypto"
 symbol = "BTC-EUR"
 radio_symbol = 52
+weight = 1.8
 unit = "eur_cent"
 minimum_price_increment = { numerator = 1, denominator = 100 }
 
@@ -412,6 +470,7 @@ minimum_price_increment = { numerator = 1, denominator = 100 }
 asset_class = "crypto"
 symbol = "ETH-EUR"
 radio_symbol = 53
+weight = 1.5
 unit = "eur_cent"
 minimum_price_increment = { numerator = 1, denominator = 100 }
 
@@ -419,6 +478,7 @@ minimum_price_increment = { numerator = 1, denominator = 100 }
 asset_class = "crypto"
 symbol = "BTC-USDT"
 radio_symbol = 54
+weight = 2.5
 unit = "usdt_cent"
 minimum_price_increment = { numerator = 1, denominator = 100 }
 
@@ -426,5 +486,6 @@ minimum_price_increment = { numerator = 1, denominator = 100 }
 asset_class = "crypto"
 symbol = "ETH-USDT"
 radio_symbol = 55
+weight = 2.0
 unit = "usdt_cent"
 minimum_price_increment = { numerator = 1, denominator = 100 }

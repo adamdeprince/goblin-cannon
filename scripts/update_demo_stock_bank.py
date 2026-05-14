@@ -150,6 +150,7 @@ def resolve_front_future(
         minimum_price_increment=instrument.minimum_price_increment,
         unit=instrument.unit,
         massive_symbol=front_ticker,
+        weight=instrument.weight,
         front=instrument.front,
         description=instrument.description,
     )
