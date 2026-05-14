@@ -87,6 +87,36 @@ BidMessageLogRecord make_bid_log(const BidMessage& message,
   return record;
 }
 
+BidMessageLogRecord make_budget_exhausted_log(const BidMessage& message) {
+  auto record = make_bid_log(message, BidMessageLogStatus::budget_exhausted, 0U);
+  record.detail = "insufficient_budget";
+  return record;
+}
+
+bool message_needs_accounting(const BidMessage& message) noexcept {
+  return message.has_client_id;
+}
+
+bool can_afford_bid(const BidMessage& message, const BidBudgetAccountant* accountant) {
+  return !message_needs_accounting(message) || accountant == nullptr || accountant->can_afford_bid(message);
+}
+
+std::optional<BidMessageLogRecord> reserve_sent_bid(BidMessageLogRecord sent_log,
+                                                    const BidMessage& message,
+                                                    BidBudgetAccountant* accountant) {
+  if (!message_needs_accounting(message) || accountant == nullptr) {
+    return sent_log;
+  }
+  const auto reserve = accountant->reserve_sent_bid(message, sent_log.local_timestamp_ns);
+  if (!reserve.accepted) {
+    auto rejected = make_budget_exhausted_log(message);
+    rejected.remaining_budget_cents = reserve.remaining_budget_cents;
+    return rejected;
+  }
+  sent_log.remaining_budget_cents = reserve.remaining_budget_cents;
+  return sent_log;
+}
+
 void validate_realtime_config(const RealtimePipelineConfig& config) {
   validate(config.rf);
   validate(config.convolutional);
@@ -167,11 +197,25 @@ void MessageStreamFramer::reset() {
 BidMessageIntakeResult BidMessageTransmitIntake::submit(BidMessage message,
                                                         SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                         SpscRingBuffer<BidMessageLogRecord>& log_queue,
-                                                        BidMessageLogObserver* observer) {
+                                                        BidMessageLogObserver* observer,
+                                                        BidBudgetAccountant* accountant) {
   validate_bid_message(message);
 
-  auto result = pump(transmit_queue, log_queue, observer);
+  auto result = pump(transmit_queue, log_queue, observer, accountant);
   if (result.log_backpressure) {
+    result.pending_bids = pending_bids();
+    return result;
+  }
+
+  if (!can_afford_bid(message, accountant)) {
+    if (!log_has_capacity(log_queue, 1U)) {
+      result.log_backpressure = true;
+      result.pending_bids = pending_bids();
+      return result;
+    }
+    emit_log(make_budget_exhausted_log(message), log_queue, observer);
+    result.budget_rejected = true;
+    result.logged_records += 1U;
     result.pending_bids = pending_bids();
     return result;
   }
@@ -182,12 +226,22 @@ BidMessageIntakeResult BidMessageTransmitIntake::submit(BidMessage message,
       result.pending_bids = pending_bids();
       return result;
     }
+    auto sent_log = reserve_sent_bid(make_bid_log(message, BidMessageLogStatus::sent, message.bid_price),
+                                     message,
+                                     accountant);
+    if (sent_log->status == BidMessageLogStatus::budget_exhausted) {
+      emit_log(std::move(*sent_log), log_queue, observer);
+      result.budget_rejected = true;
+      result.logged_records += 1U;
+      result.pending_bids = pending_bids();
+      return result;
+    }
     if (!transmit_queue.try_push(DelimitedMessage{.bytes = message.payload})) {
       result.transmit_backpressure = true;
       result.pending_bids = pending_bids();
       return result;
     }
-    emit_log(make_bid_log(message, BidMessageLogStatus::sent, message.bid_price), log_queue, observer);
+    emit_log(std::move(*sent_log), log_queue, observer);
     result.transmitted = true;
     result.logged_records += 1U;
     result.pending_bids = pending_bids();
@@ -226,7 +280,8 @@ BidMessageIntakeResult BidMessageTransmitIntake::submit(BidMessage message,
 
 BidMessageIntakeResult BidMessageTransmitIntake::pump(SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                       SpscRingBuffer<BidMessageLogRecord>& log_queue,
-                                                      BidMessageLogObserver* observer) {
+                                                      BidMessageLogObserver* observer,
+                                                      BidBudgetAccountant* accountant) {
   BidMessageIntakeResult result;
   if (!pending_best_.has_value()) {
     return result;
@@ -243,13 +298,32 @@ BidMessageIntakeResult BidMessageTransmitIntake::pump(SpscRingBuffer<DelimitedMe
   }
 
   auto winner = std::move(*pending_best_);
+  if (!can_afford_bid(winner, accountant)) {
+    emit_log(make_budget_exhausted_log(winner), log_queue, observer);
+    pending_best_.reset();
+    result.budget_rejected = true;
+    result.logged_records = 1U;
+    result.pending_bids = 0U;
+    return result;
+  }
+  auto sent_log = reserve_sent_bid(make_bid_log(winner, BidMessageLogStatus::sent, winner.bid_price),
+                                   winner,
+                                   accountant);
+  if (sent_log->status == BidMessageLogStatus::budget_exhausted) {
+    emit_log(std::move(*sent_log), log_queue, observer);
+    pending_best_.reset();
+    result.budget_rejected = true;
+    result.logged_records = 1U;
+    result.pending_bids = 0U;
+    return result;
+  }
   if (!transmit_queue.try_push(DelimitedMessage{.bytes = winner.payload})) {
     pending_best_ = std::move(winner);
     result.transmit_backpressure = true;
     result.pending_bids = pending_bids();
     return result;
   }
-  emit_log(make_bid_log(winner, BidMessageLogStatus::sent, winner.bid_price), log_queue, observer);
+  emit_log(std::move(*sent_log), log_queue, observer);
   pending_best_.reset();
   result.transmitted = true;
   result.logged_records = 1U;

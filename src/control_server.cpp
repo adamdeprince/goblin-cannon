@@ -1,5 +1,6 @@
 #include "wbhf_modem/control_server.hpp"
 
+#include "wbhf_modem/accounting.hpp"
 #include "wbhf_modem/control/v1/receiver_control.grpc.pb.h"
 
 #include <grpcpp/grpcpp.h>
@@ -358,13 +359,15 @@ public:
                             std::shared_ptr<SpscRingBuffer<BidMessageLogRecord>> log_queue,
                             std::shared_ptr<std::mutex> log_queue_mutex,
                             std::function<std::optional<PriceBank>(std::uint8_t)> bank_price_provider,
-                            std::array<std::uint64_t, Clients> client_expected_latency_ns)
+                            std::array<std::uint64_t, Clients> client_expected_latency_ns,
+                            std::shared_ptr<ClientBudgetAccounting> accounting)
       : control_(std::move(control)),
         transmit_queue_(std::move(transmit_queue)),
         log_queue_(std::move(log_queue)),
         log_queue_mutex_(std::move(log_queue_mutex)),
         bank_price_provider_(std::move(bank_price_provider)),
-        client_expected_latency_ns_(client_expected_latency_ns) {}
+        client_expected_latency_ns_(client_expected_latency_ns),
+        accounting_(std::move(accounting)) {}
 
   grpc::Status UpdateEncryptionKey(grpc::ServerContext*,
                                    const pb::EncryptionKeyUpdate* request,
@@ -624,15 +627,29 @@ private:
     const auto receiver_timestamp = message.receiver_unix_nanos();
     const auto observed_latency = now >= receiver_timestamp ? now - receiver_timestamp : 0U;
     const auto payload = message.wire_payload();
+    DeliveryAccountingResult accounting_result;
+    if (accounting_) {
+      const auto payload_bytes = std::span<const std::uint8_t>(
+          reinterpret_cast<const std::uint8_t*>(payload.data()),
+          payload.size());
+      accounting_result = accounting_->acknowledge_delivery(payload_bytes,
+                                                            static_cast<std::uint8_t>(message.client_id()),
+                                                            receiver_timestamp);
+    }
     BidMessageLogRecord record;
     record.event_type = LogEventType::receiver_client_message;
     record.local_timestamp_ns = now;
     record.receiver_timestamp_ns = receiver_timestamp;
     record.payload = std::vector<std::uint8_t>(payload.begin(), payload.end());
+    record.status = accounting_result.matched ? BidMessageLogStatus::delivery_matched
+                                              : BidMessageLogStatus::delivery_unmatched;
     record.client_id = static_cast<std::uint8_t>(message.client_id());
     record.has_client_id = true;
     record.expected_latency_ns = client_expected_latency_ns_[message.client_id()];
     record.observed_latency_ns = observed_latency;
+    record.bid_price = accounting_result.bid_cents;
+    record.remaining_budget_cents = accounting_result.remaining_budget_cents;
+    record.matched_timestamp_ns = accounting_result.matched_timestamp_ns;
     push_log(std::move(record));
   }
 
@@ -658,6 +675,7 @@ private:
   std::shared_ptr<std::mutex> log_queue_mutex_;
   std::function<std::optional<PriceBank>(std::uint8_t)> bank_price_provider_;
   std::array<std::uint64_t, Clients> client_expected_latency_ns_ = {};
+  std::shared_ptr<ClientBudgetAccounting> accounting_;
 };
 
 std::string host_from_listen_address(const std::string& listen_address) {
@@ -1302,7 +1320,8 @@ public:
         config_.log_queue,
         config_.log_queue_mutex,
         config_.bank_price_provider,
-        config_.client_expected_latency_ns);
+        config_.client_expected_latency_ns,
+        config_.accounting);
     grpc::ServerBuilder builder;
     int selected_port = 0;
     builder.AddListeningPort(config_.listen_address, grpc::InsecureServerCredentials(), &selected_port);

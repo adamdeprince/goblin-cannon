@@ -1,5 +1,6 @@
 #include "radio_common.hpp"
 
+#include "wbhf_modem/accounting.hpp"
 #include "wbhf_modem/client_udp.hpp"
 #include "wbhf_modem/control_server.hpp"
 #include "wbhf_modem/io.hpp"
@@ -38,6 +39,8 @@ struct Args {
   float scale = 0.95F;
   std::filesystem::path log_file = "/tmp/wbhf_transmitter.log";
   std::filesystem::path latency_config_file;
+  std::filesystem::path budget_config_file = "config/client_budgets.conf";
+  std::filesystem::path client_udp_config_file;
   std::size_t log_capacity = 65536;
 };
 
@@ -53,6 +56,8 @@ const char* event_type_name(wbhf_modem::LogEventType event_type) noexcept {
     return "receiver_client_message";
   case wbhf_modem::LogEventType::receiver_signal:
     return "receiver_signal";
+  case wbhf_modem::LogEventType::budget_refund:
+    return "budget_refund";
   }
   return "unknown";
 }
@@ -67,6 +72,14 @@ const char* status_name(wbhf_modem::BidMessageLogStatus status) noexcept {
     return "invalid_message_format";
   case wbhf_modem::BidMessageLogStatus::unauthorized_source:
     return "unauthorized_source";
+  case wbhf_modem::BidMessageLogStatus::budget_exhausted:
+    return "budget_exhausted";
+  case wbhf_modem::BidMessageLogStatus::expired_refunded:
+    return "expired_refunded";
+  case wbhf_modem::BidMessageLogStatus::delivery_matched:
+    return "delivery_matched";
+  case wbhf_modem::BidMessageLogStatus::delivery_unmatched:
+    return "delivery_unmatched";
   }
   return "unknown";
 }
@@ -159,6 +172,12 @@ void log_writer_loop(wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>
     if (record.observed_latency_ns != 0U) {
       out << ",\"observed_latency_ns\":" << record.observed_latency_ns;
     }
+    if (record.remaining_budget_cents != 0U) {
+      out << ",\"remaining_budget_cents\":" << record.remaining_budget_cents;
+    }
+    if (record.matched_timestamp_ns != 0U) {
+      out << ",\"matched_ts_ns\":" << record.matched_timestamp_ns;
+    }
     if (!record.event_name.empty()) {
       out << ",\"event_name\":\"" << json_escape(record.event_name) << "\"";
     }
@@ -197,6 +216,10 @@ Args parse_args(int argc, char** argv) {
       args.log_file = value;
     } else if (key == "--latency-config") {
       args.latency_config_file = value;
+    } else if (key == "--budget-config") {
+      args.budget_config_file = value;
+    } else if (key == "--client-udp-config") {
+      args.client_udp_config_file = value;
     } else if (key == "--log-capacity") {
       args.log_capacity = static_cast<std::size_t>(std::stoul(value));
     } else {
@@ -231,13 +254,19 @@ int main(int argc, char** argv) {
     if (!args.latency_config_file.empty()) {
       expected_latencies = load_client_expected_latencies_ns_config(args.latency_config_file, 5'000'000U);
     }
+    const auto initial_budgets = load_client_budgets_cents_config(args.budget_config_file);
+    auto accounting = std::make_shared<ClientBudgetAccounting>(initial_budgets, expected_latencies);
+    if (std::filesystem::exists(args.log_file)) {
+      accounting->replay_jsonl_log(args.log_file);
+    }
     TransmitterControlServer transmitter_server(
         transmitter_control,
         {.listen_address = args.transmitter_address,
          .transmit_queue = tx_queue,
          .log_queue = log_queue,
          .log_queue_mutex = log_queue_mutex,
-         .client_expected_latency_ns = expected_latencies});
+         .client_expected_latency_ns = expected_latencies,
+         .accounting = accounting});
     ControlledRealtimeTransmitter transmitter(transmitter_control, *tx_queue);
 
     transmitter_server.start();
@@ -247,12 +276,45 @@ int main(int argc, char** argv) {
               << "latency config: "
               << (args.latency_config_file.empty() ? std::string("default 5000000 ns")
                                                     : args.latency_config_file.string())
+              << '\n'
+              << "budget config: " << args.budget_config_file
               << '\n';
 
     FileIqSink sink(args.iq_output, args.sample_format, args.scale);
     std::thread log_thread([&] {
       log_writer_loop(*log_queue, args.log_file);
     });
+    std::thread accounting_thread([&] {
+      while (running.load()) {
+        const auto refunds = accounting->expire(epoch_nanos());
+        if (!refunds.empty()) {
+          std::scoped_lock lock(*log_queue_mutex);
+          for (const auto& record : refunds) {
+            (void)log_queue->try_push(record);
+          }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+    });
+    std::thread client_udp_thread;
+    if (!args.client_udp_config_file.empty()) {
+      ClientUdpIngressConfig client_udp_config = load_client_udp_ingress_config(args.client_udp_config_file);
+      auto status_sink = std::make_shared<KernelClientUdpStatusSink>();
+      auto socket = std::make_unique<ClientUdpIngressSocket>(client_udp_config,
+                                                             status_sink,
+                                                             transmitter_control,
+                                                             accounting);
+      client_udp_thread = std::thread([&, socket = std::move(socket)] mutable {
+        BidMessageTransmitIntake intake;
+        while (running.load()) {
+          const auto received = socket->poll_once(intake, *tx_queue, *log_queue);
+          const auto pumped = socket->pump_pending(intake, *tx_queue, *log_queue);
+          if (!received.accepted && !received.rejected && !pumped.transmitted && !pumped.budget_rejected) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          }
+        }
+      });
+    }
     std::vector<Complex> samples(args.chunk_samples);
     std::uint64_t produced_samples = 0;
     try {
@@ -269,6 +331,12 @@ int main(int argc, char** argv) {
     } catch (...) {
       running.store(false);
       transmitter_server.stop();
+      if (accounting_thread.joinable()) {
+        accounting_thread.join();
+      }
+      if (client_udp_thread.joinable()) {
+        client_udp_thread.join();
+      }
       if (log_thread.joinable()) {
         log_thread.join();
       }
@@ -278,6 +346,12 @@ int main(int argc, char** argv) {
     std::cout << "stopping sender, produced_samples=" << produced_samples << '\n';
     transmitter_server.stop();
     running.store(false);
+    if (accounting_thread.joinable()) {
+      accounting_thread.join();
+    }
+    if (client_udp_thread.joinable()) {
+      client_udp_thread.join();
+    }
     if (log_thread.joinable()) {
       log_thread.join();
     }

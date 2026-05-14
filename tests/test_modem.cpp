@@ -1,4 +1,5 @@
 #include "wbhf_modem/control/v1/receiver_control.grpc.pb.h"
+#include "wbhf_modem/accounting.hpp"
 #include "wbhf_modem/client_udp.hpp"
 #include "wbhf_modem/control_server.hpp"
 #include "wbhf_modem/crypto.hpp"
@@ -999,6 +1000,106 @@ void test_client_udp_message_handler() {
     return record.status == ClientUdpStatusCode::invalid_message_format && record.bid_price == 101U;
   });
   check(saw_invalid_status, "client UDP invalid message status missing");
+}
+
+void test_client_budget_accounting() {
+  ClientBudgetsCents budgets{};
+  budgets.fill(1'000U);
+  ClientExpectedLatenciesNs latencies{};
+  latencies.fill(5'000'000U);
+  ClientBudgetAccounting accounting(budgets, latencies);
+
+  BidMessage message{.payload = {0, client_id_to_symbol(3), 44, 45},
+                     .bid_price = 300,
+                     .client_id = 3,
+                     .has_client_id = true};
+  check(accounting.can_afford_bid(message), "accounting did not allow affordable bid");
+  const auto reserved = accounting.reserve_sent_bid(message, 10'000'000U);
+  check(reserved.accepted && reserved.remaining_budget_cents == 700U,
+        "accounting did not reserve sent bid");
+  check(accounting.outstanding_count() == 1U, "accounting outstanding count mismatch after reserve");
+
+  const auto delivered = accounting.acknowledge_delivery(message.payload, 3, 15'000'200U);
+  check(delivered.matched &&
+            delivered.bid_cents == 300U &&
+            delivered.matched_timestamp_ns == 10'000'000U &&
+            delivered.remaining_budget_cents == 700U,
+        "accounting did not match delivery acknowledgement");
+  check(accounting.outstanding_count() == 0U, "accounting did not clear delivered outstanding message");
+
+  check(accounting.reserve_sent_bid(message, 20'000'000U).accepted,
+        "accounting did not reserve expiring bid");
+  const auto refunds = accounting.expire(21'000'000'001U);
+  check(refunds.size() == 1U &&
+            refunds[0].event_type == LogEventType::budget_refund &&
+            refunds[0].status == BidMessageLogStatus::expired_refunded &&
+            refunds[0].bid_price == 300U &&
+            refunds[0].remaining_budget_cents == 700U,
+        "accounting did not refund expired outstanding message");
+
+  const auto budget_path = std::filesystem::temp_directory_path() / "wbhf_client_budget_test.conf";
+  {
+    std::ofstream out(budget_path);
+    out << "client.3.budget_pennies=1234\n"
+        << "4=5678\n";
+  }
+  const auto loaded = load_client_budgets_cents_config(budget_path);
+  check(loaded[3] == 1234U && loaded[4] == 5678U, "client budget config parse mismatch");
+  std::filesystem::remove(budget_path);
+
+  const auto replay_path = std::filesystem::temp_directory_path() / "wbhf_accounting_replay_test.jsonl";
+  {
+    std::ofstream out(replay_path);
+    out << "{\"ts_ns\":100,\"event\":\"udp_decision\",\"status\":\"sent\","
+           "\"payload_hex\":\"00ef2c2d\",\"bid_cents\":300,\"client_id\":3}\n";
+  }
+  ClientBudgetAccounting replayed(budgets, latencies);
+  replayed.replay_jsonl_log(replay_path);
+  check(replayed.remaining_budget_cents(3) == 700U &&
+            replayed.outstanding_count() == 1U,
+        "accounting replay did not reconstruct sent outstanding bid");
+  std::filesystem::remove(replay_path);
+}
+
+void test_client_udp_budget_rejection() {
+  ClientUdpIngressConfig config;
+  config.listen_port = 9100;
+  config.authorized_client_ips[3] = "192.0.2.3";
+  auto status_sink = std::make_shared<CapturingClientUdpStatusSink>();
+
+  ClientBudgetsCents budgets{};
+  budgets.fill(0U);
+  budgets[3] = 100U;
+  ClientExpectedLatenciesNs latencies{};
+  latencies.fill(5'000'000U);
+  auto accounting = std::make_shared<ClientBudgetAccounting>(budgets, latencies);
+  ClientUdpMessageHandler handler(config, status_sink, {}, accounting);
+  BidMessageTransmitIntake intake;
+  SpscRingBuffer<DelimitedMessage> transmit_queue(1);
+  SpscRingBuffer<BidMessageLogRecord> log_queue(8);
+
+  const std::array<std::uint8_t, 2> message = {0, 44};
+  const auto result = handler.handle_datagram(ClientUdpDatagram{.source = {.ip = "192.0.2.3", .port = 40000},
+                                                                .payload = make_client_udp_payload(500, message)},
+                                              intake,
+                                              transmit_queue,
+                                              log_queue);
+  check(result.budget_rejected && !result.transmitted, "client UDP did not reject over-budget bid");
+  check(transmit_queue.empty(), "client UDP transmitted over-budget bid");
+  const auto saw_budget_status = std::any_of(status_sink->records.begin(), status_sink->records.end(), [](const auto& record) {
+    return record.status == ClientUdpStatusCode::insufficient_budget && record.bid_price == 500U;
+  });
+  check(saw_budget_status, "client UDP did not send insufficient-budget status");
+
+  bool saw_budget_log = false;
+  BidMessageLogRecord log;
+  while (log_queue.try_pop(log)) {
+    saw_budget_log = saw_budget_log ||
+                     (log.status == BidMessageLogStatus::budget_exhausted &&
+                      log.has_client_id &&
+                      log.client_id == 3U);
+  }
+  check(saw_budget_log, "client UDP did not log budget rejection");
 }
 
 void test_quote_udp_config_and_emitter() {
@@ -2059,6 +2160,8 @@ int main() {
   test_message_framer_active_bank_override();
   test_bid_message_transmit_intake();
   test_client_udp_message_handler();
+  test_client_budget_accounting();
+  test_client_udp_budget_rejection();
   test_quote_udp_config_and_emitter();
   test_quote_udp_bank_switch_requires_fresh_bank_update();
   test_receiver_bank_cache_clear_stops_market_udp();

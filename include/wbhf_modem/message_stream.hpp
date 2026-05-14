@@ -33,6 +33,10 @@ enum class BidMessageLogStatus {
   rejected,
   invalid_message_format,
   unauthorized_source,
+  budget_exhausted,
+  expired_refunded,
+  delivery_matched,
+  delivery_unmatched,
 };
 
 enum class LogEventType {
@@ -41,6 +45,7 @@ enum class LogEventType {
   transmitter_enqueue,
   receiver_client_message,
   receiver_signal,
+  budget_refund,
 };
 
 struct BidMessageLogRecord {
@@ -58,6 +63,8 @@ struct BidMessageLogRecord {
   std::uint16_t reply_port = 0;
   std::uint64_t expected_latency_ns = 0;
   std::uint64_t observed_latency_ns = 0;
+  std::uint64_t remaining_budget_cents = 0;
+  std::uint64_t matched_timestamp_ns = 0;
   std::string event_name;
   std::string detail;
   double metric = 0.0;
@@ -71,6 +78,7 @@ struct BidMessageIntakeResult {
   std::size_t logged_records = 0;
   bool transmit_backpressure = false;
   bool log_backpressure = false;
+  bool budget_rejected = false;
 };
 
 class DelimitedMessageObserver {
@@ -83,6 +91,19 @@ class BidMessageLogObserver {
 public:
   virtual ~BidMessageLogObserver() = default;
   virtual void on_bid_message_log(const BidMessageLogRecord& record) = 0;
+};
+
+struct BidBudgetReserveResult {
+  bool accepted = true;
+  std::uint64_t remaining_budget_cents = 0;
+};
+
+class BidBudgetAccountant {
+public:
+  virtual ~BidBudgetAccountant() = default;
+  [[nodiscard]] virtual bool can_afford_bid(const BidMessage& message) const = 0;
+  [[nodiscard]] virtual BidBudgetReserveResult reserve_sent_bid(const BidMessage& message,
+                                                                std::uint64_t sent_timestamp_ns) = 0;
 };
 
 struct MessageFrameEncodeResult {
@@ -122,10 +143,12 @@ public:
   [[nodiscard]] BidMessageIntakeResult submit(BidMessage message,
                                               SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                               SpscRingBuffer<BidMessageLogRecord>& log_queue,
-                                              BidMessageLogObserver* observer = nullptr);
+                                              BidMessageLogObserver* observer = nullptr,
+                                              BidBudgetAccountant* accountant = nullptr);
   [[nodiscard]] BidMessageIntakeResult pump(SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                             SpscRingBuffer<BidMessageLogRecord>& log_queue,
-                                            BidMessageLogObserver* observer = nullptr);
+                                            BidMessageLogObserver* observer = nullptr,
+                                            BidBudgetAccountant* accountant = nullptr);
   [[nodiscard]] std::size_t pending_bids() const noexcept { return pending_best_.has_value() ? 1U : 0U; }
   void reset();
 

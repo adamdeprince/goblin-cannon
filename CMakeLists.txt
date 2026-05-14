@@ -9,6 +9,7 @@ project(
 option(WBHF_MODEM_BUILD_EXAMPLES "Build example programs" ON)
 option(WBHF_MODEM_BUILD_TESTS "Build tests" ON)
 add_library(wbhf_modem
+  src/accounting.cpp
   src/control_server.cpp
   src/constellation.cpp
   src/client_udp.cpp

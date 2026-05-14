@@ -18,6 +18,8 @@
 
 namespace wbhf_modem {
 
+class ClientBudgetAccounting;
+
 inline constexpr std::size_t control_symbol_count = market_symbol_count;
 using PriceBank = std::array<std::uint64_t, control_symbol_count>;
 using PriceBanks = std::array<PriceBank, 2>;
@@ -231,6 +233,7 @@ struct TransmitterControlServerConfig {
   std::shared_ptr<std::mutex> log_queue_mutex = {};
   std::function<std::optional<PriceBank>(std::uint8_t next_bank)> bank_price_provider = {};
   std::array<std::uint64_t, Clients> client_expected_latency_ns = {};
+  std::shared_ptr<ClientBudgetAccounting> accounting = {};
 };
 
 class TransmitterControlServer {

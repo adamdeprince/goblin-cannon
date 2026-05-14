@@ -142,6 +142,12 @@ ClientUdpStatusCode status_code_for_log(BidMessageLogStatus status) {
     return ClientUdpStatusCode::invalid_message_format;
   case BidMessageLogStatus::unauthorized_source:
     return ClientUdpStatusCode::unauthorized_source;
+  case BidMessageLogStatus::budget_exhausted:
+    return ClientUdpStatusCode::insufficient_budget;
+  case BidMessageLogStatus::expired_refunded:
+  case BidMessageLogStatus::delivery_matched:
+  case BidMessageLogStatus::delivery_unmatched:
+    break;
   }
   return ClientUdpStatusCode::invalid_message_format;
 }
@@ -208,10 +214,12 @@ void KernelClientUdpStatusSink::send_client_status(const ClientEndpoint& endpoin
 
 ClientUdpMessageHandler::ClientUdpMessageHandler(ClientUdpIngressConfig config,
                                                  std::shared_ptr<ClientUdpStatusSink> status_sink,
-                                                 std::shared_ptr<TransmitterControlState> control)
+                                                 std::shared_ptr<TransmitterControlState> control,
+                                                 std::shared_ptr<BidBudgetAccountant> accountant)
     : config_(std::move(config)),
       status_sink_(std::move(status_sink)),
-      control_(std::move(control)) {
+      control_(std::move(control)),
+      accountant_(std::move(accountant)) {
   validate_ingress_config(config_);
   if (!status_sink_) {
     throw std::invalid_argument("ClientUdpMessageHandler requires status sink");
@@ -273,13 +281,22 @@ ClientUdpHandleResult ClientUdpMessageHandler::handle_datagram(const ClientUdpDa
                                                       .reply_port = datagram.source.port},
                                            transmit_queue,
                                            log_queue,
-                                           this);
+                                           this,
+                                           accountant_.get());
   result.accepted = !intake_result.log_backpressure;
   result.transmitted = intake_result.transmitted;
   result.queued_for_arbitration = intake_result.queued_for_arbitration;
   result.log_backpressure = result.log_backpressure || intake_result.log_backpressure;
   result.transmit_backpressure = intake_result.transmit_backpressure;
+  result.budget_rejected = intake_result.budget_rejected;
+  result.rejected = intake_result.budget_rejected;
   return result;
+}
+
+BidMessageIntakeResult ClientUdpMessageHandler::pump_pending(BidMessageTransmitIntake& intake,
+                                                             SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                             SpscRingBuffer<BidMessageLogRecord>& log_queue) {
+  return intake.pump(transmit_queue, log_queue, this, accountant_.get());
 }
 
 void ClientUdpMessageHandler::on_bid_message_log(const BidMessageLogRecord& record) {
@@ -322,8 +339,9 @@ bool ClientUdpMessageHandler::log_status(BidMessageLogRecord record,
 
 ClientUdpIngressSocket::ClientUdpIngressSocket(ClientUdpIngressConfig config,
                                                std::shared_ptr<ClientUdpStatusSink> status_sink,
-                                               std::shared_ptr<TransmitterControlState> control)
-    : handler_(config, std::move(status_sink), std::move(control)) {
+                                               std::shared_ptr<TransmitterControlState> control,
+                                               std::shared_ptr<BidBudgetAccountant> accountant)
+    : handler_(config, std::move(status_sink), std::move(control), std::move(accountant)) {
   validate_ingress_config(config);
   if (config.backend == ClientUdpBackend::dpdk) {
     throw std::runtime_error("DPDK client UDP ingress requested, but wbhf_modem was built without DPDK support");
@@ -406,6 +424,12 @@ ClientUdpHandleResult ClientUdpIngressSocket::poll_once(BidMessageTransmitIntake
                                   intake,
                                   transmit_queue,
                                   log_queue);
+}
+
+BidMessageIntakeResult ClientUdpIngressSocket::pump_pending(BidMessageTransmitIntake& intake,
+                                                            SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                            SpscRingBuffer<BidMessageLogRecord>& log_queue) {
+  return handler_.pump_pending(intake, transmit_queue, log_queue);
 }
 
 ClientUdpIngressConfig load_client_udp_ingress_config(const std::filesystem::path& path) {

@@ -70,6 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--transmitter-log-file", type=Path, default=Path("/tmp/wbhf_transmitter.log"))
     parser.add_argument("--transmitter-log-capacity", type=int, default=65536)
     parser.add_argument("--client-latency-config", type=Path, default=REPO_ROOT / "config" / "client_latencies.conf")
+    parser.add_argument("--client-budget-config", type=Path, default=REPO_ROOT / "config" / "client_budgets.conf")
     parser.add_argument("--enqueue-test-message", action="store_true")
     parser.add_argument("--keep-fifo", action="store_true")
     return parser.parse_args()
@@ -125,6 +126,8 @@ def main() -> int:
         str(args.transmitter_log_capacity),
         "--latency-config",
         str(args.client_latency_config),
+        "--budget-config",
+        str(args.client_budget_config),
     ]
     configure_cmd = [
         tool_python(),

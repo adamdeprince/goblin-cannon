@@ -26,6 +26,7 @@ enum class ClientUdpStatusCode : std::uint8_t {
   insufficient_bid = 2,
   invalid_message_format = 3,
   unauthorized_source = 4,
+  insufficient_budget = 5,
 };
 
 struct ClientEndpoint {
@@ -63,6 +64,7 @@ struct ClientUdpHandleResult {
   bool unauthorized = false;
   bool log_backpressure = false;
   bool transmit_backpressure = false;
+  bool budget_rejected = false;
   std::uint8_t client_id = 0;
   std::uint32_t bid_price = 0;
 };
@@ -99,12 +101,16 @@ class ClientUdpMessageHandler final : public BidMessageLogObserver {
 public:
   explicit ClientUdpMessageHandler(ClientUdpIngressConfig config,
                                    std::shared_ptr<ClientUdpStatusSink> status_sink,
-                                   std::shared_ptr<TransmitterControlState> control = {});
+                                   std::shared_ptr<TransmitterControlState> control = {},
+                                   std::shared_ptr<BidBudgetAccountant> accountant = {});
 
   [[nodiscard]] ClientUdpHandleResult handle_datagram(const ClientUdpDatagram& datagram,
                                                       BidMessageTransmitIntake& intake,
                                                       SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                       SpscRingBuffer<BidMessageLogRecord>& log_queue);
+  [[nodiscard]] BidMessageIntakeResult pump_pending(BidMessageTransmitIntake& intake,
+                                                    SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                    SpscRingBuffer<BidMessageLogRecord>& log_queue);
   void on_bid_message_log(const BidMessageLogRecord& record) override;
 
 private:
@@ -115,13 +121,15 @@ private:
   ClientUdpIngressConfig config_;
   std::shared_ptr<ClientUdpStatusSink> status_sink_;
   std::shared_ptr<TransmitterControlState> control_;
+  std::shared_ptr<BidBudgetAccountant> accountant_;
 };
 
 class ClientUdpIngressSocket {
 public:
   ClientUdpIngressSocket(ClientUdpIngressConfig config,
                          std::shared_ptr<ClientUdpStatusSink> status_sink,
-                         std::shared_ptr<TransmitterControlState> control = {});
+                         std::shared_ptr<TransmitterControlState> control = {},
+                         std::shared_ptr<BidBudgetAccountant> accountant = {});
   ~ClientUdpIngressSocket();
 
   ClientUdpIngressSocket(const ClientUdpIngressSocket&) = delete;
@@ -132,6 +140,9 @@ public:
   [[nodiscard]] ClientUdpHandleResult poll_once(BidMessageTransmitIntake& intake,
                                                 SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                 SpscRingBuffer<BidMessageLogRecord>& log_queue);
+  [[nodiscard]] BidMessageIntakeResult pump_pending(BidMessageTransmitIntake& intake,
+                                                    SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                    SpscRingBuffer<BidMessageLogRecord>& log_queue);
 
 private:
   ClientUdpMessageHandler handler_;

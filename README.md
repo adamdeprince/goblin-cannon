@@ -129,6 +129,10 @@ The transmitter drains its bounded log ring to a common JSONL file. Logged event
 
 `config/client_latencies.conf` maps `client_id` to expected receiver-reporting latency in nanoseconds. The local demo defaults each client to `5000000` ns. The sender accepts `--latency-config path` and writes `expected_latency_ns` plus observed receiver-to-transmitter log latency for receiver-reported events.
 
+`config/client_budgets.conf` maps `client_id` to beginning-of-day budgets in pennies/cents. On startup the transmitter loads that file, then replays the JSONL log when it already exists to reconstruct remaining budgets and outstanding bids. A client bid that exceeds its remaining budget is blocked, logged as `budget_exhausted`, and receives an insufficient-budget UDP status. Sent client messages decrement remaining budget and enter an outstanding map keyed by internal radio wire payload and send timestamp. Receiver-reported delivery messages remove the closest outstanding entry after subtracting configured client latency; entries older than one second are scanned every 100 ms, removed, refunded, and logged as `budget_refund`.
+
+`config/client_udp_ingress.conf` is an optional transmitter UDP ingress config. Pass `--client-udp-config config/client_udp_ingress.conf` to `wbhf_radio_sender` to bind the kernel UDP intake path.
+
 ## Demo Market Data
 
 `config/demo_instruments.toml` defines the demo instrument universe and the integer price unit for each symbol. Stocks use half-penny units via `minimum_price_increment = 1/200`; currency pairs use pipettes with `1/100000` for non-JPY pairs and `1/1000` for JPY pairs; futures use their configured contract tick size; crypto pairs use the configured quote-currency increment. All conversion math in the Python tools is derived from that file.
@@ -255,7 +259,7 @@ For local FIFO testing, `scripts/start_pipe_radios.py` creates a named pipe, sta
 scripts/start_pipe_radios.py --quote-destination-port 9001 --enqueue-test-message
 ```
 
-The default FIFO is `/tmp/wbhf_iq.pipe`, the default quote UDP target is `127.0.0.1:9001`, and the default sample format is interleaved little-endian signed 16-bit IQ (`sc16_iq`). Set `MASSIVE_KEY` before running the full demo, or pass `--no-market-stream` to run only the pipe radios. The sender drains its bounded JSONL log ring to `/tmp/wbhf_transmitter.log` by default and reads client latency expectations from `config/client_latencies.conf`.
+The default FIFO is `/tmp/wbhf_iq.pipe`, the default quote UDP target is `127.0.0.1:9001`, and the default sample format is interleaved little-endian signed 16-bit IQ (`sc16_iq`). Set `MASSIVE_KEY` before running the full demo, or pass `--no-market-stream` to run only the pipe radios. The sender drains its bounded JSONL log ring to `/tmp/wbhf_transmitter.log` by default and reads client latency and budget expectations from `config/client_latencies.conf` and `config/client_budgets.conf`.
 
 ## Scope
 
