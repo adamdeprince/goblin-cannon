@@ -191,6 +191,7 @@ void log_writer_loop(wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>
       out << ",\"count\":" << record.count;
     }
     out << "}\n";
+    out.flush();
   }
 }
 

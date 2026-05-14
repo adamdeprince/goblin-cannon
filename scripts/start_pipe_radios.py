@@ -71,6 +71,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--transmitter-log-capacity", type=int, default=65536)
     parser.add_argument("--client-latency-config", type=Path, default=REPO_ROOT / "config" / "client_latencies.conf")
     parser.add_argument("--client-budget-config", type=Path, default=REPO_ROOT / "config" / "client_budgets.conf")
+    parser.add_argument("--client-udp-config", type=Path, help="optional transmitter-side client UDP ingress config")
     parser.add_argument("--enqueue-test-message", action="store_true")
     parser.add_argument("--keep-fifo", action="store_true")
     return parser.parse_args()
@@ -129,6 +130,8 @@ def main() -> int:
         "--budget-config",
         str(args.client_budget_config),
     ]
+    if args.client_udp_config:
+        sender_cmd.extend(["--client-udp-config", str(args.client_udp_config)])
     configure_cmd = [
         tool_python(),
         str(REPO_ROOT / "scripts" / "configure_local_radios.py"),

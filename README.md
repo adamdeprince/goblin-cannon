@@ -261,6 +261,14 @@ scripts/start_pipe_radios.py --quote-destination-port 9001 --enqueue-test-messag
 
 The default FIFO is `/tmp/wbhf_iq.pipe`, the default quote UDP target is `127.0.0.1:9001`, and the default sample format is interleaved little-endian signed 16-bit IQ (`sc16_iq`). Set `MASSIVE_KEY` before running the full demo, or pass `--no-market-stream` to run only the pipe radios. The sender drains its bounded JSONL log ring to `/tmp/wbhf_transmitter.log` by default and reads client latency and budget expectations from `config/client_latencies.conf` and `config/client_budgets.conf`.
 
+For an end-to-end software stack latency measurement, run:
+
+```sh
+MASSIVE_KEY=... scripts/benchmark_stack_latency.py --messages 16
+```
+
+The benchmark starts the same FIFO radio pair with QAM64, 48 kHz bandwidth, and 8x receiver oversampling, waits for Massive-backed market enqueue flow, sends tagged client UDP messages into the transmitter, tails the JSONL log for receiver-reported client wire messages, and prints latency percentiles. Use `--no-market-stream` for a local-only smoke benchmark that skips the Massive websocket requirement.
+
 ## Scope
 
 This is a baseband modem and framed stream layer. It assumes the receiver is configured with the same protocol parameters and currently expects sample-clock/symbol timing to be close enough for the preamble to absorb startup transients. Production HF links still need channel-specific synchronization, frequency tracking, equalization, and interleaving around this core.
