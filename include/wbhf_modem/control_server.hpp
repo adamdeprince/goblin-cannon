@@ -5,6 +5,7 @@
 #include "wbhf_modem/symbols.hpp"
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -100,6 +101,9 @@ private:
   std::uint64_t key_generation_ = 0;
   ReceiverRestartConfig active_receiver_ = {};
   std::optional<ReceiverRestartConfig> pending_restart_ = std::nullopt;
+  // Lock-free fast-path: DSP thread reads this atomic and only acquires
+  // mutex_ when a restart is actually queued.
+  std::atomic<bool> has_pending_restart_{false};
   std::uint64_t restart_generation_ = 0;
   OptionalPriceBanks prices_ = {};
   std::array<std::uint64_t, 2> bank_generation_ = {};
@@ -141,15 +145,26 @@ public:
       std::chrono::milliseconds timeout = std::chrono::milliseconds(3000)) const;
 
 private:
+  // Pack (generation << 8) | bank into a single atomic so the DSP thread can
+  // read the active bank lock-free.
+  static constexpr std::uint64_t pack_active_bank(std::uint8_t bank, std::uint64_t generation) noexcept {
+    return (generation << 8U) | static_cast<std::uint64_t>(bank);
+  }
+  static constexpr ActiveBankState unpack_active_bank(std::uint64_t packed) noexcept {
+    return {.bank = static_cast<std::uint8_t>(packed & 0xFFU), .generation = packed >> 8U};
+  }
+
   mutable std::mutex mutex_;
   Aes128Key aes_key_ = {};
   std::uint64_t key_generation_ = 0;
   TransmitterRestartConfig active_transmitter_ = {};
   std::optional<TransmitterRestartConfig> pending_restart_ = std::nullopt;
+  std::atomic<bool> has_pending_restart_{false};
   std::uint64_t restart_generation_ = 0;
   PriceBanks prices_ = {};
   std::array<std::uint64_t, 2> bank_generation_ = {};
   ActiveBankState active_bank_ = {};
+  std::atomic<std::uint64_t> active_bank_packed_{0};
   std::array<std::chrono::steady_clock::time_point, Clients> receiver_last_heartbeat_ = {};
   std::array<bool, Clients> receiver_seen_ = {};
   std::array<std::array<std::uint64_t, 2>, Clients> receiver_delivered_bank_generation_ = {};

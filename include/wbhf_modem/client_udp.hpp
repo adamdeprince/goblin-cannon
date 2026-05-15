@@ -144,6 +144,10 @@ public:
                                                     SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                     SpscRingBuffer<BidMessageLogRecord>& log_queue);
 
+  // Block (without external locks) until the socket has a datagram readable
+  // or timeout_ms elapses; returns true if data is readable.
+  bool wait_for_data(int timeout_ms) const noexcept;
+
 private:
   ClientUdpMessageHandler handler_;
   int socket_fd_ = -1;

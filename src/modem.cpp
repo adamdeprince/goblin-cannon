@@ -104,10 +104,48 @@ void validate(const ModemConfig& config) {
   }
 }
 
+namespace {
+
+bool sps_is_integer(double sps) noexcept {
+  if (!std::isfinite(sps) || sps < 1.5) {
+    return false;
+  }
+  const auto rounded = std::round(sps);
+  return std::abs(sps - rounded) < 1.0e-9;
+}
+
+} // namespace
+
 Encoder::Encoder(ModemConfig config)
     : config_(std::move(config)),
       info_(describe(config_)),
-      constellation_(config_.modulation, config_.constellation_profile) {}
+      constellation_(config_.modulation, config_.constellation_profile) {
+  if (sps_is_integer(info_.samples_per_symbol)) {
+    synth_sps_int_ = static_cast<int>(std::lround(info_.samples_per_symbol));
+    const double half_span = static_cast<double>(config_.filter_span_symbols) / 2.0;
+    synth_taps_.assign(synth_sps_int_, {});
+    synth_phase_d_min_.assign(synth_sps_int_, 0);
+    synth_phase_d_max_.assign(synth_sps_int_, 0);
+    for (int phase = 0; phase < synth_sps_int_; ++phase) {
+      // For sample at index (sps*q + phase), t = q + phase/sps.
+      // k iterates over integers in [t - half_span, t + half_span] = [q + phase/sps - h, q + phase/sps + h].
+      // d = k - q is in [ceil(phase/sps - h), floor(phase/sps + h)].
+      const double frac = static_cast<double>(phase) / static_cast<double>(synth_sps_int_);
+      const int d_min = static_cast<int>(std::ceil(frac - half_span));
+      const int d_max = static_cast<int>(std::floor(frac + half_span));
+      synth_phase_d_min_[phase] = d_min;
+      synth_phase_d_max_[phase] = d_max;
+      const int n = d_max - d_min + 1;
+      synth_taps_[phase].resize(static_cast<std::size_t>(n));
+      for (int i = 0; i < n; ++i) {
+        const int d = d_min + i;
+        const double arg = frac - static_cast<double>(d);
+        synth_taps_[phase][static_cast<std::size_t>(i)] =
+            static_cast<float>(rrc_impulse(arg, config_.rrc_rolloff));
+      }
+    }
+  }
+}
 
 StreamResult Encoder::push_bits(std::span<const std::uint8_t> bits, std::span<Complex> out) {
   for (const auto bit : bits) {
@@ -199,6 +237,25 @@ bool Encoder::can_produce_next_sample() const {
 }
 
 Complex Encoder::synthesize_sample(std::uint64_t sample_index) const {
+  if (!synth_taps_.empty()) {
+    // Fast path: integer SPS -> precomputed polyphase taps. No sin/cos/sqrt.
+    const auto sps = static_cast<std::uint64_t>(synth_sps_int_);
+    const auto phase = static_cast<std::size_t>(sample_index % sps);
+    const auto q = static_cast<std::int64_t>(sample_index / sps);
+    const auto& tap_row = synth_taps_[phase];
+    const int d_min = synth_phase_d_min_[phase];
+    const int d_max = synth_phase_d_max_[phase];
+    const auto k_min = std::max<std::int64_t>(first_symbol_index_, q + d_min);
+    const auto k_max = std::min<std::int64_t>(next_symbol_index_ - 1, q + d_max);
+    Complex y{0.0F, 0.0F};
+    for (auto k = k_min; k <= k_max; ++k) {
+      const auto symbol = symbols_[static_cast<std::size_t>(k - first_symbol_index_)];
+      const auto tap_idx = static_cast<std::size_t>((k - q) - d_min);
+      y += symbol * tap_row[tap_idx];
+    }
+    return y;
+  }
+
   const double half_span = static_cast<double>(config_.filter_span_symbols) / 2.0;
   const double t = static_cast<double>(sample_index) / info_.samples_per_symbol;
   const auto k_min = static_cast<std::int64_t>(std::ceil(t - half_span));
@@ -237,6 +294,29 @@ Decoder::Decoder(ModemConfig config, double timing_offset_symbols)
       target_symbol_power_(constellation_average_power(constellation_)) {
   if (!std::isfinite(timing_offset_symbols_) || timing_offset_symbols_ < 0.0 || timing_offset_symbols_ >= 1.0) {
     throw std::invalid_argument("timing_offset_symbols must be in [0, 1)");
+  }
+  if (sps_is_integer(info_.samples_per_symbol)) {
+    sps_int_ = static_cast<int>(std::lround(info_.samples_per_symbol));
+    sps_inv_ = 1.0F / static_cast<float>(sps_int_);
+    const double half_span = static_cast<double>(config_.filter_span_symbols) / 2.0;
+    // For symbol at integer index symbol_index, symbol_time = symbol_index + timing_offset.
+    // Sample index sample_index has sample_time = sample_index / sps.
+    // start_sample = ceil((symbol_time - half_span)*sps)
+    //              = ceil(sps*symbol_index + sps*timing_offset - sps*half_span)
+    //              = sps*symbol_index + ceil(sps*timing_offset - sps*half_span)
+    // s = sample_index - sps*symbol_index; s_min = ceil(sps*(timing_offset - half_span)),
+    // s_max = floor(sps*(timing_offset + half_span)).
+    const double sps_times_offset = static_cast<double>(sps_int_) * timing_offset_symbols_;
+    const double sps_times_half = static_cast<double>(sps_int_) * half_span;
+    taps_s_min_ = static_cast<int>(std::ceil(sps_times_offset - sps_times_half));
+    taps_s_max_ = static_cast<int>(std::floor(sps_times_offset + sps_times_half));
+    const int n_taps = taps_s_max_ - taps_s_min_ + 1;
+    taps_.assign(static_cast<std::size_t>(n_taps), 0.0F);
+    for (int i = 0; i < n_taps; ++i) {
+      const int s = taps_s_min_ + i;
+      const double arg = static_cast<double>(s) / static_cast<double>(sps_int_) - timing_offset_symbols_;
+      taps_[static_cast<std::size_t>(i)] = static_cast<float>(rrc_impulse(arg, config_.rrc_rolloff));
+    }
   }
   reset();
 }
@@ -304,6 +384,22 @@ bool Decoder::can_decode_next_symbol() const {
 }
 
 Complex Decoder::matched_filter_symbol(std::int64_t symbol_index) const {
+  if (!taps_.empty()) {
+    // Fast path: integer SPS -> precomputed taps, straight FMA accumulation.
+    const auto sps = static_cast<std::int64_t>(sps_int_);
+    const auto center = sps * symbol_index;  // sample index aligned to this symbol
+    const auto start = std::max<std::int64_t>(first_sample_index_, center + taps_s_min_);
+    const auto stop = std::min<std::int64_t>(static_cast<std::int64_t>(next_sample_index_) - 1,
+                                              center + taps_s_max_);
+    Complex y{0.0F, 0.0F};
+    for (auto sample_index = start; sample_index <= stop; ++sample_index) {
+      const auto offset = static_cast<std::size_t>(sample_index - first_sample_index_);
+      const auto tap_idx = static_cast<std::size_t>((sample_index - center) - taps_s_min_);
+      y += samples_[offset] * taps_[tap_idx];
+    }
+    return y * sps_inv_;
+  }
+
   const double half_span = static_cast<double>(config_.filter_span_symbols) / 2.0;
   const double symbol_time = static_cast<double>(symbol_index) + timing_offset_symbols_;
   const auto start = static_cast<std::int64_t>(

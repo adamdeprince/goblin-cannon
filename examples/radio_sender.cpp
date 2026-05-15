@@ -250,10 +250,16 @@ void log_writer_loop(wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>
     }
     return;
   }
+  std::size_t records_since_flush = 0;
+  constexpr std::size_t flush_batch = 64;
   while (running.load() || !log_queue.empty()) {
     wbhf_modem::BidMessageLogRecord record;
     if (!log_queue.try_pop(record)) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      if (records_since_flush != 0U) {
+        out.flush();
+        records_since_flush = 0;
+      }
+      std::this_thread::sleep_for(std::chrono::microseconds(200));
       continue;
     }
     const auto ts = record.local_timestamp_ns == 0U ? epoch_nanos() : record.local_timestamp_ns;
@@ -301,8 +307,13 @@ void log_writer_loop(wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>
       out << ",\"count\":" << record.count;
     }
     out << "}\n";
-    out.flush();
+    ++records_since_flush;
+    if (records_since_flush >= flush_batch) {
+      out.flush();
+      records_since_flush = 0;
+    }
   }
+  out.flush();
 }
 
 Args parse_args(int argc, char** argv) {
@@ -371,6 +382,8 @@ Args parse_args(int argc, char** argv) {
 
 int main(int argc, char** argv) {
   using namespace wbhf_modem;
+
+  radio_example::prepare_realtime_process("radio_sender");
 
   try {
     const auto args = parse_args(argc, argv);
@@ -448,15 +461,15 @@ int main(int argc, char** argv) {
                                                              accounting);
       client_udp_thread = std::thread([&, socket = std::move(socket)] mutable {
         while (running.load()) {
-          ClientUdpHandleResult received;
-          BidMessageIntakeResult pumped;
+          // Wait for a datagram without holding any mutex; kernel wakes us
+          // immediately on packet arrival instead of an unconditional 1ms sleep.
+          const bool data_ready = socket->wait_for_data(1);
           {
             std::scoped_lock lock(*log_queue_mutex);
-            received = socket->poll_once(shared_bid_intake, *tx_queue, *log_queue);
-            pumped = socket->pump_pending(shared_bid_intake, *tx_queue, *log_queue);
-          }
-          if (!received.accepted && !received.rejected && !pumped.transmitted && !pumped.budget_rejected) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            if (data_ready) {
+              (void)socket->poll_once(shared_bid_intake, *tx_queue, *log_queue);
+            }
+            (void)socket->pump_pending(shared_bid_intake, *tx_queue, *log_queue);
           }
         }
       });
@@ -502,11 +515,16 @@ int main(int argc, char** argv) {
     std::vector<Complex> samples(args.chunk_samples);
     std::uint64_t produced_samples = 0;
     auto last_iq_trace = std::chrono::steady_clock::now();
+    // Promote this (audio/DSP) thread to SCHED_FIFO best-effort once we've
+    // finished setup; pin to CPU 2 so it doesn't fight with logger/intake.
+    radio_example::promote_to_realtime("radio_sender.audio", 50, 2);
     try {
       while (running.load()) {
         const auto tx = transmitter.push_samples(samples);
         if (tx.produced_samples == 0U) {
-          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          // Startup / restart only: pacer otherwise gates this loop. Tight
+          // sleep so we don't add millisecond-class latency before steady state.
+          std::this_thread::sleep_for(std::chrono::microseconds(50));
           continue;
         }
         const auto out = std::span<const Complex>(samples).first(tx.produced_samples);

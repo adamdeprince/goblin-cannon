@@ -740,6 +740,7 @@ ReceiverControlState::ReceiverControlState(RealtimePipelineConfig initial_pipeli
   active_receiver_.pipeline = std::move(initial_pipeline);
   aes_key_ = active_receiver_.pipeline.aes_key;
   pending_restart_ = active_receiver_;
+  has_pending_restart_.store(true, std::memory_order_release);
 }
 
 ReceiverControlSnapshot ReceiverControlState::snapshot() const {
@@ -772,9 +773,15 @@ ReceiverRestartConfig ReceiverControlState::active_receiver_config() const {
 }
 
 std::optional<ReceiverRestartConfig> ReceiverControlState::take_pending_restart() {
+  // Lock-free fast path: no pending restart, no mutex acquisition. The DSP
+  // thread calls this every chunk; in steady state it stays lock-free.
+  if (!has_pending_restart_.load(std::memory_order_acquire)) {
+    return std::nullopt;
+  }
   std::scoped_lock lock(mutex_);
   auto restart = std::move(pending_restart_);
   pending_restart_.reset();
+  has_pending_restart_.store(false, std::memory_order_release);
   return restart;
 }
 
@@ -882,6 +889,7 @@ ReceiverRestartConfig ReceiverControlState::request_restart(ReceiverRestartConfi
   config.generation = ++restart_generation_;
   active_receiver_ = config;
   pending_restart_ = config;
+  has_pending_restart_.store(true, std::memory_order_release);
   prices_[0].reset();
   prices_[1].reset();
   active_market_bank_.reset();
@@ -957,6 +965,9 @@ TransmitterControlState::TransmitterControlState(RealtimePipelineConfig initial_
   active_transmitter_.pipeline = std::move(initial_pipeline);
   aes_key_ = active_transmitter_.pipeline.aes_key;
   pending_restart_ = active_transmitter_;
+  has_pending_restart_.store(true, std::memory_order_release);
+  active_bank_packed_.store(pack_active_bank(active_bank_.bank, active_bank_.generation),
+                            std::memory_order_release);
 }
 
 TransmitterControlSnapshot TransmitterControlState::snapshot() const {
@@ -986,9 +997,15 @@ TransmitterRestartConfig TransmitterControlState::active_transmitter_config() co
 }
 
 std::optional<TransmitterRestartConfig> TransmitterControlState::take_pending_restart() {
+  // Lock-free fast path on the DSP thread: in steady state the audio thread
+  // calls this every chunk and the atomic load is the entire cost.
+  if (!has_pending_restart_.load(std::memory_order_acquire)) {
+    return std::nullopt;
+  }
   std::scoped_lock lock(mutex_);
   auto restart = std::move(pending_restart_);
   pending_restart_.reset();
+  has_pending_restart_.store(false, std::memory_order_release);
   return restart;
 }
 
@@ -1012,8 +1029,9 @@ std::uint64_t TransmitterControlState::bank_generation(std::uint8_t bank) const 
 }
 
 ActiveBankState TransmitterControlState::active_bank() const {
-  std::scoped_lock lock(mutex_);
-  return active_bank_;
+  // Lock-free read on the DSP fast path. Writers publish via active_bank_packed_
+  // after taking mutex_ to update active_bank_.
+  return unpack_active_bank(active_bank_packed_.load(std::memory_order_acquire));
 }
 
 bool TransmitterControlState::receiver_client_alive(std::uint8_t client_id,
@@ -1062,6 +1080,7 @@ TransmitterRestartConfig TransmitterControlState::request_restart(TransmitterRes
   config.generation = ++restart_generation_;
   active_transmitter_ = config;
   pending_restart_ = config;
+  has_pending_restart_.store(true, std::memory_order_release);
   return config;
 }
 
@@ -1083,6 +1102,8 @@ ActiveBankState TransmitterControlState::use_bank(std::uint8_t bank) {
   std::scoped_lock lock(mutex_);
   active_bank_.bank = bank;
   ++active_bank_.generation;
+  active_bank_packed_.store(pack_active_bank(active_bank_.bank, active_bank_.generation),
+                            std::memory_order_release);
   return active_bank_;
 }
 

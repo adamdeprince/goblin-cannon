@@ -146,6 +146,14 @@ private:
   std::uint64_t next_sample_index_ = 0;
   bool flushing_ = false;
   std::int64_t flush_last_symbol_index_ = -1;
+  // Precomputed pulse-shape taps for integer samples_per_symbol. For each
+  // phase (= sample_index % sps), synth_taps_[phase] holds taps for symbol
+  // offsets d in [synth_phase_d_min_[phase], synth_phase_d_max_[phase]] where
+  // d = k - q (q = sample_index / sps). Tap value = rrc((phase/sps - d), rolloff).
+  std::vector<std::vector<float>> synth_taps_;
+  std::vector<int> synth_phase_d_min_;
+  std::vector<int> synth_phase_d_max_;
+  int synth_sps_int_ = 0;
 };
 
 class Decoder {
@@ -179,6 +187,14 @@ private:
   float agc_gain_ = 1.0F;
   float agc_power_ = 1.0F;
   float target_symbol_power_ = 1.0F;
+  // Precomputed RRC matched-filter taps for integer samples_per_symbol.
+  // taps_[i] applies to the sample at offset (taps_s_min_ + i) from
+  // sps_int_*symbol_index. Empty if the integer-SPS fast path is unavailable.
+  std::vector<float> taps_;
+  int sps_int_ = 0;
+  int taps_s_min_ = 0;
+  int taps_s_max_ = 0;
+  float sps_inv_ = 0.0F;
 };
 
 class BytePacker {

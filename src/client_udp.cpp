@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -430,6 +431,18 @@ BidMessageIntakeResult ClientUdpIngressSocket::pump_pending(BidMessageTransmitIn
                                                             SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                             SpscRingBuffer<BidMessageLogRecord>& log_queue) {
   return handler_.pump_pending(intake, transmit_queue, log_queue);
+}
+
+bool ClientUdpIngressSocket::wait_for_data(int timeout_ms) const noexcept {
+  if (socket_fd_ < 0) {
+    return false;
+  }
+  pollfd pfd{.fd = socket_fd_, .events = POLLIN, .revents = 0};
+  int rc = 0;
+  do {
+    rc = ::poll(&pfd, 1, timeout_ms);
+  } while (rc < 0 && errno == EINTR);
+  return rc > 0 && (pfd.revents & POLLIN) != 0;
 }
 
 ClientUdpIngressConfig load_client_udp_ingress_config(const std::filesystem::path& path) {

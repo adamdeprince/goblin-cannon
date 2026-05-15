@@ -4,6 +4,7 @@
 #include "wbhf_modem/control/v1/receiver_control.grpc.pb.h"
 #include "wbhf_modem/io.hpp"
 #include "wbhf_modem/quote_udp.hpp"
+#include "wbhf_modem/ring_buffer.hpp"
 
 #include <grpcpp/grpcpp.h>
 
@@ -20,6 +21,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -121,6 +123,77 @@ private:
   std::mutex mutex_;
   std::condition_variable cv_;
   std::deque<ReceiverSessionEvent> queue_;
+};
+
+// Wraps a real QuotePacketSink so the decode thread only does a non-blocking
+// ring push instead of a sendto() syscall per decoded quote. A background
+// thread drains the ring and calls the underlying sink.
+class AsyncQuotePacketSink final : public wbhf_modem::QuotePacketSink {
+public:
+  AsyncQuotePacketSink(std::shared_ptr<wbhf_modem::QuotePacketSink> inner,
+                       std::size_t capacity = 4096)
+      : inner_(std::move(inner)),
+        ring_(capacity) {
+    if (!inner_) {
+      throw std::invalid_argument("AsyncQuotePacketSink requires inner sink");
+    }
+    thread_ = std::thread([this] { drain_loop(); });
+  }
+
+  ~AsyncQuotePacketSink() override {
+    stop();
+    if (thread_.joinable()) {
+      thread_.join();
+    }
+  }
+
+  AsyncQuotePacketSink(const AsyncQuotePacketSink&) = delete;
+  AsyncQuotePacketSink& operator=(const AsyncQuotePacketSink&) = delete;
+
+  void send_quote_packet(std::span<const std::uint8_t, 9> payload) override {
+    wbhf_modem::QuoteUdpPayload buffer{};
+    std::copy(payload.begin(), payload.end(), buffer.begin());
+    if (!ring_.try_push(buffer)) {
+      dropped_.fetch_add(1U, std::memory_order_relaxed);
+    }
+  }
+
+  void stop() noexcept {
+    stop_.store(true, std::memory_order_release);
+  }
+
+  [[nodiscard]] std::uint64_t dropped() const noexcept {
+    return dropped_.load(std::memory_order_relaxed);
+  }
+
+private:
+  void drain_loop() {
+    wbhf_modem::QuoteUdpPayload payload{};
+    while (!stop_.load(std::memory_order_acquire) && running.load(std::memory_order_acquire)) {
+      bool any = false;
+      while (ring_.try_pop(payload)) {
+        inner_->send_quote_packet(std::span<const std::uint8_t, 9>(payload));
+        any = true;
+      }
+      if (!any) {
+        std::this_thread::sleep_for(std::chrono::microseconds(50));
+      }
+    }
+    // Drain remaining on shutdown so we don't lose tail quotes.
+    while (ring_.try_pop(payload)) {
+      try {
+        inner_->send_quote_packet(std::span<const std::uint8_t, 9>(payload));
+      } catch (...) {
+        break;
+      }
+    }
+  }
+
+  std::shared_ptr<wbhf_modem::QuotePacketSink> inner_;
+  wbhf_modem::SpscRingBuffer<wbhf_modem::QuoteUdpPayload> ring_;
+  std::atomic_bool stop_{false};
+  std::atomic_uint64_t dropped_{0};
+  std::thread thread_;
 };
 
 class ReceiverMessageObserver final : public wbhf_modem::DelimitedMessageObserver {
@@ -314,6 +387,8 @@ Args parse_args(int argc, char** argv) {
 int main(int argc, char** argv) {
   using namespace wbhf_modem;
 
+  radio_example::prepare_realtime_process("radio_receiver");
+
   try {
     const auto args = parse_args(argc, argv);
     std::signal(SIGINT, handle_signal);
@@ -332,7 +407,8 @@ int main(int argc, char** argv) {
     quote_config.destination_port = args.quote_destination_port;
     quote_config.source_ip = "0.0.0.0";
     quote_config.source_port = 0;
-    auto quote_sink = make_quote_packet_sink(quote_config);
+    auto quote_sink_inner = make_quote_packet_sink(quote_config);
+    auto quote_sink = std::shared_ptr<QuotePacketSink>(std::make_shared<AsyncQuotePacketSink>(quote_sink_inner));
 
     ControlledRealtimeReceiver receiver(receiver_control, rx_messages);
     QuotePacketEmitter quote_emitter(receiver_control, quote_sink);
@@ -354,11 +430,16 @@ int main(int argc, char** argv) {
     std::uint64_t decoded_messages = 0;
     std::uint64_t consumed_samples = 0;
     auto last_iq_trace = std::chrono::steady_clock::now();
+    // Promote the decode thread to SCHED_FIFO best-effort and pin off the
+    // gRPC/session/UDP-egress cores.
+    radio_example::promote_to_realtime("radio_receiver.audio", 50, 3);
     try {
       while (running.load()) {
         const auto n = source.read(samples);
         if (n == 0U) {
-          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          // Tight idle; the sender produces a chunk roughly every chunk_samples /
+          // sample_rate seconds and we want to wake within microseconds of it.
+          std::this_thread::sleep_for(std::chrono::microseconds(50));
           continue;
         }
         const auto result = receiver.push_samples(std::span<const Complex>(samples).first(n));
