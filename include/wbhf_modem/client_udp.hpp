@@ -108,10 +108,20 @@ public:
                                                       BidMessageTransmitIntake& intake,
                                                       SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                       SpscRingBuffer<BidMessageLogRecord>& log_queue);
+  // Hot-path overload: caller provides the parsed network-order source addr
+  // so we skip the string-keyed authorized-client scan.
+  [[nodiscard]] ClientUdpHandleResult handle_datagram(const ClientUdpDatagram& datagram,
+                                                      std::uint32_t source_addr_be,
+                                                      BidMessageTransmitIntake& intake,
+                                                      SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                      SpscRingBuffer<BidMessageLogRecord>& log_queue);
   [[nodiscard]] BidMessageIntakeResult pump_pending(BidMessageTransmitIntake& intake,
                                                     SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                     SpscRingBuffer<BidMessageLogRecord>& log_queue);
   void on_bid_message_log(const BidMessageLogRecord& record) override;
+  // Lookup by parsed source address (network-byte-order uint32) — avoids the
+  // inet_ntop + std::string compare on the per-packet hot path.
+  [[nodiscard]] std::optional<std::uint8_t> client_id_for_source_addr(std::uint32_t addr) const noexcept;
 
 private:
   [[nodiscard]] std::optional<std::uint8_t> client_id_for_source(std::string_view ip) const noexcept;
@@ -122,6 +132,10 @@ private:
   std::shared_ptr<ClientUdpStatusSink> status_sink_;
   std::shared_ptr<TransmitterControlState> control_;
   std::shared_ptr<BidBudgetAccountant> accountant_;
+  // Precomputed authorized-source-address table (network byte order); a
+  // zero-byte string in config maps to absent.
+  std::array<std::uint32_t, Clients> authorized_client_addrs_ = {};
+  std::array<bool, Clients> authorized_client_present_ = {};
 };
 
 class ClientUdpIngressSocket {

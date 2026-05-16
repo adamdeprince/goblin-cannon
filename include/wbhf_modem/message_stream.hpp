@@ -181,7 +181,8 @@ public:
 private:
   [[nodiscard]] bool flush_pending(SpscRingBuffer<DelimitedMessage>& output);
   [[nodiscard]] bool push_completed(std::vector<std::uint8_t> message,
-                                    SpscRingBuffer<DelimitedMessage>& output);
+                                    SpscRingBuffer<DelimitedMessage>& output,
+                                    bool& emitted);
 
   std::vector<std::uint8_t> current_;
   std::optional<DelimitedMessage> pending_;
@@ -245,6 +246,7 @@ private:
   RfStreamEncoder rf_;
   Constellation constellation_;
   std::vector<std::uint8_t> pending_bits_;
+  std::size_t pending_bits_head_ = 0;
   std::vector<std::uint32_t> symbols_;
   std::size_t symbol_offset_ = 0;
   std::array<std::uint8_t, 8> sync_timestamp_bytes_{};
@@ -277,6 +279,9 @@ private:
   std::size_t sync_timestamp_offset_ = 0;
   bool sync_timestamp_validated_ = false;
   bool stream_aborted_ = false;
+  // Persistent per-chunk buffers reused across push_samples calls.
+  std::vector<SoftBit> coded_bits_buffer_;
+  std::vector<Token> message_tokens_buffer_;
 };
 
 } // namespace wbhf_modem

@@ -17,6 +17,10 @@ bool is_delimiter(std::uint8_t byte) noexcept {
   return byte == 0U || byte == 1U;
 }
 
+constexpr std::size_t message_crc_bytes = 4U;
+constexpr std::uint32_t message_crc31_mask = 0x7FFFFFFFU;
+constexpr std::uint32_t message_crc_radix = 254U;
+
 double current_epoch_seconds() {
   const auto now = std::chrono::system_clock::now().time_since_epoch();
   return std::chrono::duration<double>(now).count();
@@ -59,11 +63,90 @@ void validate_bid_message(const BidMessage& message) {
   validate_message(DelimitedMessage{.bytes = message.payload});
 }
 
+std::uint32_t message_crc32_update(std::uint32_t crc, std::span<const std::uint8_t> bytes) {
+  crc = ~crc;
+  for (const auto byte : bytes) {
+    crc ^= byte;
+    for (int bit = 0; bit < 8; ++bit) {
+      const std::uint32_t mask = 0U - (crc & 1U);
+      crc = (crc >> 1U) ^ (0xEDB88320U & mask);
+    }
+  }
+  return ~crc;
+}
+
+std::uint32_t message_crc31(std::span<const std::uint8_t> bytes) {
+  return message_crc32_update(0, bytes) & message_crc31_mask;
+}
+
+std::array<std::uint8_t, message_crc_bytes> encode_crc31_base254(std::uint32_t value) {
+  value &= message_crc31_mask;
+  std::array<std::uint8_t, message_crc_bytes> out{};
+  for (auto& byte : out) {
+    byte = static_cast<std::uint8_t>(2U + (value % message_crc_radix));
+    value /= message_crc_radix;
+  }
+  return out;
+}
+
+std::optional<std::uint32_t> decode_crc31_base254(std::span<const std::uint8_t, message_crc_bytes> bytes) {
+  std::uint64_t value = 0;
+  std::uint64_t multiplier = 1;
+  for (const auto byte : bytes) {
+    if (byte < 2U) {
+      return std::nullopt;
+    }
+    value += static_cast<std::uint64_t>(byte - 2U) * multiplier;
+    multiplier *= message_crc_radix;
+  }
+  if (value > message_crc31_mask) {
+    return std::nullopt;
+  }
+  return static_cast<std::uint32_t>(value);
+}
+
+bool message_carries_crc(std::span<const std::uint8_t> message) noexcept {
+  return message.size() > 1U;
+}
+
+std::size_t message_wire_bytes(std::span<const std::uint8_t> message) noexcept {
+  return message.size() + (message_carries_crc(message) ? message_crc_bytes : 0U);
+}
+
+void append_message_crc(std::vector<std::uint8_t>& message) {
+  if (!message_carries_crc(message)) {
+    return;
+  }
+  const auto encoded = encode_crc31_base254(message_crc31(message));
+  message.insert(message.end(), encoded.begin(), encoded.end());
+}
+
+std::optional<std::vector<std::uint8_t>> verify_and_strip_message_crc(std::vector<std::uint8_t> message) {
+  if (!message_carries_crc(message)) {
+    return std::nullopt;
+  }
+  if (message.size() <= message_crc_bytes) {
+    return std::nullopt;
+  }
+  const auto body_size = message.size() - message_crc_bytes;
+  const auto observed = decode_crc31_base254(
+      std::span<const std::uint8_t, message_crc_bytes>(message.data() + body_size, message_crc_bytes));
+  if (!observed.has_value()) {
+    return std::nullopt;
+  }
+  const auto expected = message_crc31(std::span<const std::uint8_t>(message.data(), body_size));
+  if (*observed != expected) {
+    return std::nullopt;
+  }
+  message.resize(body_size);
+  return message;
+}
+
 bool bid_score_better(const BidMessage& candidate, const BidMessage& incumbent) noexcept {
   const auto candidate_score = static_cast<long double>(candidate.bid_price) /
-                               static_cast<long double>(candidate.payload.size());
+                               static_cast<long double>(message_wire_bytes(candidate.payload));
   const auto incumbent_score = static_cast<long double>(incumbent.bid_price) /
-                               static_cast<long double>(incumbent.payload.size());
+                               static_cast<long double>(message_wire_bytes(incumbent.payload));
   if (candidate_score != incumbent_score) {
     return candidate_score > incumbent_score;
   }
@@ -151,6 +234,7 @@ MessageFrameEncodeResult MessageStreamFramer::next_payload_frame(SpscRingBuffer<
       if (observer_ != nullptr) {
         observer_->on_delimited_message(DelimitedMessage{.bytes = current_});
       }
+      append_message_crc(current_);
       current_offset_ = 0;
       ++result.consumed_messages;
     }
@@ -369,15 +453,22 @@ bool MessageStreamDeframer::flush_pending(SpscRingBuffer<DelimitedMessage>& outp
 }
 
 bool MessageStreamDeframer::push_completed(std::vector<std::uint8_t> message,
-                                           SpscRingBuffer<DelimitedMessage>& output) {
+                                           SpscRingBuffer<DelimitedMessage>& output,
+                                           bool& emitted) {
+  emitted = false;
   if (message.size() <= 1U) {
     return true;
   }
-  DelimitedMessage completed{.bytes = std::move(message)};
+  auto verified = verify_and_strip_message_crc(std::move(message));
+  if (!verified.has_value()) {
+    return true;
+  }
+  DelimitedMessage completed{.bytes = std::move(*verified)};
   if (output.try_push(completed)) {
     if (observer_ != nullptr) {
       observer_->on_delimited_message(completed);
     }
+    emitted = true;
     return true;
   }
   pending_ = std::move(completed);
@@ -419,16 +510,16 @@ MessageFrameDecodeResult MessageStreamDeframer::push_payload_tokens(std::span<co
     const auto byte = token.value;
     if (is_delimiter(byte)) {
       auto completed = std::move(current_);
-      const bool should_emit = completed.size() > 1U;
       current_.clear();
       current_.push_back(byte);
       require_delimiter_ = false;
       ++result.consumed_bytes;
-      if (!push_completed(std::move(completed), output)) {
+      bool emitted = false;
+      if (!push_completed(std::move(completed), output, emitted)) {
         result.output_backpressure = true;
         return result;
       }
-      if (should_emit) {
+      if (emitted) {
         ++result.produced_messages;
       }
       continue;
@@ -484,16 +575,26 @@ void RealtimeTransmitter::ensure_symbol_block(RealtimeTransmitResult& result) {
   }
   ++result.emitted_bytes;
 
-  auto coded = convolutional_.push_bytes(byte);
-  auto scrambled = bit_xor_.xor_bits(coded);
-  result.emitted_coded_bits += scrambled.size();
-  pending_bits_.insert(pending_bits_.end(), scrambled.begin(), scrambled.end());
+  // Append coded bits straight into pending_bits_ — no intermediate vectors.
+  const auto before = pending_bits_.size();
+  convolutional_.push_bytes_append(byte, pending_bits_);
+  // Scramble the newly appended bits in place.
+  bit_xor_.xor_bits_in_place(std::span<std::uint8_t>(pending_bits_).subspan(before));
+  result.emitted_coded_bits += pending_bits_.size() - before;
 
+  // Pack bits into QAM symbols using a head index instead of erase()ing the
+  // front, then amortize compaction when over half the buffer is consumed.
   const auto qam_bits = constellation_.bits_per_symbol();
-  while (pending_bits_.size() >= qam_bits) {
-    const auto symbol = constellation_.bits_to_symbol(std::span<const std::uint8_t>(pending_bits_).first(qam_bits));
+  while (pending_bits_.size() - pending_bits_head_ >= qam_bits) {
+    const auto symbol = constellation_.bits_to_symbol(
+        std::span<const std::uint8_t>(pending_bits_).subspan(pending_bits_head_, qam_bits));
     symbols_.push_back(symbol);
-    pending_bits_.erase(pending_bits_.begin(), pending_bits_.begin() + static_cast<std::ptrdiff_t>(qam_bits));
+    pending_bits_head_ += qam_bits;
+  }
+  if (pending_bits_head_ > 0U && pending_bits_head_ * 2U >= pending_bits_.size()) {
+    pending_bits_.erase(pending_bits_.begin(),
+                        pending_bits_.begin() + static_cast<std::ptrdiff_t>(pending_bits_head_));
+    pending_bits_head_ = 0U;
   }
 }
 
@@ -590,24 +691,22 @@ bool RealtimeReceiver::accept_sync_timestamp_byte(const Token& token, RealtimeRe
 }
 
 bool RealtimeReceiver::process_decoded_tokens(std::span<const Token> tokens, RealtimeReceiveResult& result) {
-  std::vector<Token> message_tokens;
-  message_tokens.reserve(tokens.size());
-
-  for (const auto& token : tokens) {
-    if (!sync_timestamp_validated_) {
-      if (!accept_sync_timestamp_byte(token, result)) {
-        return false;
-      }
-      continue;
+  // Eat sync-timestamp bytes from the front of the token stream until the
+  // timestamp is validated. After that, pass the remaining span straight to
+  // the deframer with no intermediate copy.
+  std::size_t start = 0;
+  while (start < tokens.size() && !sync_timestamp_validated_) {
+    if (!accept_sync_timestamp_byte(tokens[start], result)) {
+      return false;
     }
-    message_tokens.push_back(token);
+    ++start;
   }
-
-  if (message_tokens.empty()) {
+  if (start >= tokens.size()) {
     return true;
   }
 
-  const auto decoded_messages = deframer_.push_payload_tokens(message_tokens, output_);
+  const auto decoded_messages =
+      deframer_.push_payload_tokens(tokens.subspan(start), output_);
   result.produced_messages += decoded_messages.produced_messages;
   result.output_backpressure = result.output_backpressure || decoded_messages.output_backpressure;
   return !decoded_messages.output_backpressure;
@@ -631,8 +730,8 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
     }
 
     std::array<std::uint8_t, max_bits_per_symbol> bits{};
-    std::vector<SoftBit> new_coded_bits;
-    new_coded_bits.reserve(decoded.produced_symbols * constellation_.bits_per_symbol());
+    coded_bits_buffer_.clear();
+    coded_bits_buffer_.reserve(decoded.produced_symbols * constellation_.bits_per_symbol());
     for (std::size_t i = 0; i < decoded.produced_symbols; ++i) {
       constellation_.symbol_to_bits(symbols[i].value,
                                     std::span<std::uint8_t>(bits).first(constellation_.bits_per_symbol()));
@@ -640,16 +739,17 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
         const SoftBit soft{.value = bits[bit],
                            .certain = symbols[i].certain,
                            .confidence = symbols[i].confidence};
-        new_coded_bits.push_back(bit_xor_.xor_soft_bit(soft));
+        coded_bits_buffer_.push_back(bit_xor_.xor_soft_bit(soft));
       }
     }
     if (stream_aborted_) {
       result.replay_rejected = true;
-    } else if (!new_coded_bits.empty()) {
-      const auto decoded_tokens = viterbi_.push(new_coded_bits);
-      result.decoded_bytes += decoded_tokens.size();
-      if (!decoded_tokens.empty()) {
-        (void)process_decoded_tokens(decoded_tokens, result);
+    } else if (!coded_bits_buffer_.empty()) {
+      message_tokens_buffer_.clear();
+      viterbi_.push_append(coded_bits_buffer_, message_tokens_buffer_);
+      result.decoded_bytes += message_tokens_buffer_.size();
+      if (!message_tokens_buffer_.empty()) {
+        (void)process_decoded_tokens(message_tokens_buffer_, result);
       }
     }
     if (result.output_backpressure || result.replay_rejected || decoded.consumed_samples == 0U) {

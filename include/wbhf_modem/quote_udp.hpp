@@ -14,6 +14,7 @@
 namespace wbhf_modem {
 
 using QuoteUdpPayload = std::array<std::uint8_t, 9>;
+using BadMessageUdpPayload = std::array<std::uint8_t, 19>;
 
 enum class QuoteUdpBackend {
   kernel_udp,
@@ -40,7 +41,9 @@ struct QuoteUdpSinkConfig {
 class QuotePacketSink {
 public:
   virtual ~QuotePacketSink() = default;
-  virtual void send_quote_packet(std::span<const std::uint8_t, 9> payload) = 0;
+  virtual void send_packet(std::span<const std::uint8_t> payload) = 0;
+  virtual void send_quote_packet(std::span<const std::uint8_t, 9> payload);
+  virtual void send_bad_message_packet(std::span<const std::uint8_t, 19> payload);
 };
 
 class KernelUdpQuotePacketSink final : public QuotePacketSink {
@@ -53,7 +56,7 @@ public:
   KernelUdpQuotePacketSink(KernelUdpQuotePacketSink&&) noexcept;
   KernelUdpQuotePacketSink& operator=(KernelUdpQuotePacketSink&&) noexcept;
 
-  void send_quote_packet(std::span<const std::uint8_t, 9> payload) override;
+  void send_packet(std::span<const std::uint8_t> payload) override;
 
 private:
   int socket_fd_ = -1;
@@ -64,7 +67,7 @@ private:
 class DpdkQuotePacketSink final : public QuotePacketSink {
 public:
   explicit DpdkQuotePacketSink(const QuoteUdpSinkConfig& config);
-  void send_quote_packet(std::span<const std::uint8_t, 9> payload) override;
+  void send_packet(std::span<const std::uint8_t> payload) override;
 
 private:
   QuoteUdpSinkConfig config_;
@@ -86,5 +89,9 @@ private:
 };
 
 [[nodiscard]] QuoteUdpPayload make_quote_udp_payload(std::uint8_t symbol, std::uint64_t price_units);
+[[nodiscard]] BadMessageUdpPayload make_bad_message_udp_payload(std::uint8_t bank,
+                                                                std::uint8_t symbol,
+                                                                std::uint64_t base_price_units,
+                                                                std::uint64_t reconstructed_price_units);
 
 } // namespace wbhf_modem

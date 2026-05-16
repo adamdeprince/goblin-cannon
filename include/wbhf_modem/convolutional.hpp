@@ -38,6 +38,10 @@ public:
   [[nodiscard]] const PuncturedConvolutionalCodeConfig& config() const noexcept { return config_; }
   [[nodiscard]] std::vector<std::uint8_t> push_bit(std::uint8_t bit);
   [[nodiscard]] std::vector<std::uint8_t> push_bytes(std::span<const std::uint8_t> bytes);
+  // Alloc-free hot-path variants: append coded bits to the caller's buffer
+  // instead of allocating a fresh vector per call.
+  void push_bit_append(std::uint8_t bit, std::vector<std::uint8_t>& out);
+  void push_bytes_append(std::span<const std::uint8_t> bytes, std::vector<std::uint8_t>& out);
   void reset() noexcept;
 
 private:
@@ -67,6 +71,8 @@ public:
 
   [[nodiscard]] const PuncturedConvolutionalCodeConfig& config() const noexcept { return config_; }
   [[nodiscard]] std::vector<Token> push(std::span<const SoftBit> coded_bits);
+  // Alloc-free hot-path variant: appends produced tokens to caller buffer.
+  void push_append(std::span<const SoftBit> coded_bits, std::vector<Token>& out);
   void reset();
 
 private:
@@ -80,6 +86,15 @@ private:
   [[nodiscard]] std::size_t observations_required_for_next_bit() const noexcept;
   void process_bit(std::span<const SoftBit> observations);
   void emit_ready_bytes(std::vector<Token>& out);
+  [[nodiscard]] std::size_t history_steps_in_flight() const noexcept {
+    return history_step_count_ - history_emitted_count_;
+  }
+  [[nodiscard]] Decision& history_row(std::size_t step, std::size_t state) noexcept {
+    return history_storage_[(step % history_capacity_) * states_ + state];
+  }
+  [[nodiscard]] const Decision& history_row(std::size_t step, std::size_t state) const noexcept {
+    return history_storage_[(step % history_capacity_) * states_ + state];
+  }
 
   PuncturedConvolutionalCodeConfig config_;
   std::size_t traceback_bits_ = 0;
@@ -88,9 +103,16 @@ private:
   std::uint32_t full_mask_ = 0;
   std::size_t mother_bit_index_ = 0;
   std::vector<SoftBit> pending_;
+  std::size_t pending_head_ = 0;
   std::vector<float> metrics_;
   std::vector<float> next_metrics_;
-  std::vector<std::vector<Decision>> history_;
+  // Flat preallocated history: history_storage_[(step % history_capacity_) * states_ + state].
+  std::vector<Decision> history_storage_;
+  std::size_t history_capacity_ = 0;
+  std::size_t history_step_count_ = 0;
+  std::size_t history_emitted_count_ = 0;
+  // Scratch traceback buffer to avoid per-emit allocation.
+  std::vector<SoftBit> traceback_bits_buffer_;
 };
 
 class Aes128CtrBitXor {
@@ -101,11 +123,19 @@ public:
   [[nodiscard]] SoftBit xor_soft_bit(SoftBit bit);
   [[nodiscard]] std::vector<std::uint8_t> xor_bits(std::span<const std::uint8_t> bits);
   [[nodiscard]] std::vector<SoftBit> xor_soft_bits(std::span<const SoftBit> bits);
+  // Alloc-free in-place XOR for the hot path.
+  void xor_bits_in_place(std::span<std::uint8_t> bits);
 
 private:
+  // Refills the keystream buffer in one EVP call, then serves bits/bytes
+  // from the buffer. Amortizes ~64x the per-byte OpenSSL crossing.
+  static constexpr std::size_t keystream_buffer_bytes = 64;
   [[nodiscard]] std::uint8_t next_keystream_bit();
+  void refill_keystream_byte();
 
   Aes128CtrKeystream stream_;
+  std::array<std::uint8_t, keystream_buffer_bytes> keystream_buffer_{};
+  std::size_t keystream_buffer_pos_ = keystream_buffer_bytes;  // start empty
   std::uint8_t current_byte_ = 0;
   std::uint8_t remaining_bits_ = 0;
 };

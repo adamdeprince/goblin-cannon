@@ -40,6 +40,18 @@ wbhf_modem::Modulation parse_modulation(const std::string& value) {
   if (value == "1024qam") {
     return wbhf_modem::Modulation::qam1024;
   }
+  if (value == "16qci" || value == "16-qci") {
+    return wbhf_modem::Modulation::qci16;
+  }
+  if (value == "64qci" || value == "64-qci") {
+    return wbhf_modem::Modulation::qci64;
+  }
+  if (value == "256qci" || value == "256-qci") {
+    return wbhf_modem::Modulation::qci256;
+  }
+  if (value == "1024qci" || value == "1024-qci") {
+    return wbhf_modem::Modulation::qci1024;
+  }
   throw std::invalid_argument("unknown modulation: " + value);
 }
 

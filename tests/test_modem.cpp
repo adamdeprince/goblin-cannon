@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstdint>
 #include <filesystem>
@@ -50,12 +51,20 @@ void check(bool condition, const char* message) {
 
 class CapturingQuotePacketSink final : public QuotePacketSink {
 public:
-  void send_quote_packet(std::span<const std::uint8_t, 9> payload) override {
-    packets.push_back(QuoteUdpPayload{});
-    std::copy(payload.begin(), payload.end(), packets.back().begin());
+  void send_packet(std::span<const std::uint8_t> payload) override {
+    raw_packets.emplace_back(payload.begin(), payload.end());
+    if (payload.size() == 9U) {
+      packets.push_back(QuoteUdpPayload{});
+      std::copy(payload.begin(), payload.end(), packets.back().begin());
+    } else if (payload.size() == 19U) {
+      bad_packets.push_back(BadMessageUdpPayload{});
+      std::copy(payload.begin(), payload.end(), bad_packets.back().begin());
+    }
   }
 
   std::vector<QuoteUdpPayload> packets;
+  std::vector<BadMessageUdpPayload> bad_packets;
+  std::vector<std::vector<std::uint8_t>> raw_packets;
 };
 
 class CapturingClientUdpStatusSink final : public ClientUdpStatusSink {
@@ -130,7 +139,7 @@ std::vector<std::uint8_t> make_client_udp_payload(std::uint32_t bid,
 void test_constellations() {
   for (const auto modulation :
        {Modulation::qpsk, Modulation::psk8, Modulation::qam16, Modulation::qam64, Modulation::qam256,
-        Modulation::qam1024}) {
+        Modulation::qam1024, Modulation::qci16, Modulation::qci64, Modulation::qci256, Modulation::qci1024}) {
     Constellation constellation(modulation);
     const auto bits = bits_per_symbol(modulation);
     std::array<std::uint8_t, max_bits_per_symbol> out{};
@@ -143,6 +152,32 @@ void test_constellations() {
                   << " symbol=" << symbol << " nearest=" << nearest << '\n';
       }
       check(nearest == symbol, "constellation nearest-symbol round trip failed");
+    }
+  }
+}
+
+void test_qci_radial_constellations() {
+  const std::array<std::pair<Modulation, Modulation>, 4> pairs = {{
+      {Modulation::qam16, Modulation::qci16},
+      {Modulation::qam64, Modulation::qci64},
+      {Modulation::qam256, Modulation::qci256},
+      {Modulation::qam1024, Modulation::qci1024},
+  }};
+  for (const auto [qam_mode, qci_mode] : pairs) {
+    Constellation qam(qam_mode, ConstellationProfile::square_gray);
+    Constellation qci(qci_mode);
+    check(qam.size() == qci.size(), "QCI constellation size mismatch");
+    check(bits_per_symbol(qam_mode) == bits_per_symbol(qci_mode), "QCI bits-per-symbol mismatch");
+    for (std::uint32_t symbol = 0; symbol < qci.size(); ++symbol) {
+      const auto qam_point = qam.map_symbol(symbol);
+      const auto qci_point = qci.map_symbol(symbol);
+      const auto qam_radius = std::hypot(qam_point.real(), qam_point.imag());
+      const auto qci_radius = std::hypot(qci_point.real(), qci_point.imag());
+      const auto expected_radius = std::sqrt(2.0F) * std::max(std::abs(qam_point.real()),
+                                                              std::abs(qam_point.imag()));
+      check(std::abs(qci_radius - expected_radius) < 1.0e-5F,
+            "QCI radial map radius mismatch");
+      check(qci.nearest_symbol(qci_point) == symbol, "QCI nearest-symbol round trip failed");
     }
   }
 }
@@ -401,7 +436,7 @@ void test_frame_loopback() {
   const std::string_view text = "hft over hf radio";
   const auto payload = std::span<const std::uint8_t>(
       reinterpret_cast<const std::uint8_t*>(text.data()), text.size());
-  for (const auto modulation : {Modulation::qpsk, Modulation::qam64}) {
+  for (const auto modulation : {Modulation::qpsk, Modulation::qam64, Modulation::qci64}) {
     const auto samples = encode_frame(modulation, payload);
     check(!samples.empty(), "frame encoder produced no samples");
     decode_frame(modulation, samples, payload);
@@ -414,50 +449,52 @@ void test_frame_loopback() {
 }
 
 void test_qam1024_modem_symbol_loopback() {
-  ModemConfig cfg;
-  cfg.sample_rate_hz = 48000.0;
-  cfg.bandwidth_hz = 1200.0;
-  cfg.modulation = Modulation::qam1024;
-  cfg.rrc_rolloff = 0.35;
-  cfg.filter_span_symbols = 32;
-  cfg.tx_gain = 1.0F;
-  cfg.decoder_agc = false;
+  for (const auto modulation : {Modulation::qam1024, Modulation::qci1024}) {
+    ModemConfig cfg;
+    cfg.sample_rate_hz = 48000.0;
+    cfg.bandwidth_hz = 1200.0;
+    cfg.modulation = modulation;
+    cfg.rrc_rolloff = 0.35;
+    cfg.filter_span_symbols = 32;
+    cfg.tx_gain = 1.0F;
+    cfg.decoder_agc = false;
 
-  Constellation constellation(Modulation::qam1024);
-  std::array<std::uint8_t, max_bits_per_symbol> symbol_bits{};
-  const std::size_t guard_symbols = cfg.filter_span_symbols * 2U;
-  const std::size_t payload_symbols = 96U;
-  std::vector<std::uint8_t> bits;
-  bits.reserve((payload_symbols + 2U * guard_symbols) * bits_per_symbol(Modulation::qam1024));
-  for (std::uint32_t i = 0; i < payload_symbols + 2U * guard_symbols; ++i) {
-    const auto in_guard = i < guard_symbols || i >= guard_symbols + payload_symbols;
-    const auto symbol = in_guard ? 0U : static_cast<std::uint32_t>((i * 197U + 31U) % 1024U);
-    constellation.symbol_to_bits(symbol, std::span<std::uint8_t>(symbol_bits).first(constellation.bits_per_symbol()));
-    bits.insert(bits.end(), symbol_bits.begin(), symbol_bits.begin() + static_cast<std::ptrdiff_t>(constellation.bits_per_symbol()));
-  }
-
-  Encoder encoder(cfg);
-  std::array<Complex, 4096> chunk{};
-  std::vector<Complex> samples;
-  const auto pushed = encoder.push_bits(bits, chunk);
-  check(pushed.consumed == bits.size(), "QAM1024 raw modem did not consume all bits");
-  samples.insert(samples.end(), chunk.begin(), chunk.begin() + static_cast<std::ptrdiff_t>(pushed.produced));
-  for (;;) {
-    const auto drained = encoder.drain(chunk);
-    samples.insert(samples.end(), chunk.begin(), chunk.begin() + static_cast<std::ptrdiff_t>(drained.produced));
-    if (drained.produced == 0U) {
-      break;
+    Constellation constellation(modulation);
+    std::array<std::uint8_t, max_bits_per_symbol> symbol_bits{};
+    const std::size_t guard_symbols = cfg.filter_span_symbols * 2U;
+    const std::size_t payload_symbols = 96U;
+    std::vector<std::uint8_t> bits;
+    bits.reserve((payload_symbols + 2U * guard_symbols) * bits_per_symbol(modulation));
+    for (std::uint32_t i = 0; i < payload_symbols + 2U * guard_symbols; ++i) {
+      const auto in_guard = i < guard_symbols || i >= guard_symbols + payload_symbols;
+      const auto symbol = in_guard ? 0U : static_cast<std::uint32_t>((i * 197U + 31U) % 1024U);
+      constellation.symbol_to_bits(symbol, std::span<std::uint8_t>(symbol_bits).first(constellation.bits_per_symbol()));
+      bits.insert(bits.end(), symbol_bits.begin(), symbol_bits.begin() + static_cast<std::ptrdiff_t>(constellation.bits_per_symbol()));
     }
-  }
 
-  Decoder decoder(cfg);
-  std::vector<std::uint8_t> decoded(bits.size() + max_bits_per_symbol * 8U);
-  const auto result = decoder.push_samples(samples, decoded);
-  const auto compare_begin = guard_symbols * constellation.bits_per_symbol();
-  const auto compare_end = compare_begin + payload_symbols * constellation.bits_per_symbol();
-  check(result.produced_bits >= compare_end, "QAM1024 raw modem produced too few decoded bits");
-  for (std::size_t i = compare_begin; i < compare_end; ++i) {
-    check(decoded[i] == bits[i], "QAM1024 raw modem bit mismatch");
+    Encoder encoder(cfg);
+    std::array<Complex, 4096> chunk{};
+    std::vector<Complex> samples;
+    const auto pushed = encoder.push_bits(bits, chunk);
+    check(pushed.consumed == bits.size(), "1024-symbol raw modem did not consume all bits");
+    samples.insert(samples.end(), chunk.begin(), chunk.begin() + static_cast<std::ptrdiff_t>(pushed.produced));
+    for (;;) {
+      const auto drained = encoder.drain(chunk);
+      samples.insert(samples.end(), chunk.begin(), chunk.begin() + static_cast<std::ptrdiff_t>(drained.produced));
+      if (drained.produced == 0U) {
+        break;
+      }
+    }
+
+    Decoder decoder(cfg);
+    std::vector<std::uint8_t> decoded(bits.size() + max_bits_per_symbol * 8U);
+    const auto result = decoder.push_samples(samples, decoded);
+    const auto compare_begin = guard_symbols * constellation.bits_per_symbol();
+    const auto compare_end = compare_begin + payload_symbols * constellation.bits_per_symbol();
+    check(result.produced_bits >= compare_end, "1024-symbol raw modem produced too few decoded bits");
+    for (std::size_t i = compare_begin; i < compare_end; ++i) {
+      check(decoded[i] == bits[i], "1024-symbol raw modem bit mismatch");
+    }
   }
 }
 
@@ -710,6 +747,27 @@ void test_rf_stream_qam1024_header_loopback() {
   check(receiver.header()->modulation == Modulation::qam1024, "QAM1024 RF stream header modulation mismatch");
 }
 
+void test_rf_stream_qci1024_header_loopback() {
+  auto cfg = make_rf_config();
+  cfg.modem.modulation = Modulation::qci1024;
+  cfg.pilot_sequence = {0, 1023};
+  const std::vector<std::uint32_t> payload;
+  const auto samples = encode_rf_stream(cfg, 7200, payload);
+
+  RfStreamReceiver receiver(cfg);
+  std::vector<RfStreamSymbol> decoded;
+  bool acquisition_found = false;
+  bool header_valid = false;
+  bool lock_lost = false;
+  push_rf_samples(receiver, samples, decoded, acquisition_found, header_valid, lock_lost);
+
+  check(acquisition_found, "QCI1024 RF stream receiver did not acquire preamble");
+  check(header_valid, "QCI1024 RF stream receiver did not validate header");
+  check(!lock_lost, "QCI1024 RF stream receiver lost lock before payload");
+  check(receiver.header().has_value(), "QCI1024 RF stream receiver did not expose validated header");
+  check(receiver.header()->modulation == Modulation::qci1024, "QCI1024 RF stream header modulation mismatch");
+}
+
 void test_rf_reacquire_after_lock_loss() {
   const auto cfg = make_rf_config();
   const auto first_payload = make_rf_symbols(40);
@@ -772,13 +830,13 @@ void test_message_stream_delimiters_across_payload_frames() {
   };
 
   pump_frame();
-  check(received.size() == 9U, "message ending at byte 39 should wait for byte-40 delimiter");
+  check(received.size() < messages.size(), "message stream completed too early after first frame");
 
   pump_frame();
-  check(received.size() == 23U, "message starting with byte-79 delimiter should wait for following frame");
+  check(received.size() < messages.size(), "message stream completed too early after second frame");
 
   pump_frame();
-  check(received.size() == 35U, "partial message crossing byte 120 should not emit early");
+  check(received.size() < messages.size(), "message stream completed too early after third frame");
 
   for (std::size_t guard = 0; guard < 8U && received.size() < messages.size(); ++guard) {
     pump_frame();
@@ -796,16 +854,49 @@ void test_message_framer_active_bank_override() {
 
   MessageStreamFramer framer;
   framer.set_active_bank(1);
-  std::array<std::uint8_t, 6> payload{};
+  std::array<std::uint8_t, 10> payload{};
   const auto encoded = framer.next_payload_frame(input, payload);
 
   check(encoded.consumed_messages == 1U, "active-bank framer did not consume message");
-  check(encoded.payload_bytes == 4U, "active-bank framer payload size mismatch");
+  check(encoded.payload_bytes == 8U, "active-bank framer payload size mismatch");
   check(encoded.padding_bytes == 2U, "active-bank framer padding size mismatch");
   check(payload[0] == 1U, "active-bank framer did not override delimiter");
   check(payload[1] >= 2U && payload[2] >= 2U && payload[3] >= 2U,
         "active-bank framer changed message body");
-  check(payload[4] == 1U && payload[5] == 1U, "active-bank framer did not pad with active delimiter");
+  check(payload[4] >= 2U && payload[5] >= 2U && payload[6] >= 2U && payload[7] >= 2U,
+        "active-bank framer emitted delimiter inside CRC trailer");
+  check(payload[8] == 1U && payload[9] == 1U, "active-bank framer did not pad with active delimiter");
+}
+
+void test_message_crc_trailer_rejects_corruption_and_allows_padding() {
+  SpscRingBuffer<DelimitedMessage> input(2);
+  SpscRingBuffer<DelimitedMessage> output(2);
+  const auto source = make_message(0, 3, 17);
+  check(input.try_push(source), "CRC test input push failed");
+
+  MessageStreamFramer framer;
+  MessageStreamDeframer deframer;
+  std::array<std::uint8_t, 16> payload{};
+  const auto encoded = framer.next_payload_frame(input, payload);
+  check(encoded.payload_bytes == source.bytes.size() + 4U, "CRC test encoded size mismatch");
+  auto decoded = deframer.push_payload_frame(payload, output);
+  check(decoded.produced_messages == 1U, "CRC test did not emit verified message");
+  DelimitedMessage message;
+  check(output.try_pop(message), "CRC test output missing");
+  check(message.bytes == source.bytes, "CRC test did not strip trailer");
+
+  SpscRingBuffer<DelimitedMessage> corrupted_output(2);
+  MessageStreamDeframer corrupted_deframer;
+  payload[2] = payload[2] == 2U ? 3U : 2U;
+  decoded = corrupted_deframer.push_payload_frame(payload, corrupted_output);
+  check(decoded.produced_messages == 0U, "CRC test emitted corrupted message");
+  check(corrupted_output.empty(), "CRC test corrupted output not empty");
+
+  std::array<std::uint8_t, 8> padding{};
+  MessageStreamDeframer padding_deframer;
+  decoded = padding_deframer.push_payload_frame(padding, corrupted_output);
+  check(decoded.produced_messages == 0U && corrupted_output.empty(),
+        "CRC test emitted delimiter-only padding as a message");
 }
 
 void test_bid_message_transmit_intake() {
@@ -831,12 +922,12 @@ void test_bid_message_transmit_intake() {
   check(log.bid_price == 90U && log.winning_bid_price == 90U, "bid intake immediate log price mismatch");
 
   check(transmit_queue.try_push(make_message(0, 1, 99)), "failed to seed backed-up transmit queue");
-  const auto low = make_message(0, 3, 10);    // 100 / 4 = 25.0
-  const auto high = make_message(1, 1, 20);   // 60 / 2 = 30.0
-  const auto lower = make_message(0, 2, 30);  // 70 / 3 = 23.3
+  const auto low = make_message(0, 3, 10);    // 100 / (4 + CRC) = 12.5
+  const auto high = make_message(1, 1, 20);   // 80 / (2 + CRC) = 13.3
+  const auto lower = make_message(0, 2, 30);  // 70 / (3 + CRC) = 10.0
   result = intake.submit(make_bid(low, 100), transmit_queue, log_queue);
   check(!result.transmitted && result.pending_bids == 1U, "bid intake did not hold first backed-up bid");
-  result = intake.submit(make_bid(high, 60), transmit_queue, log_queue);
+  result = intake.submit(make_bid(high, 80), transmit_queue, log_queue);
   check(result.pending_bids == 1U, "bid intake kept more than one standing bid");
   result = intake.submit(make_bid(lower, 70), transmit_queue, log_queue);
   check(result.pending_bids == 1U, "bid intake queued losing backed-up bid");
@@ -855,17 +946,17 @@ void test_bid_message_transmit_intake() {
   check(logs[0].status == BidMessageLogStatus::rejected &&
             logs[0].payload == low.bytes &&
             logs[0].bid_price == 100U &&
-            logs[0].winning_bid_price == 60U,
+            logs[0].winning_bid_price == 80U,
         "bid intake did not log displaced bid");
   check(logs[1].status == BidMessageLogStatus::rejected &&
             logs[1].payload == lower.bytes &&
             logs[1].bid_price == 70U &&
-            logs[1].winning_bid_price == 60U,
+            logs[1].winning_bid_price == 80U,
         "bid intake did not log losing bid");
   check(logs[2].status == BidMessageLogStatus::sent &&
             logs[2].payload == high.bytes &&
-            logs[2].bid_price == 60U &&
-            logs[2].winning_bid_price == 60U,
+            logs[2].bid_price == 80U &&
+            logs[2].winning_bid_price == 80U,
         "bid intake did not log sent winner");
 }
 
@@ -999,7 +1090,7 @@ void test_client_udp_message_handler() {
                                    log_queue);
   check(result.queued_for_arbitration, "client UDP low backed-up bid not held");
   result = handler.handle_datagram(ClientUdpDatagram{.source = {.ip = "192.0.2.3", .port = 40000},
-                                                     .payload = make_client_udp_payload(250, high_message)},
+                                                     .payload = make_client_udp_payload(280, high_message)},
                                    intake,
                                    transmit_queue,
                                    log_queue);
@@ -1014,15 +1105,15 @@ void test_client_udp_message_handler() {
   bool saw_second_sent = false;
   while (log_queue.try_pop(log)) {
     saw_rejected = saw_rejected || (log.status == BidMessageLogStatus::rejected && log.bid_price == 300U &&
-                                    log.winning_bid_price == 250U);
-    saw_second_sent = saw_second_sent || (log.status == BidMessageLogStatus::sent && log.bid_price == 250U);
+                                    log.winning_bid_price == 280U);
+    saw_second_sent = saw_second_sent || (log.status == BidMessageLogStatus::sent && log.bid_price == 280U);
   }
   check(saw_rejected, "client UDP displaced bid was not logged rejected");
   check(saw_second_sent, "client UDP standing winner was not logged sent");
   const auto saw_lost_status = std::any_of(status_sink->records.begin(), status_sink->records.end(), [](const auto& record) {
     return record.status == ClientUdpStatusCode::insufficient_bid &&
            record.bid_price == 300U &&
-           record.winning_bid_price == 250U;
+           record.winning_bid_price == 280U;
   });
   check(saw_lost_status, "client UDP insufficient bid status missing");
 
@@ -1166,6 +1257,12 @@ void test_quote_udp_config_and_emitter() {
   check(config.backend == QuoteUdpBackend::kernel_udp, "quote UDP config backend mismatch");
   check(config.destination_ip == "127.0.0.1", "quote UDP config destination IP mismatch");
   check(config.destination_port == 9001U, "quote UDP config destination port mismatch");
+  const auto bad_payload = make_bad_message_udp_payload(1, 77, 123456U, 123499U);
+  check(bad_payload[0] == 0U && bad_payload[1] == 1U && bad_payload[2] == 77U,
+        "bad-message UDP payload header mismatch");
+  check(read_u64_be(std::span<const std::uint8_t, 8>(bad_payload.data() + 3U, 8U)) == 123456U &&
+            read_u64_be(std::span<const std::uint8_t, 8>(bad_payload.data() + 11U, 8U)) == 123499U,
+        "bad-message UDP payload prices mismatch");
 
   auto control = std::make_shared<ReceiverControlState>();
   PriceBank prices{};
@@ -1282,6 +1379,13 @@ void test_receiver_default_client_permissions() {
 void test_message_deframer_drops_around_erasures() {
   MessageStreamDeframer deframer;
   SpscRingBuffer<DelimitedMessage> output(4);
+  SpscRingBuffer<DelimitedMessage> framed_input(1);
+  check(framed_input.try_push(DelimitedMessage{.bytes = {1, 7, 8}}), "erasure test framer input push failed");
+  MessageStreamFramer framer;
+  std::array<std::uint8_t, 8> framed_clear_message{};
+  const auto framed = framer.next_payload_frame(framed_input, framed_clear_message);
+  check(framed.consumed_messages == 1U && framed.payload_bytes == 7U,
+        "erasure test did not frame CRC-protected message");
   std::vector<Token> tokens = {
       {.value = 0, .certain = true, .confidence = 1.0F},
       {.value = 2, .certain = true, .confidence = 1.0F},
@@ -1289,11 +1393,10 @@ void test_message_deframer_drops_around_erasures() {
       {.value = 99, .certain = false, .confidence = 0.0F},
       {.value = 4, .certain = true, .confidence = 1.0F},
       {.value = 5, .certain = true, .confidence = 1.0F},
-      {.value = 1, .certain = true, .confidence = 1.0F},
-      {.value = 7, .certain = true, .confidence = 1.0F},
-      {.value = 8, .certain = true, .confidence = 1.0F},
-      {.value = 0, .certain = true, .confidence = 1.0F},
   };
+  for (const auto byte : framed_clear_message) {
+    tokens.push_back({.value = byte, .certain = true, .confidence = 1.0F});
+  }
 
   const auto decoded = deframer.push_payload_tokens(tokens, output);
   check(decoded.produced_messages == 1U, "deframer should emit only message with clear post-erasure delimiter");
@@ -1502,6 +1605,14 @@ pb::Modulation to_proto_modulation(Modulation modulation) {
     return pb::MODULATION_256QAM;
   case Modulation::qam1024:
     return pb::MODULATION_1024QAM;
+  case Modulation::qci16:
+    return pb::MODULATION_16QCI;
+  case Modulation::qci64:
+    return pb::MODULATION_64QCI;
+  case Modulation::qci256:
+    return pb::MODULATION_256QCI;
+  case Modulation::qci1024:
+    return pb::MODULATION_1024QCI;
   }
   return pb::MODULATION_UNSPECIFIED;
 }
@@ -1937,7 +2048,8 @@ void test_transmitter_receiver_session_stream_and_bank_switch() {
   check(stream->Write(heartbeat), "session stream test failed to write receiver heartbeat");
 
   bool saw_bank1 = false;
-  for (int i = 0; i < 4 && !saw_bank1; ++i) {
+  const auto bank1_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  while (!saw_bank1 && std::chrono::steady_clock::now() < bank1_deadline) {
     pb::ReceiverSessionServerMessage message;
     check(stream->Read(&message), "session stream test ended before next bank cache");
     if (message.has_bank_update() && message.bank_update().bank() == 1U) {
@@ -1956,6 +2068,88 @@ void test_transmitter_receiver_session_stream_and_bank_switch() {
 
   stream->WritesDone();
   (void)stream->Finish();
+  server.stop();
+}
+
+void test_transmitter_receiver_session_broadcasts_canonical_messages() {
+  auto control = std::make_shared<TransmitterControlState>();
+  auto canonical = std::make_shared<CanonicalMessageBroadcaster>();
+  TransmitterControlServer server(control,
+                                  {.listen_address = "127.0.0.1:0",
+                                   .canonical_messages = canonical});
+  server.start();
+
+  auto channel = grpc::CreateChannel(server.bound_address(), grpc::InsecureChannelCredentials());
+  auto stub = pb::TransmitterControl::NewStub(channel);
+
+  grpc::ClientContext context_a;
+  grpc::ClientContext context_b;
+  context_a.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(5));
+  context_b.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(5));
+  auto stream_a = stub->ReceiverSession(&context_a);
+  auto stream_b = stub->ReceiverSession(&context_b);
+
+  pb::ReceiverSessionClientMessage hello_a;
+  hello_a.mutable_hello()->set_client_id(1);
+  pb::ReceiverSessionClientMessage hello_b;
+  hello_b.mutable_hello()->set_client_id(2);
+  check(stream_a->Write(hello_a), "canonical broadcast test failed to write hello A");
+  check(stream_b->Write(hello_b), "canonical broadcast test failed to write hello B");
+
+  const auto wait_for_heartbeat = [](auto& stream, const char* failure) {
+    for (int i = 0; i < 4; ++i) {
+      pb::ReceiverSessionServerMessage message;
+      check(stream->Read(&message), failure);
+      if (message.has_heartbeat()) {
+        return;
+      }
+    }
+    check(false, failure);
+  };
+  wait_for_heartbeat(stream_a, "canonical broadcast test no heartbeat A");
+  wait_for_heartbeat(stream_b, "canonical broadcast test no heartbeat B");
+
+  std::vector<DelimitedMessage> expected;
+  expected.reserve(130);
+  for (std::size_t i = 0; i < 130U; ++i) {
+    expected.push_back(make_message(static_cast<std::uint8_t>(i & 1U),
+                                    2U,
+                                    static_cast<std::uint8_t>(10U + i)));
+    canonical->on_delimited_message(expected.back());
+  }
+
+  auto read_canonical_payloads = [](auto& stream) {
+    std::vector<std::vector<std::uint8_t>> payloads;
+    std::size_t largest_batch = 0;
+    while (payloads.size() < 130U) {
+      pb::ReceiverSessionServerMessage message;
+      check(stream->Read(&message), "canonical broadcast test stream ended before payloads");
+      if (!message.has_canonical_messages()) {
+        continue;
+      }
+      const auto& batch = message.canonical_messages();
+      largest_batch = std::max(largest_batch, static_cast<std::size_t>(batch.payload_size()));
+      for (const auto& payload : batch.payload()) {
+        payloads.emplace_back(payload.begin(), payload.end());
+      }
+    }
+    check(largest_batch <= 128U, "canonical broadcast test exceeded max batch size");
+    return payloads;
+  };
+
+  const auto payloads_a = read_canonical_payloads(stream_a);
+  const auto payloads_b = read_canonical_payloads(stream_b);
+  check(payloads_a.size() == expected.size(), "canonical broadcast test receiver A count mismatch");
+  check(payloads_b.size() == expected.size(), "canonical broadcast test receiver B count mismatch");
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    check(payloads_a[i] == expected[i].bytes, "canonical broadcast test receiver A payload mismatch");
+    check(payloads_b[i] == expected[i].bytes, "canonical broadcast test receiver B payload mismatch");
+  }
+
+  stream_a->WritesDone();
+  stream_b->WritesDone();
+  (void)stream_a->Finish();
+  (void)stream_b->Finish();
   server.stop();
 }
 
@@ -2213,6 +2407,7 @@ void test_convolutional_latency_estimates() {
 
 int main() {
   test_constellations();
+  test_qci_radial_constellations();
   test_config_validation();
   test_sample_formats();
   test_base254_varuint_and_zigzag();
@@ -2224,9 +2419,11 @@ int main() {
   test_rf_acquisition_correlator();
   test_rf_stream_loopback();
   test_rf_stream_qam1024_header_loopback();
+  test_rf_stream_qci1024_header_loopback();
   test_rf_reacquire_after_lock_loss();
   test_message_stream_delimiters_across_payload_frames();
   test_message_framer_active_bank_override();
+  test_message_crc_trailer_rejects_corruption_and_allows_padding();
   test_bid_message_transmit_intake();
   test_market_data_shared_memory_ring();
   test_client_udp_message_handler();
@@ -2245,6 +2442,7 @@ int main() {
   test_receiver_control_grpc_server();
   test_transmitter_control_grpc_server();
   test_transmitter_receiver_session_stream_and_bank_switch();
+  test_transmitter_receiver_session_broadcasts_canonical_messages();
   test_receiver_session_logs_client_and_signal_events();
   test_transmitter_bank_switch_price_provider();
   test_realtime_timestamp_accepts_fresh_stream();

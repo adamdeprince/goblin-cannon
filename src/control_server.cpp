@@ -6,6 +6,7 @@
 #include <grpcpp/grpcpp.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -76,6 +77,14 @@ Modulation from_proto_modulation(pb::Modulation modulation) {
     return Modulation::qam256;
   case pb::MODULATION_1024QAM:
     return Modulation::qam1024;
+  case pb::MODULATION_16QCI:
+    return Modulation::qci16;
+  case pb::MODULATION_64QCI:
+    return Modulation::qci64;
+  case pb::MODULATION_256QCI:
+    return Modulation::qci256;
+  case pb::MODULATION_1024QCI:
+    return Modulation::qci1024;
   case pb::MODULATION_UNSPECIFIED:
   default:
     throw std::invalid_argument("restart request modulation is unspecified");
@@ -360,14 +369,16 @@ public:
                             std::shared_ptr<std::mutex> log_queue_mutex,
                             std::function<std::optional<PriceBank>(std::uint8_t)> bank_price_provider,
                             std::array<std::uint64_t, Clients> client_expected_latency_ns,
-                            std::shared_ptr<ClientBudgetAccounting> accounting)
+                            std::shared_ptr<ClientBudgetAccounting> accounting,
+                            std::shared_ptr<CanonicalMessageBroadcaster> canonical_messages)
       : control_(std::move(control)),
         transmit_queue_(std::move(transmit_queue)),
         log_queue_(std::move(log_queue)),
         log_queue_mutex_(std::move(log_queue_mutex)),
         bank_price_provider_(std::move(bank_price_provider)),
         client_expected_latency_ns_(client_expected_latency_ns),
-        accounting_(std::move(accounting)) {}
+        accounting_(std::move(accounting)),
+        canonical_messages_(std::move(canonical_messages)) {}
 
   grpc::Status UpdateEncryptionKey(grpc::ServerContext*,
                                    const pb::EncryptionKeyUpdate* request,
@@ -559,7 +570,7 @@ public:
   }
 
   grpc::Status ReceiverSession(
-      grpc::ServerContext*,
+      grpc::ServerContext* context,
       grpc::ServerReaderWriter<pb::ReceiverSessionServerMessage, pb::ReceiverSessionClientMessage>* stream) override {
     pb::ReceiverSessionClientMessage first;
     if (!stream->Read(&first) || !first.has_hello()) {
@@ -573,6 +584,9 @@ public:
     control_->register_receiver_client(client_id);
     std::array<std::uint64_t, 2> sent_bank_generation{};
     std::uint64_t sent_active_bank_generation = 0;
+    std::uint64_t sent_canonical_sequence =
+        canonical_messages_ ? canonical_messages_->current_sequence() : 0U;
+    std::atomic_bool stream_open = true;
 
     auto write_heartbeat = [&]() {
       pb::ReceiverSessionServerMessage out;
@@ -607,29 +621,96 @@ public:
       control_->note_receiver_bank_delivered(client_id, bank, generation);
       return true;
     };
+    auto collect_canonical_batch = [&]() {
+      std::vector<CanonicalMessageRecord> records;
+      if (!canonical_messages_) {
+        return records;
+      }
+      records = canonical_messages_->wait_for_messages_after(sent_canonical_sequence,
+                                                             128U,
+                                                             std::chrono::milliseconds(100));
+      if (records.empty() || records.size() >= 128U) {
+        return records;
+      }
+
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+      while (records.size() < 128U && std::chrono::steady_clock::now() < deadline) {
+        const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+            deadline - std::chrono::steady_clock::now());
+        const auto expanded = canonical_messages_->wait_for_messages_after(
+            sent_canonical_sequence,
+            128U,
+            std::max(std::chrono::milliseconds(1), remaining));
+        if (expanded.size() <= records.size()) {
+          break;
+        }
+        records = std::move(expanded);
+      }
+      return records;
+    };
+    auto maybe_write_canonical_batch = [&]() {
+      auto records = collect_canonical_batch();
+      if (records.empty()) {
+        return true;
+      }
+      pb::ReceiverSessionServerMessage out;
+      auto* batch = out.mutable_canonical_messages();
+      batch->set_first_sequence(records.front().sequence);
+      batch->set_transmitter_unix_nanos(records.front().transmitter_unix_nanos);
+      for (const auto& record : records) {
+        batch->add_payload(reinterpret_cast<const char*>(record.payload.data()),
+                           record.payload.size());
+      }
+      if (!stream->Write(out)) {
+        return false;
+      }
+      sent_canonical_sequence = records.back().sequence;
+      return true;
+    };
+
+    std::thread reader([&] {
+      pb::ReceiverSessionClientMessage message;
+      while (stream_open.load(std::memory_order_acquire) && stream->Read(&message)) {
+        if (message.has_heartbeat()) {
+          control_->note_receiver_heartbeat(client_id);
+        } else if (message.has_client_message()) {
+          log_receiver_client_message(message.client_message());
+        } else if (message.has_signal_event()) {
+          log_receiver_signal_event(message.signal_event());
+        } else if (message.has_hello()) {
+          continue;
+        }
+      }
+      stream_open.store(false, std::memory_order_release);
+    });
 
     const auto active = control_->active_bank();
-    if (!maybe_write_bank(active.bank, true) || !maybe_write_active_bank() || !write_heartbeat()) {
-      return grpc::Status::OK;
-    }
-
-    pb::ReceiverSessionClientMessage message;
-    while (stream->Read(&message)) {
-      if (message.has_heartbeat()) {
-        control_->note_receiver_heartbeat(client_id);
-      } else if (message.has_client_message()) {
-        log_receiver_client_message(message.client_message());
-      } else if (message.has_signal_event()) {
-        log_receiver_signal_event(message.signal_event());
-      } else if (message.has_hello()) {
-        continue;
-      }
+    bool write_ok = maybe_write_bank(active.bank, true) && maybe_write_active_bank() && write_heartbeat();
+    auto last_heartbeat = std::chrono::steady_clock::now();
+    while (write_ok && stream_open.load(std::memory_order_acquire) && !context->IsCancelled()) {
       const auto current_active = control_->active_bank().bank;
       const auto inactive_bank = static_cast<std::uint8_t>(current_active ^ 1U);
-      if (!maybe_write_bank(current_active, true) || !maybe_write_bank(inactive_bank, false) ||
-          !maybe_write_active_bank() || !write_heartbeat()) {
-        return grpc::Status::OK;
+      write_ok = maybe_write_bank(current_active, true) &&
+                 maybe_write_bank(inactive_bank, false) &&
+                 maybe_write_active_bank();
+      if (!write_ok) {
+        break;
       }
+      const auto now = std::chrono::steady_clock::now();
+      if (now - last_heartbeat >= std::chrono::seconds(1)) {
+        write_ok = write_heartbeat();
+        last_heartbeat = now;
+        if (!write_ok) {
+          break;
+        }
+      }
+      write_ok = maybe_write_canonical_batch();
+    }
+
+    stream_open.store(false, std::memory_order_release);
+    context->TryCancel();
+    if (reader.joinable()) {
+      reader.join();
     }
     return grpc::Status::OK;
   }
@@ -718,6 +799,7 @@ private:
   std::function<std::optional<PriceBank>(std::uint8_t)> bank_price_provider_;
   std::array<std::uint64_t, Clients> client_expected_latency_ns_ = {};
   std::shared_ptr<ClientBudgetAccounting> accounting_;
+  std::shared_ptr<CanonicalMessageBroadcaster> canonical_messages_;
   BidMessageTransmitIntake enqueue_intake_;
   std::mutex enqueue_intake_mutex_;
 };
@@ -731,6 +813,82 @@ std::string host_from_listen_address(const std::string& listen_address) {
 }
 
 } // namespace
+
+CanonicalMessageBroadcaster::CanonicalMessageBroadcaster(std::size_t retained_messages)
+    : retained_messages_(retained_messages) {
+  if (retained_messages_ == 0U) {
+    throw std::invalid_argument("canonical broadcaster retained_messages must be positive");
+  }
+}
+
+void CanonicalMessageBroadcaster::on_delimited_message(const DelimitedMessage& message) {
+  CanonicalMessageRecord record;
+  record.transmitter_unix_nanos = unix_nanos_now();
+  record.payload = message.bytes;
+  {
+    std::scoped_lock lock(mutex_);
+    record.sequence = next_sequence_++;
+    messages_.push_back(std::move(record));
+    while (messages_.size() > retained_messages_) {
+      messages_.pop_front();
+    }
+  }
+  cv_.notify_all();
+}
+
+std::uint64_t CanonicalMessageBroadcaster::current_sequence() const {
+  std::scoped_lock lock(mutex_);
+  return next_sequence_ - 1U;
+}
+
+std::vector<CanonicalMessageRecord> CanonicalMessageBroadcaster::messages_after(
+    std::uint64_t last_sequence,
+    std::size_t max_messages) const {
+  std::vector<CanonicalMessageRecord> out;
+  if (max_messages == 0U) {
+    return out;
+  }
+  std::scoped_lock lock(mutex_);
+  for (const auto& message : messages_) {
+    if (message.sequence <= last_sequence) {
+      continue;
+    }
+    out.push_back(message);
+    if (out.size() == max_messages) {
+      break;
+    }
+  }
+  return out;
+}
+
+std::vector<CanonicalMessageRecord> CanonicalMessageBroadcaster::wait_for_messages_after(
+    std::uint64_t last_sequence,
+    std::size_t max_messages,
+    std::chrono::milliseconds timeout) const {
+  if (max_messages == 0U) {
+    return {};
+  }
+
+  std::unique_lock lock(mutex_);
+  const auto has_new_message = [&] {
+    return !messages_.empty() && messages_.back().sequence > last_sequence;
+  };
+  if (!has_new_message()) {
+    cv_.wait_for(lock, timeout, has_new_message);
+  }
+
+  std::vector<CanonicalMessageRecord> out;
+  for (const auto& message : messages_) {
+    if (message.sequence <= last_sequence) {
+      continue;
+    }
+    out.push_back(message);
+    if (out.size() == max_messages) {
+      break;
+    }
+  }
+  return out;
+}
 
 ReceiverControlState::ReceiverControlState()
     : permissions_(allow_all_symbol_permissions()) {}
@@ -1394,7 +1552,8 @@ public:
         config_.log_queue_mutex,
         config_.bank_price_provider,
         config_.client_expected_latency_ns,
-        config_.accounting);
+        config_.accounting,
+        config_.canonical_messages);
     grpc::ServerBuilder builder;
     int selected_port = 0;
     builder.AddListeningPort(config_.listen_address, grpc::InsecureServerCredentials(), &selected_port);

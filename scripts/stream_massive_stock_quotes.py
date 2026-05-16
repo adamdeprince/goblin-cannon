@@ -36,6 +36,7 @@ from market_shm import MarketDataShmProducer
 
 BASE254_RADIX = 254
 BASE254_MIN_BYTE = 2
+MESSAGE_CRC_BYTES = 4
 INT64_MIN = -(1 << 63)
 INT64_MAX = (1 << 63) - 1
 
@@ -162,6 +163,10 @@ def encode_base254_varuint(value: int) -> bytes:
 
 def encode_bank_symbol_delta(bank: int, radio_symbol: int, delta_units: int) -> bytes:
     return bytes((bank, radio_symbol)) + encode_base254_varuint(zigzag_encode_i64(delta_units))
+
+
+def radio_billable_bytes(payload: bytes) -> int:
+    return len(payload) + (MESSAGE_CRC_BYTES if len(payload) > 1 else 0)
 
 
 def parse_events(raw: str | bytes) -> list[dict[str, Any]]:
@@ -297,7 +302,7 @@ async def stream_feed_once(
                 if bidder.state[instrument.radio_symbol].last_sent_units == units:
                     bidder.record_received(instrument, units, now_ms)
                     continue
-                bid_cents = bidder.compute_bid_cents(instrument, units, len(payload), now_ms)
+                bid_cents = bidder.compute_bid_cents(instrument, units, radio_billable_bytes(payload), now_ms)
                 accepted = publisher.publish(payload, bid_cents)
                 bidder.record_received(instrument, units, now_ms)
                 if accepted:

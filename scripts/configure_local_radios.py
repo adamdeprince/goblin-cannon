@@ -41,9 +41,17 @@ def modulation_value(pb2: object, value: str) -> int:
         "64qam": "MODULATION_64QAM",
         "256qam": "MODULATION_256QAM",
         "1024qam": "MODULATION_1024QAM",
+        "16qci": "MODULATION_16QCI",
+        "16-qci": "MODULATION_16QCI",
+        "64qci": "MODULATION_64QCI",
+        "64-qci": "MODULATION_64QCI",
+        "256qci": "MODULATION_256QCI",
+        "256-qci": "MODULATION_256QCI",
+        "1024qci": "MODULATION_1024QCI",
+        "1024-qci": "MODULATION_1024QCI",
     }
     try:
-        return getattr(pb2, mapping[value])
+        return getattr(pb2, mapping[value.lower()])
     except KeyError as exc:
         raise ValueError(f"unsupported modulation: {value}") from exc
 

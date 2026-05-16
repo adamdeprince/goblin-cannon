@@ -14,6 +14,13 @@ namespace {
 
 constexpr float inv_sqrt_2 = 0.7071067811865475F;
 
+bool is_qci(Modulation modulation) noexcept {
+  return modulation == Modulation::qci16 ||
+         modulation == Modulation::qci64 ||
+         modulation == Modulation::qci256 ||
+         modulation == Modulation::qci1024;
+}
+
 std::vector<Complex> make_wbhf_points(Modulation modulation) {
   switch (modulation) {
   case Modulation::qpsk:
@@ -68,6 +75,11 @@ std::vector<Complex> make_wbhf_points(Modulation modulation) {
     break;
   case Modulation::qam1024:
     throw std::invalid_argument("WBHF profile does not define 1024QAM points; use square_gray");
+  case Modulation::qci16:
+  case Modulation::qci64:
+  case Modulation::qci256:
+  case Modulation::qci1024:
+    throw std::invalid_argument("WBHF profile does not define QCI points; use QCI radial mapping");
   }
 
   const std::array<float, 16> x0 = {
@@ -177,6 +189,22 @@ std::vector<Complex> make_square_gray_points(Modulation modulation) {
   return points;
 }
 
+std::vector<Complex> make_qci_points(Modulation modulation) {
+  auto points = make_square_gray_points(modulation);
+  for (auto& point : points) {
+    const float u = point.real();
+    const float v = point.imag();
+    const float radius = std::hypot(u, v);
+    if (radius == 0.0F) {
+      continue;
+    }
+    const float edge = std::max(std::abs(u), std::abs(v));
+    const float scale = std::sqrt(2.0F) * edge / radius;
+    point = {u * scale, v * scale};
+  }
+  return points;
+}
+
 } // namespace
 
 std::string to_string(Modulation modulation) {
@@ -193,6 +221,14 @@ std::string to_string(Modulation modulation) {
     return "256QAM";
   case Modulation::qam1024:
     return "1024QAM";
+  case Modulation::qci16:
+    return "16QCI";
+  case Modulation::qci64:
+    return "64QCI";
+  case Modulation::qci256:
+    return "256QCI";
+  case Modulation::qci1024:
+    return "1024QCI";
   }
   return "unknown";
 }
@@ -210,7 +246,14 @@ std::size_t bits_per_symbol(Modulation modulation) {
   case Modulation::qam256:
     return 8;
   case Modulation::qam1024:
+  case Modulation::qci1024:
     return 10;
+  case Modulation::qci16:
+    return 4;
+  case Modulation::qci64:
+    return 6;
+  case Modulation::qci256:
+    return 8;
   }
   throw std::invalid_argument("unknown modulation");
 }
@@ -218,9 +261,11 @@ std::size_t bits_per_symbol(Modulation modulation) {
 Constellation::Constellation(Modulation modulation, ConstellationProfile profile)
     : modulation_(modulation),
       bits_per_symbol_(wbhf_modem::bits_per_symbol(modulation)),
-      points_((profile == ConstellationProfile::square_gray || modulation == Modulation::qam1024)
-                  ? make_square_gray_points(modulation)
-                  : make_wbhf_points(modulation)) {
+      points_(is_qci(modulation)
+                  ? make_qci_points(modulation)
+                  : ((profile == ConstellationProfile::square_gray || modulation == Modulation::qam1024)
+                         ? make_square_gray_points(modulation)
+                         : make_wbhf_points(modulation))) {
   if (points_.size() != (1ULL << bits_per_symbol_)) {
     throw std::logic_error("constellation point count does not match modulation order");
   }
@@ -263,7 +308,7 @@ std::uint32_t Constellation::bits_to_symbol(std::span<const std::uint8_t> bits) 
 }
 
 std::uint32_t Constellation::nearest_symbol(Complex sample) const {
-  const auto point = detail::nearest_symbol_avx512(sample.real(), sample.imag(), i_, q_);
+  const auto point = detail::nearest_symbol(sample.real(), sample.imag(), i_, q_);
   if (modulation_ == Modulation::qpsk) {
     static constexpr std::array<std::uint8_t, 8> reverse = {0, 3, 1, 2, 2, 2, 2, 2};
     return reverse[point];
@@ -276,7 +321,7 @@ std::uint32_t Constellation::nearest_symbol(Complex sample) const {
 }
 
 SymbolDecision Constellation::decide(Complex sample) const {
-  const auto decision = detail::nearest_symbol_decision_avx512(sample.real(), sample.imag(), i_, q_);
+  const auto decision = detail::nearest_symbol_decision(sample.real(), sample.imag(), i_, q_);
   auto symbol = static_cast<std::uint32_t>(decision.symbol);
   if (modulation_ == Modulation::qpsk) {
     static constexpr std::array<std::uint8_t, 8> reverse = {0, 3, 1, 2, 2, 2, 2, 2};

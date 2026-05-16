@@ -77,6 +77,11 @@ void write_u64_be(std::span<std::uint8_t, 8> out, std::uint64_t value) {
   }
 }
 
+template <std::size_t N>
+void write_u64_be_at(std::array<std::uint8_t, N>& out, std::size_t offset, std::uint64_t value) {
+  write_u64_be(std::span<std::uint8_t, 8>(out.data() + offset, 8U), value);
+}
+
 std::uint64_t checked_add_price_delta(std::uint64_t base, std::int64_t delta) {
   if (delta >= 0) {
     const auto unsigned_delta = static_cast<std::uint64_t>(delta);
@@ -94,6 +99,14 @@ std::uint64_t checked_add_price_delta(std::uint64_t base, std::int64_t delta) {
 }
 
 } // namespace
+
+void QuotePacketSink::send_quote_packet(std::span<const std::uint8_t, 9> payload) {
+  send_packet(payload);
+}
+
+void QuotePacketSink::send_bad_message_packet(std::span<const std::uint8_t, 19> payload) {
+  send_packet(payload);
+}
 
 KernelUdpQuotePacketSink::KernelUdpQuotePacketSink(const QuoteUdpSinkConfig& config) {
   validate_quote_config(config);
@@ -158,7 +171,7 @@ KernelUdpQuotePacketSink& KernelUdpQuotePacketSink::operator=(KernelUdpQuotePack
   return *this;
 }
 
-void KernelUdpQuotePacketSink::send_quote_packet(std::span<const std::uint8_t, 9> payload) {
+void KernelUdpQuotePacketSink::send_packet(std::span<const std::uint8_t> payload) {
   const auto sent = ::sendto(socket_fd_,
                              payload.data(),
                              payload.size(),
@@ -178,7 +191,7 @@ DpdkQuotePacketSink::DpdkQuotePacketSink(const QuoteUdpSinkConfig& config)
 #endif
 }
 
-void DpdkQuotePacketSink::send_quote_packet(std::span<const std::uint8_t, 9>) {
+void DpdkQuotePacketSink::send_packet(std::span<const std::uint8_t>) {
 #ifndef WBHF_MODEM_HAS_DPDK
   throw std::runtime_error("DPDK quote UDP backend requested, but wbhf_modem was built without DPDK support");
 #endif
@@ -296,6 +309,19 @@ QuoteUdpPayload make_quote_udp_payload(std::uint8_t symbol, std::uint64_t price_
   QuoteUdpPayload payload{};
   payload[0] = symbol;
   write_u64_be(std::span<std::uint8_t, 8>(payload.data() + 1U, 8U), price_units);
+  return payload;
+}
+
+BadMessageUdpPayload make_bad_message_udp_payload(std::uint8_t bank,
+                                                  std::uint8_t symbol,
+                                                  std::uint64_t base_price_units,
+                                                  std::uint64_t reconstructed_price_units) {
+  BadMessageUdpPayload payload{};
+  payload[0] = 0U;
+  payload[1] = bank;
+  payload[2] = symbol;
+  write_u64_be_at(payload, 3U, base_price_units);
+  write_u64_be_at(payload, 11U, reconstructed_price_units);
   return payload;
 }
 

@@ -101,6 +101,7 @@ private:
   SampleFormat format_;
   float inverse_scale_;
   std::vector<std::uint8_t> buffer_;
+  std::size_t residual_bytes_ = 0;
   struct Impl;
   Impl* impl_;
 };

@@ -174,6 +174,7 @@ StreamResult Encoder::drain(std::span<Complex> out) {
 void Encoder::reset() {
   bit_buffer_.clear();
   symbols_.clear();
+  symbols_head_ = 0;
   first_symbol_index_ = 0;
   next_symbol_index_ = 0;
   next_sample_index_ = 0;
@@ -249,7 +250,7 @@ Complex Encoder::synthesize_sample(std::uint64_t sample_index) const {
     const auto k_max = std::min<std::int64_t>(next_symbol_index_ - 1, q + d_max);
     Complex y{0.0F, 0.0F};
     for (auto k = k_min; k <= k_max; ++k) {
-      const auto symbol = symbols_[static_cast<std::size_t>(k - first_symbol_index_)];
+      const auto symbol = symbols_[symbols_head_ + static_cast<std::size_t>(k - first_symbol_index_)];
       const auto tap_idx = static_cast<std::size_t>((k - q) - d_min);
       y += symbol * tap_row[tap_idx];
     }
@@ -266,7 +267,7 @@ Complex Encoder::synthesize_sample(std::uint64_t sample_index) const {
     if (k < first_symbol_index_ || k >= next_symbol_index_) {
       continue;
     }
-    const auto symbol = symbols_[static_cast<std::size_t>(k - first_symbol_index_)];
+    const auto symbol = symbols_[symbols_head_ + static_cast<std::size_t>(k - first_symbol_index_)];
     const auto h = static_cast<float>(rrc_impulse(t - static_cast<double>(k), config_.rrc_rolloff));
     y += symbol * h;
   }
@@ -280,10 +281,17 @@ void Encoder::prune_symbols(double symbol_time) {
   if (keep_from <= first_symbol_index_) {
     return;
   }
+  const auto live_size = symbols_.size() - symbols_head_;
   const auto remove_count = std::min<std::size_t>(
-      static_cast<std::size_t>(keep_from - first_symbol_index_), symbols_.size());
-  symbols_.erase(symbols_.begin(), symbols_.begin() + static_cast<std::ptrdiff_t>(remove_count));
+      static_cast<std::size_t>(keep_from - first_symbol_index_), live_size);
+  symbols_head_ += remove_count;
   first_symbol_index_ += static_cast<std::int64_t>(remove_count);
+  // Amortized compaction.
+  if (symbols_head_ > 0U && symbols_head_ * 2U >= symbols_.size()) {
+    symbols_.erase(symbols_.begin(),
+                   symbols_.begin() + static_cast<std::ptrdiff_t>(symbols_head_));
+    symbols_head_ = 0U;
+  }
 }
 
 Decoder::Decoder(ModemConfig config, double timing_offset_symbols)
@@ -366,8 +374,27 @@ DecodeResult Decoder::push_samples_soft(std::span<const Complex> samples, std::s
   return result;
 }
 
+DecodeSymbolsResult Decoder::push_samples_symbols(std::span<const Complex> samples,
+                                                  std::span<SymbolDecision> out_symbols) {
+  for (const auto sample : samples) {
+    append_sample(sample);
+  }
+
+  DecodeSymbolsResult result{.consumed_samples = samples.size(), .produced_symbols = 0};
+  while (result.produced_symbols < out_symbols.size() && can_decode_next_symbol()) {
+    Complex sample = matched_filter_symbol(next_symbol_index_);
+    sample = apply_agc(sample, 0);
+    out_symbols[result.produced_symbols] = constellation_.decide(sample);
+    ++result.produced_symbols;
+    ++next_symbol_index_;
+    prune_samples(next_symbol_index_);
+  }
+  return result;
+}
+
 void Decoder::reset() {
   samples_.clear();
+  samples_head_ = 0;
   first_sample_index_ = 0;
   next_sample_index_ = 0;
   next_symbol_index_ = 0;
@@ -393,7 +420,7 @@ Complex Decoder::matched_filter_symbol(std::int64_t symbol_index) const {
                                               center + taps_s_max_);
     Complex y{0.0F, 0.0F};
     for (auto sample_index = start; sample_index <= stop; ++sample_index) {
-      const auto offset = static_cast<std::size_t>(sample_index - first_sample_index_);
+      const auto offset = samples_head_ + static_cast<std::size_t>(sample_index - first_sample_index_);
       const auto tap_idx = static_cast<std::size_t>((sample_index - center) - taps_s_min_);
       y += samples_[offset] * taps_[tap_idx];
     }
@@ -412,7 +439,7 @@ Complex Decoder::matched_filter_symbol(std::int64_t symbol_index) const {
     if (sample_index < first_sample_index_ || sample_index >= static_cast<std::int64_t>(next_sample_index_)) {
       continue;
     }
-    const auto offset = static_cast<std::size_t>(sample_index - first_sample_index_);
+    const auto offset = samples_head_ + static_cast<std::size_t>(sample_index - first_sample_index_);
     const double sample_time = static_cast<double>(sample_index) / info_.samples_per_symbol;
     const auto h = static_cast<float>(rrc_impulse(sample_time - symbol_time, config_.rrc_rolloff));
     y += samples_[offset] * h;
@@ -434,10 +461,17 @@ void Decoder::prune_samples(std::int64_t decoded_symbol) {
   if (keep_from <= first_sample_index_) {
     return;
   }
+  const auto live_size = samples_.size() - samples_head_;
   const auto remove_count = std::min<std::size_t>(
-      static_cast<std::size_t>(keep_from - first_sample_index_), samples_.size());
-  samples_.erase(samples_.begin(), samples_.begin() + static_cast<std::ptrdiff_t>(remove_count));
+      static_cast<std::size_t>(keep_from - first_sample_index_), live_size);
+  samples_head_ += remove_count;
   first_sample_index_ += static_cast<std::int64_t>(remove_count);
+  // Amortized compaction: only memmove when the dead-head fraction is large.
+  if (samples_head_ > 0U && samples_head_ * 2U >= samples_.size()) {
+    samples_.erase(samples_.begin(),
+                   samples_.begin() + static_cast<std::ptrdiff_t>(samples_head_));
+    samples_head_ = 0U;
+  }
 }
 
 Complex Decoder::apply_agc(Complex sample, std::uint32_t) {

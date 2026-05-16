@@ -36,17 +36,6 @@ std::uint8_t keystream_bit(std::span<const std::uint8_t> bytes, std::size_t bit_
   return static_cast<std::uint8_t>((bytes[bit_index / 8U] >> (7U - (bit_index % 8U))) & 1U);
 }
 
-std::vector<std::uint8_t> bytes_to_bits(std::span<const std::uint8_t> bytes) {
-  std::vector<std::uint8_t> bits;
-  bits.reserve(bytes.size() * 8U);
-  for (const auto byte : bytes) {
-    for (int bit = 7; bit >= 0; --bit) {
-      bits.push_back(static_cast<std::uint8_t>((byte >> bit) & 1U));
-    }
-  }
-  return bits;
-}
-
 std::vector<Token> pack_soft_bits_to_tokens(std::span<const SoftBit> bits, float threshold) {
   std::vector<Token> bytes;
   bytes.reserve(bits.size() / 8U);
@@ -160,32 +149,43 @@ PuncturedConvolutionalEncoder::PuncturedConvolutionalEncoder(PuncturedConvolutio
   validate(config_);
 }
 
-std::vector<std::uint8_t> PuncturedConvolutionalEncoder::push_bit(std::uint8_t bit) {
+void PuncturedConvolutionalEncoder::push_bit_append(std::uint8_t bit, std::vector<std::uint8_t>& out) {
   const auto full_mask = (1U << config_.constraint_length) - 1U;
   shift_register_ = ((shift_register_ << 1U) | (bit & 1U)) & full_mask;
-  const std::array<std::uint8_t, 2> mother = {
-      parity(shift_register_ & config_.generator0),
-      parity(shift_register_ & config_.generator1),
-  };
+  const std::uint8_t m0 = parity(shift_register_ & config_.generator0);
+  const std::uint8_t m1 = parity(shift_register_ & config_.generator1);
+  const auto& pattern = config_.puncture_pattern;
+  const auto pattern_size = pattern.size();
+  if (pattern[mother_bit_index_ % pattern_size] != 0U) {
+    out.push_back(m0);
+  }
+  ++mother_bit_index_;
+  if (pattern[mother_bit_index_ % pattern_size] != 0U) {
+    out.push_back(m1);
+  }
+  ++mother_bit_index_;
+}
 
+void PuncturedConvolutionalEncoder::push_bytes_append(std::span<const std::uint8_t> bytes,
+                                                      std::vector<std::uint8_t>& out) {
+  out.reserve(out.size() + bytes.size() * 2U * 8U);
+  for (const auto byte : bytes) {
+    for (int bit_index = 7; bit_index >= 0; --bit_index) {
+      push_bit_append(static_cast<std::uint8_t>((byte >> bit_index) & 1U), out);
+    }
+  }
+}
+
+std::vector<std::uint8_t> PuncturedConvolutionalEncoder::push_bit(std::uint8_t bit) {
   std::vector<std::uint8_t> out;
   out.reserve(2);
-  for (std::uint8_t i = 0; i < 2U; ++i) {
-    if (config_.puncture_pattern[mother_bit_index_ % config_.puncture_pattern.size()] != 0U) {
-      out.push_back(mother[i]);
-    }
-    ++mother_bit_index_;
-  }
+  push_bit_append(bit, out);
   return out;
 }
 
 std::vector<std::uint8_t> PuncturedConvolutionalEncoder::push_bytes(std::span<const std::uint8_t> bytes) {
   std::vector<std::uint8_t> out;
-  out.reserve(bytes.size() * 2U * 8U);
-  for (const auto bit : bytes_to_bits(bytes)) {
-    auto coded = push_bit(bit);
-    out.insert(out.end(), coded.begin(), coded.end());
-  }
+  push_bytes_append(bytes, out);
   return out;
 }
 
@@ -297,6 +297,11 @@ StreamingSoftViterbiDecoder::StreamingSoftViterbiDecoder(PuncturedConvolutionalC
   if (traceback_bits_ < 8U) {
     throw std::invalid_argument("streaming Viterbi traceback_bits must be at least 8");
   }
+  // History needs to hold up to traceback_bits_ + 8 steps before emit; pad
+  // one byte's worth to give emit_ready_bytes headroom.
+  history_capacity_ = traceback_bits_ + 16U;
+  history_storage_.assign(history_capacity_ * states_, Decision{});
+  traceback_bits_buffer_.assign(history_capacity_, SoftBit{});
   reset();
 }
 
@@ -304,10 +309,13 @@ void StreamingSoftViterbiDecoder::reset() {
   constexpr float inf = std::numeric_limits<float>::infinity();
   mother_bit_index_ = 0;
   pending_.clear();
+  pending_head_ = 0;
   metrics_.assign(states_, inf);
   next_metrics_.assign(states_, inf);
   metrics_[0] = 0.0F;
-  history_.clear();
+  // Reset history bookkeeping but keep the preallocated storage.
+  history_step_count_ = 0;
+  history_emitted_count_ = 0;
 }
 
 std::size_t StreamingSoftViterbiDecoder::observations_required_for_next_bit() const noexcept {
@@ -334,7 +342,13 @@ void StreamingSoftViterbiDecoder::process_bit(std::span<const SoftBit> observati
 
   constexpr float inf = std::numeric_limits<float>::infinity();
   std::fill(next_metrics_.begin(), next_metrics_.end(), inf);
-  std::vector<Decision> decisions(states_);
+
+  // Write decisions directly into the preallocated history slot for this step.
+  const auto step = history_step_count_;
+  Decision* const decisions = &history_storage_[(step % history_capacity_) * states_];
+  for (std::size_t s = 0; s < states_; ++s) {
+    decisions[s] = Decision{};
+  }
 
   const auto observations = std::span<const Observation>(observation_storage).first(observations_in.size());
   for (std::uint32_t previous = 0; previous < states_; ++previous) {
@@ -369,27 +383,31 @@ void StreamingSoftViterbiDecoder::process_bit(std::span<const SoftBit> observati
       }
     }
   }
-  history_.push_back(std::move(decisions));
+  ++history_step_count_;
   mother_bit_index_ += 2U;
 }
 
 void StreamingSoftViterbiDecoder::emit_ready_bytes(std::vector<Token>& out) {
-  while (history_.size() >= traceback_bits_ + 8U) {
+  while (history_steps_in_flight() >= traceback_bits_ + 8U) {
     const auto best = std::min_element(metrics_.begin(), metrics_.end());
     if (best == metrics_.end() || !std::isfinite(*best)) {
       throw std::runtime_error("streaming Viterbi decoder could not find a valid path");
     }
 
     auto state = static_cast<std::uint32_t>(std::distance(metrics_.begin(), best));
-    std::vector<SoftBit> bits(history_.size());
-    for (std::size_t step = history_.size(); step-- > 0U;) {
-      const auto decision = history_[step][state];
+    const auto in_flight = history_steps_in_flight();
+    // Traceback walks from the most recent step (history_step_count_ - 1) down
+    // to history_emitted_count_, writing into the scratch buffer. We only emit
+    // bytes from the oldest 8 of these steps below.
+    for (std::size_t i = in_flight; i-- > 0U;) {
+      const auto step = history_emitted_count_ + i;
+      const auto& decision = history_row(step, state);
       if (!decision.valid) {
         throw std::runtime_error("streaming Viterbi traceback encountered an invalid decision");
       }
-      bits[step] = {.value = decision.bit,
-                    .certain = decision.confidence >= config_.decoded_bit_confidence_threshold,
-                    .confidence = decision.confidence};
+      traceback_bits_buffer_[i] = {.value = decision.bit,
+                                   .certain = decision.confidence >= config_.decoded_bit_confidence_threshold,
+                                   .confidence = decision.confidence};
       state = decision.previous_state;
     }
 
@@ -397,34 +415,42 @@ void StreamingSoftViterbiDecoder::emit_ready_bytes(std::vector<Token>& out) {
     bool certain = true;
     float confidence = 1.0F;
     for (std::size_t bit = 0; bit < 8U; ++bit) {
-      const auto soft = bits[bit];
+      const auto soft = traceback_bits_buffer_[bit];
       value = static_cast<std::uint8_t>((value << 1U) | (soft.value & 1U));
       confidence = std::min(confidence, soft.confidence);
       certain = certain && soft.certain && soft.confidence >= config_.decoded_bit_confidence_threshold;
     }
     out.push_back({.value = value, .certain = certain, .confidence = confidence});
-    history_.erase(history_.begin(), history_.begin() + 8);
+    history_emitted_count_ += 8U;
+  }
+}
+
+void StreamingSoftViterbiDecoder::push_append(std::span<const SoftBit> coded_bits,
+                                              std::vector<Token>& out) {
+  pending_.insert(pending_.end(), coded_bits.begin(), coded_bits.end());
+
+  while (true) {
+    const auto required = observations_required_for_next_bit();
+    if (pending_.size() - pending_head_ < required) {
+      break;
+    }
+    process_bit(std::span<const SoftBit>(pending_.data() + pending_head_, required));
+    pending_head_ += required;
+    emit_ready_bytes(out);
+  }
+
+  // Amortized compaction: only shift the residual when half (or more) of
+  // the buffer is consumed. The per-bit cost remains O(1).
+  if (pending_head_ > 0U && pending_head_ * 2U >= pending_.size()) {
+    pending_.erase(pending_.begin(),
+                   pending_.begin() + static_cast<std::ptrdiff_t>(pending_head_));
+    pending_head_ = 0U;
   }
 }
 
 std::vector<Token> StreamingSoftViterbiDecoder::push(std::span<const SoftBit> coded_bits) {
-  pending_.insert(pending_.end(), coded_bits.begin(), coded_bits.end());
-
   std::vector<Token> out;
-  std::size_t pending_offset = 0;
-  while (true) {
-    const auto required = observations_required_for_next_bit();
-    if (pending_.size() - pending_offset < required) {
-      break;
-    }
-    process_bit(std::span<const SoftBit>(pending_.data() + pending_offset, required));
-    pending_offset += required;
-    emit_ready_bytes(out);
-  }
-
-  if (pending_offset != 0U) {
-    pending_.erase(pending_.begin(), pending_.begin() + static_cast<std::ptrdiff_t>(pending_offset));
-  }
+  push_append(coded_bits, out);
   return out;
 }
 
@@ -452,12 +478,18 @@ std::size_t convolutional_coded_bits_for_input_bytes(std::size_t input_bytes,
 Aes128CtrBitXor::Aes128CtrBitXor(Aes128Key key, Aes128CtrCounter counter)
     : stream_(key, counter) {}
 
+void Aes128CtrBitXor::refill_keystream_byte() {
+  if (keystream_buffer_pos_ >= keystream_buffer_.size()) {
+    stream_.generate(keystream_buffer_);
+    keystream_buffer_pos_ = 0;
+  }
+  current_byte_ = keystream_buffer_[keystream_buffer_pos_++];
+  remaining_bits_ = 8U;
+}
+
 std::uint8_t Aes128CtrBitXor::next_keystream_bit() {
   if (remaining_bits_ == 0U) {
-    std::array<std::uint8_t, 1> next{};
-    stream_.generate(next);
-    current_byte_ = next[0];
-    remaining_bits_ = 8U;
+    refill_keystream_byte();
   }
   const auto shift = static_cast<std::uint8_t>(remaining_bits_ - 1U);
   const auto bit = static_cast<std::uint8_t>((current_byte_ >> shift) & 1U);
@@ -475,12 +507,15 @@ SoftBit Aes128CtrBitXor::xor_soft_bit(SoftBit bit) {
 }
 
 std::vector<std::uint8_t> Aes128CtrBitXor::xor_bits(std::span<const std::uint8_t> bits) {
-  std::vector<std::uint8_t> out;
-  out.reserve(bits.size());
-  for (const auto bit : bits) {
-    out.push_back(xor_bit(bit));
-  }
+  std::vector<std::uint8_t> out(bits.begin(), bits.end());
+  xor_bits_in_place(out);
   return out;
+}
+
+void Aes128CtrBitXor::xor_bits_in_place(std::span<std::uint8_t> bits) {
+  for (auto& bit : bits) {
+    bit = static_cast<std::uint8_t>((bit & 1U) ^ next_keystream_bit());
+  }
 }
 
 std::vector<SoftBit> Aes128CtrBitXor::xor_soft_bits(std::span<const SoftBit> bits) {

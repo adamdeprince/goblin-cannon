@@ -2,18 +2,22 @@
 
 #include "wbhf_modem/control_server.hpp"
 #include "wbhf_modem/control/v1/receiver_control.grpc.pb.h"
+#include "wbhf_modem/integer_codec.hpp"
 #include "wbhf_modem/io.hpp"
 #include "wbhf_modem/quote_udp.hpp"
 #include "wbhf_modem/ring_buffer.hpp"
 
 #include <grpcpp/grpcpp.h>
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <csignal>
 #include <cstdint>
 #include <deque>
+#include <limits>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -44,6 +48,9 @@ struct Args {
   float scale = 0.95F;
   std::size_t pipe_capacity_bytes = 4096;
   std::uint64_t iq_trace_interval_ms = 1000;
+  std::uint64_t canonical_timeout_ms = 1000;
+  std::uint64_t bad_message_window_ms = 10000;
+  std::uint64_t bad_message_shutdown_threshold = 8;
 };
 
 std::uint64_t epoch_nanos() {
@@ -82,6 +89,11 @@ struct ReceiverSessionEvent {
   std::string detail;
   double metric = 0.0;
   std::uint64_t count = 0;
+};
+
+struct ReceiverUdpPacket {
+  std::array<std::uint8_t, 32> bytes{};
+  std::size_t size = 0;
 };
 
 class ReceiverSessionEventQueue {
@@ -150,9 +162,14 @@ public:
   AsyncQuotePacketSink(const AsyncQuotePacketSink&) = delete;
   AsyncQuotePacketSink& operator=(const AsyncQuotePacketSink&) = delete;
 
-  void send_quote_packet(std::span<const std::uint8_t, 9> payload) override {
-    wbhf_modem::QuoteUdpPayload buffer{};
-    std::copy(payload.begin(), payload.end(), buffer.begin());
+  void send_packet(std::span<const std::uint8_t> payload) override {
+    ReceiverUdpPacket buffer{};
+    if (payload.size() > buffer.bytes.size()) {
+      dropped_.fetch_add(1U, std::memory_order_relaxed);
+      return;
+    }
+    std::copy(payload.begin(), payload.end(), buffer.bytes.begin());
+    buffer.size = payload.size();
     if (!ring_.try_push(buffer)) {
       dropped_.fetch_add(1U, std::memory_order_relaxed);
     }
@@ -168,11 +185,11 @@ public:
 
 private:
   void drain_loop() {
-    wbhf_modem::QuoteUdpPayload payload{};
+    ReceiverUdpPacket payload{};
     while (!stop_.load(std::memory_order_acquire) && running.load(std::memory_order_acquire)) {
       bool any = false;
       while (ring_.try_pop(payload)) {
-        inner_->send_quote_packet(std::span<const std::uint8_t, 9>(payload));
+        inner_->send_packet(std::span<const std::uint8_t>(payload.bytes).first(payload.size));
         any = true;
       }
       if (!any) {
@@ -182,7 +199,7 @@ private:
     // Drain remaining on shutdown so we don't lose tail quotes.
     while (ring_.try_pop(payload)) {
       try {
-        inner_->send_quote_packet(std::span<const std::uint8_t, 9>(payload));
+        inner_->send_packet(std::span<const std::uint8_t>(payload.bytes).first(payload.size));
       } catch (...) {
         break;
       }
@@ -190,20 +207,185 @@ private:
   }
 
   std::shared_ptr<wbhf_modem::QuotePacketSink> inner_;
-  wbhf_modem::SpscRingBuffer<wbhf_modem::QuoteUdpPayload> ring_;
+  wbhf_modem::SpscRingBuffer<ReceiverUdpPacket> ring_;
   std::atomic_bool stop_{false};
   std::atomic_uint64_t dropped_{0};
   std::thread thread_;
 };
 
+std::uint64_t checked_add_price_delta(std::uint64_t base, std::int64_t delta) {
+  if (delta >= 0) {
+    const auto unsigned_delta = static_cast<std::uint64_t>(delta);
+    if (base > std::numeric_limits<std::uint64_t>::max() - unsigned_delta) {
+      return std::numeric_limits<std::uint64_t>::max();
+    }
+    return base + unsigned_delta;
+  }
+  const auto magnitude = static_cast<std::uint64_t>(-(delta + 1)) + 1U;
+  return base < magnitude ? 0U : base - magnitude;
+}
+
+class CanonicalRadioMessageVerifier {
+public:
+  CanonicalRadioMessageVerifier(std::shared_ptr<wbhf_modem::ReceiverControlState> control,
+                                std::chrono::milliseconds timeout,
+                                std::chrono::milliseconds bad_window,
+                                std::uint64_t shutdown_threshold)
+      : control_(std::move(control)),
+        timeout_(timeout),
+        bad_window_(bad_window),
+        shutdown_threshold_(shutdown_threshold) {}
+
+  void note_radio_message(const wbhf_modem::DelimitedMessage& message) {
+    const auto now = std::chrono::steady_clock::now();
+    PendingRadioMessage pending;
+    pending.payload = message.bytes;
+    pending.received_steady = now;
+    pending.received_unix_nanos = epoch_nanos();
+    fill_price_snapshot(pending);
+
+    std::scoped_lock lock(mutex_);
+    prune_canonical_locked(now);
+    const auto canonical = find_payload(canonical_, pending.payload);
+    if (canonical != canonical_.end()) {
+      canonical_.erase(canonical);
+      return;
+    }
+    pending_radio_.push_back(std::move(pending));
+  }
+
+  void note_canonical_message(std::span<const std::uint8_t> payload) {
+    const auto now = std::chrono::steady_clock::now();
+    std::vector<std::uint8_t> bytes(payload.begin(), payload.end());
+    std::scoped_lock lock(mutex_);
+    prune_canonical_locked(now);
+    const auto pending = find_payload(pending_radio_, bytes);
+    if (pending != pending_radio_.end()) {
+      pending_radio_.erase(pending);
+      return;
+    }
+    canonical_.push_back(CanonicalMessage{.payload = std::move(bytes), .received_steady = now});
+  }
+
+  bool sweep(wbhf_modem::QuotePacketSink& sink,
+             ReceiverSessionEventQueue& session_events) {
+    const auto now = std::chrono::steady_clock::now();
+    std::vector<PendingRadioMessage> expired;
+    bool shutdown = false;
+    {
+      std::scoped_lock lock(mutex_);
+      prune_canonical_locked(now);
+      while (!pending_radio_.empty() && now - pending_radio_.front().received_steady >= timeout_) {
+        expired.push_back(std::move(pending_radio_.front()));
+        pending_radio_.pop_front();
+      }
+      for (std::size_t i = 0; i < expired.size(); ++i) {
+        bad_message_times_.push_back(now);
+      }
+      while (!bad_message_times_.empty() && now - bad_message_times_.front() > bad_window_) {
+        bad_message_times_.pop_front();
+      }
+      shutdown = shutdown_threshold_ != 0U && bad_message_times_.size() >= shutdown_threshold_;
+    }
+
+    for (const auto& bad : expired) {
+      const auto packet = wbhf_modem::make_bad_message_udp_payload(bad.bank,
+                                                                   bad.symbol,
+                                                                   bad.base_price_units,
+                                                                   bad.reconstructed_price_units);
+      sink.send_bad_message_packet(std::span<const std::uint8_t, 19>(packet));
+      session_events.push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::signal_event,
+                                               .timestamp_ns = epoch_nanos(),
+                                               .event_type = "unaccounted_radio_message",
+                                               .detail = wbhf_modem::is_client_symbol_byte(bad.symbol)
+                                                   ? "client_symbol"
+                                                   : "market_symbol",
+                                               .count = 1});
+    }
+    if (shutdown) {
+      session_events.push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::signal_event,
+                                               .timestamp_ns = epoch_nanos(),
+                                               .event_type = "receiver_shutdown",
+                                               .detail = "replay_or_injection_suspected",
+                                               .count = shutdown_threshold_});
+    }
+    return shutdown;
+  }
+
+private:
+  struct PendingRadioMessage {
+    std::vector<std::uint8_t> payload;
+    std::chrono::steady_clock::time_point received_steady;
+    std::uint64_t received_unix_nanos = 0;
+    std::uint8_t bank = 0;
+    std::uint8_t symbol = 0;
+    std::uint64_t base_price_units = 0;
+    std::uint64_t reconstructed_price_units = 0;
+  };
+
+  struct CanonicalMessage {
+    std::vector<std::uint8_t> payload;
+    std::chrono::steady_clock::time_point received_steady;
+  };
+
+  template <typename Container>
+  static typename Container::iterator find_payload(Container& container,
+                                                   const std::vector<std::uint8_t>& payload) {
+    return std::find_if(container.begin(), container.end(), [&](const auto& entry) {
+      return entry.payload == payload;
+    });
+  }
+
+  void prune_canonical_locked(std::chrono::steady_clock::time_point now) {
+    while (!canonical_.empty() && now - canonical_.front().received_steady > timeout_ * 2) {
+      canonical_.pop_front();
+    }
+  }
+
+  void fill_price_snapshot(PendingRadioMessage& pending) const {
+    if (pending.payload.size() >= 1U) {
+      pending.bank = pending.payload[0];
+    }
+    if (pending.payload.size() >= 2U) {
+      pending.symbol = pending.payload[1];
+    }
+    const auto decoded = wbhf_modem::decode_bank_symbol_integer(std::span<const std::uint8_t>(pending.payload));
+    if (!decoded.has_value() || !wbhf_modem::is_market_symbol_byte(decoded->symbol) || !control_) {
+      return;
+    }
+    const auto prices = control_->bank_prices_units(decoded->bank);
+    if (!prices.has_value()) {
+      return;
+    }
+    pending.bank = decoded->bank;
+    pending.symbol = decoded->symbol;
+    pending.base_price_units = (*prices)[wbhf_modem::market_symbol_to_index(decoded->symbol)];
+    pending.reconstructed_price_units = checked_add_price_delta(pending.base_price_units, decoded->value);
+  }
+
+  std::shared_ptr<wbhf_modem::ReceiverControlState> control_;
+  std::chrono::milliseconds timeout_;
+  std::chrono::milliseconds bad_window_;
+  std::uint64_t shutdown_threshold_ = 0;
+  std::mutex mutex_;
+  std::deque<PendingRadioMessage> pending_radio_;
+  std::deque<CanonicalMessage> canonical_;
+  std::deque<std::chrono::steady_clock::time_point> bad_message_times_;
+};
+
 class ReceiverMessageObserver final : public wbhf_modem::DelimitedMessageObserver {
 public:
   ReceiverMessageObserver(wbhf_modem::QuotePacketEmitter& quote_emitter,
-                          std::shared_ptr<ReceiverSessionEventQueue> session_events)
+                          std::shared_ptr<ReceiverSessionEventQueue> session_events,
+                          std::shared_ptr<CanonicalRadioMessageVerifier> verifier)
       : quote_emitter_(quote_emitter),
-        session_events_(std::move(session_events)) {}
+        session_events_(std::move(session_events)),
+        verifier_(std::move(verifier)) {}
 
   void on_delimited_message(const wbhf_modem::DelimitedMessage& message) override {
+    if (verifier_) {
+      verifier_->note_radio_message(message);
+    }
     if (message.bytes.size() >= 2U && wbhf_modem::is_client_symbol_byte(message.bytes[1])) {
       session_events_->push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::client_message,
                                                  .timestamp_ns = epoch_nanos(),
@@ -217,10 +399,12 @@ public:
 private:
   wbhf_modem::QuotePacketEmitter& quote_emitter_;
   std::shared_ptr<ReceiverSessionEventQueue> session_events_;
+  std::shared_ptr<CanonicalRadioMessageVerifier> verifier_;
 };
 
 void receiver_session_loop(std::shared_ptr<wbhf_modem::ReceiverControlState> control,
                            std::shared_ptr<ReceiverSessionEventQueue> session_events,
+                           std::shared_ptr<CanonicalRadioMessageVerifier> verifier,
                            std::string transmitter_address,
                            std::uint8_t client_id) {
   namespace pb = ::wbhf_modem::control::v1;
@@ -319,6 +503,13 @@ void receiver_session_loop(std::shared_ptr<wbhf_modem::ReceiverControlState> con
         } catch (const std::exception& exception) {
           std::cerr << "receiver session ignored invalid bank update: " << exception.what() << '\n';
         }
+      } else if (message.has_canonical_messages()) {
+        const auto& batch = message.canonical_messages();
+        for (const auto& payload : batch.payload()) {
+          verifier->note_canonical_message(std::span<const std::uint8_t>(
+              reinterpret_cast<const std::uint8_t*>(payload.data()),
+              payload.size()));
+        }
       }
     }
     stream_open.store(false);
@@ -372,12 +563,21 @@ Args parse_args(int argc, char** argv) {
       args.pipe_capacity_bytes = static_cast<std::size_t>(std::stoul(value));
     } else if (key == "--iq-trace-interval-ms") {
       args.iq_trace_interval_ms = static_cast<std::uint64_t>(std::stoull(value));
+    } else if (key == "--canonical-timeout-ms") {
+      args.canonical_timeout_ms = static_cast<std::uint64_t>(std::stoull(value));
+    } else if (key == "--bad-message-window-ms") {
+      args.bad_message_window_ms = static_cast<std::uint64_t>(std::stoull(value));
+    } else if (key == "--bad-message-shutdown-threshold") {
+      args.bad_message_shutdown_threshold = static_cast<std::uint64_t>(std::stoull(value));
     } else {
       throw std::invalid_argument("unknown argument: " + key);
     }
   }
   if (args.chunk_samples == 0U) {
     throw std::invalid_argument("chunk-samples must be positive");
+  }
+  if (args.canonical_timeout_ms == 0U || args.bad_message_window_ms == 0U) {
+    throw std::invalid_argument("canonical and bad-message windows must be positive");
   }
   return args;
 }
@@ -386,6 +586,19 @@ Args parse_args(int argc, char** argv) {
 
 int main(int argc, char** argv) {
   using namespace wbhf_modem;
+
+#if defined(__GNUC__) || defined(__clang__)
+  if (!__builtin_cpu_supports("avx2") || !__builtin_cpu_supports("fma")) {
+    std::cerr << "radio_receiver requires a CPU with AVX2 + FMA (Haswell or newer).\n";
+    return 1;
+  }
+  const bool has_avx512 = __builtin_cpu_supports("avx512f") &&
+                          __builtin_cpu_supports("avx512dq") &&
+                          __builtin_cpu_supports("avx512bw") &&
+                          __builtin_cpu_supports("avx512vl");
+  std::cout << "radio_receiver demapper ISA: "
+            << (has_avx512 ? "avx-512" : "avx2+fma") << '\n';
+#endif
 
   radio_example::prepare_realtime_process("radio_receiver");
 
@@ -409,27 +622,39 @@ int main(int argc, char** argv) {
     quote_config.source_port = 0;
     auto quote_sink_inner = make_quote_packet_sink(quote_config);
     auto quote_sink = std::shared_ptr<QuotePacketSink>(std::make_shared<AsyncQuotePacketSink>(quote_sink_inner));
+    auto canonical_verifier = std::make_shared<CanonicalRadioMessageVerifier>(
+        receiver_control,
+        std::chrono::milliseconds(args.canonical_timeout_ms),
+        std::chrono::milliseconds(args.bad_message_window_ms),
+        args.bad_message_shutdown_threshold);
 
     ControlledRealtimeReceiver receiver(receiver_control, rx_messages);
     QuotePacketEmitter quote_emitter(receiver_control, quote_sink);
-    ReceiverMessageObserver message_observer(quote_emitter, session_events);
+    ReceiverMessageObserver message_observer(quote_emitter, session_events, canonical_verifier);
     receiver.set_decoded_message_observer(&message_observer);
     FileIqSource source(args.iq_input, args.sample_format, args.scale, args.pipe_capacity_bytes);
 
     receiver_server.start();
     std::thread session_thread([&] {
-      receiver_session_loop(receiver_control, session_events, args.transmitter_control_address, args.client_id);
+      receiver_session_loop(receiver_control,
+                            session_events,
+                            canonical_verifier,
+                            args.transmitter_control_address,
+                            args.client_id);
     });
     std::cout << "receiver gRPC: " << receiver_server.bound_address() << '\n'
               << "transmitter session: " << args.transmitter_control_address << '\n'
               << "client id: " << static_cast<unsigned>(args.client_id) << '\n'
               << "IQ input: " << args.iq_input << '\n'
-              << "quote UDP: " << args.quote_destination_ip << ':' << args.quote_destination_port << '\n';
+              << "quote UDP: " << args.quote_destination_ip << ':' << args.quote_destination_port << '\n'
+              << "canonical timeout: " << args.canonical_timeout_ms << " ms"
+              << " bad shutdown threshold: " << args.bad_message_shutdown_threshold << '\n';
 
     std::vector<Complex> samples(args.chunk_samples);
     std::uint64_t decoded_messages = 0;
     std::uint64_t consumed_samples = 0;
     auto last_iq_trace = std::chrono::steady_clock::now();
+    auto last_canonical_sweep = std::chrono::steady_clock::now();
     // Promote the decode thread to SCHED_FIFO best-effort and pin off the
     // gRPC/session/UDP-egress cores.
     radio_example::promote_to_realtime("radio_receiver.audio", 50, 3);
@@ -437,6 +662,13 @@ int main(int argc, char** argv) {
       while (running.load()) {
         const auto n = source.read(samples);
         if (n == 0U) {
+          if (std::chrono::steady_clock::now() - last_canonical_sweep >= std::chrono::milliseconds(50)) {
+            if (canonical_verifier->sweep(*quote_sink, *session_events)) {
+              running.store(false);
+              break;
+            }
+            last_canonical_sweep = std::chrono::steady_clock::now();
+          }
           // Tight idle; the sender produces a chunk roughly every chunk_samples /
           // sample_rate seconds and we want to wake within microseconds of it.
           std::this_thread::sleep_for(std::chrono::microseconds(50));
@@ -463,6 +695,13 @@ int main(int argc, char** argv) {
         DelimitedMessage message;
         while (rx_messages.try_pop(message)) {
           ++decoded_messages;
+        }
+        if (std::chrono::steady_clock::now() - last_canonical_sweep >= std::chrono::milliseconds(50)) {
+          if (canonical_verifier->sweep(*quote_sink, *session_events)) {
+            running.store(false);
+            break;
+          }
+          last_canonical_sweep = std::chrono::steady_clock::now();
         }
         if (args.iq_trace_interval_ms != 0U &&
             std::chrono::steady_clock::now() - last_iq_trace >=

@@ -225,31 +225,39 @@ FileIqSource::~FileIqSource() {
 
 std::size_t FileIqSource::read(std::span<Complex> samples) {
   const auto bytes_per_sample = encoded_sample_size_bytes(format_);
-  const auto previous_pending = buffer_.size();
-  buffer_.resize(previous_pending + samples.size() * bytes_per_sample);
+  // Residual partial-sample bytes from the previous read live at the head of
+  // buffer_ between [0, residual_). Avoid shifting them after every decode by
+  // only compacting when residual_ has grown comparable to buffer_ size; the
+  // residual is bounded by bytes_per_sample - 1, so this is essentially free.
+  const auto residual = residual_bytes_;
+  buffer_.resize(residual + samples.size() * bytes_per_sample);
   ssize_t read_bytes = 0;
   do {
     read_bytes = ::read(impl_->fd,
-                        buffer_.data() + previous_pending,
-                        buffer_.size() - previous_pending);
+                        buffer_.data() + residual,
+                        buffer_.size() - residual);
   } while (read_bytes < 0 && errno == EINTR);
   if (read_bytes < 0) {
     throw std::runtime_error(errno_message("failed to read IQ samples"));
   }
-  buffer_.resize(previous_pending + static_cast<std::size_t>(read_bytes));
-  const auto complete_bytes = (buffer_.size() / bytes_per_sample) * bytes_per_sample;
+  const auto valid_bytes = residual + static_cast<std::size_t>(read_bytes);
+  const auto complete_bytes = (valid_bytes / bytes_per_sample) * bytes_per_sample;
   const auto decoded = decode_samples(std::span<const std::uint8_t>(buffer_.data(), complete_bytes),
                                       format_,
                                       inverse_scale_,
                                       samples);
-  if (complete_bytes != 0U) {
-    buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(complete_bytes));
+  // Preserve any sub-sample tail bytes at the head of the buffer so the next
+  // read starts from the right offset. Moves at most bytes_per_sample-1 bytes.
+  const auto tail = valid_bytes - complete_bytes;
+  if (tail != 0U && complete_bytes != 0U) {
+    std::memmove(buffer_.data(), buffer_.data() + complete_bytes, tail);
   }
+  residual_bytes_ = tail;
   return decoded;
 }
 
 std::size_t FileIqSource::readable_bytes() const {
-  return impl_ == nullptr ? 0U : pending_pipe_bytes(impl_->fd) + buffer_.size();
+  return impl_ == nullptr ? 0U : pending_pipe_bytes(impl_->fd) + residual_bytes_;
 }
 
 std::size_t encoded_sample_size_bytes(SampleFormat format) {

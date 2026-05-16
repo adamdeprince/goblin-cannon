@@ -30,6 +30,14 @@ std::uint32_t modulation_id(Modulation modulation) {
     return 4;
   case Modulation::qam1024:
     return 5;
+  case Modulation::qci16:
+    return 6;
+  case Modulation::qci64:
+    return 7;
+  case Modulation::qci256:
+    return 8;
+  case Modulation::qci1024:
+    return 9;
   }
   return 0;
 }
@@ -48,6 +56,14 @@ Modulation modulation_from_id(std::uint32_t id) {
     return Modulation::qam256;
   case 5:
     return Modulation::qam1024;
+  case 6:
+    return Modulation::qci16;
+  case 7:
+    return Modulation::qci64;
+  case 8:
+    return Modulation::qci256;
+  case 9:
+    return Modulation::qci1024;
   default:
     throw std::invalid_argument("unknown modulation id in RF stream header");
   }
@@ -722,40 +738,28 @@ private:
     const auto pilot_budget = remaining_out / std::max<std::uint32_t>(config_.pilot_interval_symbols, 1U) +
                               config_.pilot_sequence.size() + startup_pilots_remaining_ + 8U;
     const auto max_symbols = remaining_out + pilot_budget;
-    std::vector<SoftBit> bits(max_symbols * bits_per_symbol(config_.modem.modulation));
-    const auto decoded = data_decoder_.push_samples_soft(buffer_, bits);
+    symbol_decision_buffer_.resize(max_symbols);
+    const auto decoded = data_decoder_.push_samples_symbols(buffer_, symbol_decision_buffer_);
     erase_prefix(buffer_, buffer_.size(), first_sample_index_);
-    if (decoded.produced_bits == 0) {
+    if (decoded.produced_symbols == 0) {
       return false;
     }
-    bits.resize(decoded.produced_bits);
-    for (const auto bit : bits) {
-      bit_accumulator_.push_back(bit);
-      if (bit_accumulator_.size() == data_constellation_.bits_per_symbol()) {
-        if (!consume_modulation_symbol(bit_accumulator_, out, result)) {
-          bit_accumulator_.clear();
-          return true;
-        }
-        bit_accumulator_.clear();
-        if (state_ != RfStreamState::locked || result.produced_symbols == out.size()) {
-          return true;
-        }
+    for (std::size_t i = 0; i < decoded.produced_symbols; ++i) {
+      if (!consume_modulation_symbol(symbol_decision_buffer_[i], out, result)) {
+        return true;
+      }
+      if (state_ != RfStreamState::locked || result.produced_symbols == out.size()) {
+        return true;
       }
     }
     return true;
   }
 
-  bool consume_modulation_symbol(std::span<const SoftBit> bits,
+  bool consume_modulation_symbol(const SymbolDecision& decision,
                                  std::span<RfStreamSymbol> out,
                                  RfStreamReceiveResult& result) {
-    std::uint32_t symbol = 0;
-    bool certain = true;
-    float confidence = 1.0F;
-    for (const auto bit : bits) {
-      symbol = (symbol << 1U) | (bit.value & 1U);
-      certain = certain && bit.certain;
-      confidence = std::min(confidence, bit.confidence);
-    }
+    const auto symbol = decision.symbol;
+    const auto confidence = decision.confidence;
 
     if (startup_pilots_remaining_ != 0) {
       --startup_pilots_remaining_;
@@ -782,7 +786,7 @@ private:
                                       .bits_per_symbol = static_cast<std::uint8_t>(data_constellation_.bits_per_symbol()),
                                       .frame_counter = frame_counter_,
                                       .frame_symbol_offset = frame_symbol_offset_,
-                                      .certain = certain && confidence >= config_.symbol_confidence_threshold,
+                                      .certain = confidence >= config_.symbol_confidence_threshold,
                                       .confidence = confidence};
     ++frame_symbol_offset_;
     --symbols_until_pilot_;
@@ -820,6 +824,8 @@ private:
   std::optional<RfStreamHeader> header_ = std::nullopt;
   RfSyncEstimate sync_ = {};
   std::vector<SoftBit> bit_accumulator_;
+  // Reusable scratch for symbol-direct decode on the data path.
+  std::vector<SymbolDecision> symbol_decision_buffer_;
   std::uint64_t frame_counter_ = 0;
   std::uint32_t frame_symbol_offset_ = 0;
   std::uint32_t symbols_until_pilot_ = 0;

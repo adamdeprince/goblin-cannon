@@ -19,6 +19,10 @@ enum class Modulation {
   qam64,
   qam256,
   qam1024,
+  qci16,
+  qci64,
+  qci256,
+  qci1024,
 };
 
 inline constexpr std::size_t max_bits_per_symbol = 10;
@@ -61,6 +65,11 @@ struct StreamResult {
 struct DecodeResult {
   std::size_t consumed_samples = 0;
   std::size_t produced_bits = 0;
+};
+
+struct DecodeSymbolsResult {
+  std::size_t consumed_samples = 0;
+  std::size_t produced_symbols = 0;
 };
 
 struct SoftBit {
@@ -141,6 +150,9 @@ private:
   Constellation constellation_;
   std::vector<std::uint8_t> bit_buffer_;
   std::vector<Complex> symbols_;
+  // Amortized-compaction head: symbols_[i] holds the symbol at index
+  // first_symbol_index_ + i - symbols_head_.
+  std::size_t symbols_head_ = 0;
   std::int64_t first_symbol_index_ = 0;
   std::int64_t next_symbol_index_ = 0;
   std::uint64_t next_sample_index_ = 0;
@@ -167,6 +179,10 @@ public:
 
   DecodeResult push_samples(std::span<const Complex> samples, std::span<std::uint8_t> out_bits);
   DecodeResult push_samples_soft(std::span<const Complex> samples, std::span<SoftBit> out_bits);
+  // Symbol-direct soft decode: emits SymbolDecision per symbol, skipping the
+  // symbol→bits→symbol round-trip the streaming RF receiver used to do.
+  DecodeSymbolsResult push_samples_symbols(std::span<const Complex> samples,
+                                            std::span<SymbolDecision> out_symbols);
   void reset();
 
 private:
@@ -181,6 +197,11 @@ private:
   Constellation constellation_;
   double timing_offset_symbols_ = 0.0;
   std::vector<Complex> samples_;
+  // Amortized-compaction head: samples_[i] holds the sample at index
+  // first_sample_index_ + i - samples_head_. prune_samples advances both
+  // first_sample_index_ and samples_head_; compaction memmove only fires
+  // when samples_head_ exceeds half of samples_.size().
+  std::size_t samples_head_ = 0;
   std::int64_t first_sample_index_ = 0;
   std::uint64_t next_sample_index_ = 0;
   std::int64_t next_symbol_index_ = 0;

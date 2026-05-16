@@ -225,14 +225,31 @@ ClientUdpMessageHandler::ClientUdpMessageHandler(ClientUdpIngressConfig config,
   if (!status_sink_) {
     throw std::invalid_argument("ClientUdpMessageHandler requires status sink");
   }
+  // Precompute parsed source addresses so the per-packet path avoids
+  // inet_ntop / std::string compare. Anything malformed in config drops a
+  // zero address, which never matches a real client source.
+  for (std::size_t i = 0; i < config_.authorized_client_ips.size(); ++i) {
+    in_addr addr{};
+    if (!config_.authorized_client_ips[i].empty() &&
+        ::inet_pton(AF_INET, config_.authorized_client_ips[i].c_str(), &addr) == 1) {
+      authorized_client_addrs_[i] = addr.s_addr;
+      authorized_client_present_[i] = true;
+    } else {
+      authorized_client_addrs_[i] = 0U;
+      authorized_client_present_[i] = false;
+    }
+  }
 }
 
 ClientUdpHandleResult ClientUdpMessageHandler::handle_datagram(const ClientUdpDatagram& datagram,
+                                                               std::uint32_t source_addr_be,
                                                                BidMessageTransmitIntake& intake,
                                                                SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                                SpscRingBuffer<BidMessageLogRecord>& log_queue) {
   ClientUdpHandleResult result;
-  const auto client_id = client_id_for_source(datagram.source.ip);
+  const auto client_id = source_addr_be != 0U
+      ? client_id_for_source_addr(source_addr_be)
+      : client_id_for_source(datagram.source.ip);
   const auto bid = datagram.payload.size() >= 4U
       ? read_u32_be(std::span<const std::uint8_t>(datagram.payload).first(4U))
       : 0U;
@@ -294,6 +311,13 @@ ClientUdpHandleResult ClientUdpMessageHandler::handle_datagram(const ClientUdpDa
   return result;
 }
 
+ClientUdpHandleResult ClientUdpMessageHandler::handle_datagram(const ClientUdpDatagram& datagram,
+                                                               BidMessageTransmitIntake& intake,
+                                                               SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                               SpscRingBuffer<BidMessageLogRecord>& log_queue) {
+  return handle_datagram(datagram, 0U, intake, transmit_queue, log_queue);
+}
+
 BidMessageIntakeResult ClientUdpMessageHandler::pump_pending(BidMessageTransmitIntake& intake,
                                                              SpscRingBuffer<DelimitedMessage>& transmit_queue,
                                                              SpscRingBuffer<BidMessageLogRecord>& log_queue) {
@@ -319,6 +343,15 @@ void ClientUdpMessageHandler::on_bid_message_log(const BidMessageLogRecord& reco
 std::optional<std::uint8_t> ClientUdpMessageHandler::client_id_for_source(std::string_view ip) const noexcept {
   for (std::size_t i = 0; i < config_.authorized_client_ips.size(); ++i) {
     if (!config_.authorized_client_ips[i].empty() && config_.authorized_client_ips[i] == ip) {
+      return static_cast<std::uint8_t>(i);
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<std::uint8_t> ClientUdpMessageHandler::client_id_for_source_addr(std::uint32_t addr) const noexcept {
+  for (std::size_t i = 0; i < authorized_client_addrs_.size(); ++i) {
+    if (authorized_client_present_[i] && authorized_client_addrs_[i] == addr) {
       return static_cast<std::uint8_t>(i);
     }
   }
@@ -419,12 +452,13 @@ ClientUdpHandleResult ClientUdpIngressSocket::poll_once(BidMessageTransmitIntake
   if (::inet_ntop(AF_INET, &source.sin_addr, ip, sizeof(ip)) == nullptr) {
     throw std::runtime_error("failed to format client UDP source address");
   }
-  return handler_.handle_datagram(ClientUdpDatagram{
-                                      .source = {.ip = ip, .port = ntohs(source.sin_port)},
-                                      .payload = std::vector<std::uint8_t>(bytes.begin(), bytes.begin() + n)},
-                                  intake,
-                                  transmit_queue,
-                                  log_queue);
+  return handler_.handle_datagram(
+      ClientUdpDatagram{.source = {.ip = ip, .port = ntohs(source.sin_port)},
+                        .payload = std::vector<std::uint8_t>(bytes.begin(), bytes.begin() + n)},
+      source.sin_addr.s_addr,
+      intake,
+      transmit_queue,
+      log_queue);
 }
 
 BidMessageIntakeResult ClientUdpIngressSocket::pump_pending(BidMessageTransmitIntake& intake,

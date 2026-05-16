@@ -16,6 +16,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -181,6 +182,23 @@ public:
 private:
   std::shared_ptr<wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>> log_queue_;
   std::shared_ptr<std::mutex> log_queue_mutex_;
+};
+
+class FanoutDelimitedMessageObserver final : public wbhf_modem::DelimitedMessageObserver {
+public:
+  FanoutDelimitedMessageObserver(std::initializer_list<wbhf_modem::DelimitedMessageObserver*> observers)
+      : observers_(observers) {}
+
+  void on_delimited_message(const wbhf_modem::DelimitedMessage& message) override {
+    for (auto* observer : observers_) {
+      if (observer != nullptr) {
+        observer->on_delimited_message(message);
+      }
+    }
+  }
+
+private:
+  std::vector<wbhf_modem::DelimitedMessageObserver*> observers_;
 };
 
 class ClientBidStatusObserver final : public wbhf_modem::BidMessageLogObserver {
@@ -385,6 +403,17 @@ int main(int argc, char** argv) {
 
   radio_example::prepare_realtime_process("radio_sender");
 
+#if defined(__GNUC__) || defined(__clang__)
+  std::cout << "radio_sender ISA: "
+            << (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512dq") &&
+                __builtin_cpu_supports("avx512bw") && __builtin_cpu_supports("avx512vl")
+                    ? "avx-512 available (dispatch picks at runtime)"
+                : __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma")
+                    ? "avx2+fma available (transmitter only needs AVX)"
+                    : "avx baseline")
+            << '\n';
+#endif
+
   try {
     const auto args = parse_args(argc, argv);
     std::signal(SIGINT, handle_signal);
@@ -397,6 +426,7 @@ int main(int argc, char** argv) {
     auto client_status_sink = std::make_shared<KernelClientUdpStatusSink>();
     ClientBidStatusObserver client_status_observer(client_status_sink);
     auto transmitter_control = std::make_shared<TransmitterControlState>();
+    auto canonical_messages = std::make_shared<CanonicalMessageBroadcaster>();
     ClientExpectedLatenciesNs expected_latencies{};
     expected_latencies.fill(5'000'000U);
     if (!args.latency_config_file.empty()) {
@@ -414,10 +444,12 @@ int main(int argc, char** argv) {
          .log_queue = log_queue,
          .log_queue_mutex = log_queue_mutex,
          .client_expected_latency_ns = expected_latencies,
-         .accounting = accounting});
+         .accounting = accounting,
+         .canonical_messages = canonical_messages});
     ControlledRealtimeTransmitter transmitter(transmitter_control, *tx_queue);
     TransmitFramerTraceObserver framer_trace(log_queue, log_queue_mutex);
-    transmitter.set_consumed_message_observer(&framer_trace);
+    FanoutDelimitedMessageObserver framer_observer{&framer_trace, canonical_messages.get()};
+    transmitter.set_consumed_message_observer(&framer_observer);
 
     transmitter_server.start();
     std::cout << "transmitter gRPC: " << transmitter_server.bound_address() << '\n'

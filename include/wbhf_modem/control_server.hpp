@@ -7,8 +7,10 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -26,6 +28,34 @@ using PriceBank = std::array<std::uint64_t, control_symbol_count>;
 using PriceBanks = std::array<PriceBank, 2>;
 using OptionalPriceBanks = std::array<std::optional<PriceBank>, 2>;
 using SymbolPermissionMask = std::array<std::uint8_t, symbol_permission_mask_bytes>;
+
+struct CanonicalMessageRecord {
+  std::uint64_t sequence = 0;
+  std::uint64_t transmitter_unix_nanos = 0;
+  std::vector<std::uint8_t> payload;
+};
+
+class CanonicalMessageBroadcaster final : public DelimitedMessageObserver {
+public:
+  explicit CanonicalMessageBroadcaster(std::size_t retained_messages = 16384);
+
+  void on_delimited_message(const DelimitedMessage& message) override;
+
+  [[nodiscard]] std::uint64_t current_sequence() const;
+  [[nodiscard]] std::vector<CanonicalMessageRecord> messages_after(std::uint64_t last_sequence,
+                                                                    std::size_t max_messages) const;
+  [[nodiscard]] std::vector<CanonicalMessageRecord> wait_for_messages_after(
+      std::uint64_t last_sequence,
+      std::size_t max_messages,
+      std::chrono::milliseconds timeout) const;
+
+private:
+  mutable std::mutex mutex_;
+  mutable std::condition_variable cv_;
+  std::deque<CanonicalMessageRecord> messages_;
+  std::size_t retained_messages_ = 0;
+  std::uint64_t next_sequence_ = 1;
+};
 
 struct ReceiverRestartConfig {
   RealtimePipelineConfig pipeline = {};
@@ -251,6 +281,7 @@ struct TransmitterControlServerConfig {
   std::function<std::optional<PriceBank>(std::uint8_t next_bank)> bank_price_provider = {};
   std::array<std::uint64_t, Clients> client_expected_latency_ns = {};
   std::shared_ptr<ClientBudgetAccounting> accounting = {};
+  std::shared_ptr<CanonicalMessageBroadcaster> canonical_messages = {};
 };
 
 class TransmitterControlServer {

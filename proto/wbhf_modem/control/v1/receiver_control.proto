@@ -39,6 +39,10 @@ enum Modulation {
   MODULATION_64QAM = 4;
   MODULATION_256QAM = 5;
   MODULATION_1024QAM = 6;
+  MODULATION_16QCI = 7;
+  MODULATION_64QCI = 8;
+  MODULATION_256QCI = 9;
+  MODULATION_1024QCI = 10;
 }
 
 message ConvolutionalFecConfig {
@@ -141,7 +145,17 @@ message ReceiverSessionServerMessage {
     Heartbeat heartbeat = 1;
     BankUpdate bank_update = 2;
     UseBankRequest active_bank = 3;
+    CanonicalMessageBatch canonical_messages = 4;
   }
+}
+
+message CanonicalMessageBatch {
+  // Monotonic transmitter-side sequence number for payload[0]. The payloads
+  // are the delimiter-prefixed message bytes before the radio CRC trailer is
+  // added by MessageStreamFramer.
+  uint64 first_sequence = 1;
+  uint64 transmitter_unix_nanos = 2;
+  repeated bytes payload = 3;
 }
 
 message ReceivedClientMessage {

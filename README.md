@@ -1,6 +1,6 @@
 # wbhf_modem
 
-`wbhf_modem` is a C++23 complex-baseband modem library for low-latency WBHF-style data links at 48 kHz and other configured sample rates. It supports QPSK, 8PSK, 16QAM, 64QAM, 256QAM, and 1024QAM, adjustable occupied bandwidth, streaming encode/decode APIs, carrier gating, framed payload flow, RF stream acquisition, and raw IQ stream adapters suitable for SDR pipelines.
+`wbhf_modem` is a C++23 complex-baseband modem library for low-latency WBHF-style data links at 48 kHz and other configured sample rates. It supports QPSK, 8PSK, 16QAM, 64QAM, 256QAM, 1024QAM, 16QCI, 64QCI, 256QCI, and 1024QCI, adjustable occupied bandwidth, streaming encode/decode APIs, carrier gating, framed payload flow, RF stream acquisition, and raw IQ stream adapters suitable for SDR pipelines.
 
 This package intentionally builds for modern x86 AVX-512 systems. CMake fails during configuration if the build host cannot execute the required AVX-512F/DQ/BW/VL instructions, and the DSP code is compiled with `-march=native` so it can use the AVX-512 features available on the host.
 
@@ -44,6 +44,7 @@ The core modem is device-agnostic. `Encoder` and `Decoder` work with spans of co
 - Configured modulation, bandwidth, sample rate, and shaping parameters.
 - Receiver timing branches support `receiver_oversampling` of 1x, 2x, 4x, or 8x. 2x/4x are the practical startup choices; 8x is available when a wider acquisition search is worth the extra CPU.
 - 1024QAM uses square Gray mapping. The custom WBHF-style constellation profile is implemented through 256QAM, so requesting 1024QAM selects the square Gray constellation.
+- QCI modes are QAM-to-circular-isomorphic constellations generated from square Gray QAM by radial mapping while preserving the same bit labeling and bits per symbol.
 
 The library does not auto-detect modulation or bandwidth. Configure those offline through `FrameConfig::modem`.
 
@@ -59,7 +60,7 @@ The library does not auto-detect modulation or bandwidth. Configure those offlin
 - Once locked, frame boundaries are derived from decoded symbol count. Periodic pilots are used for lock monitoring instead of full reacquisition.
 - If pilot confidence or value fails, the receiver reports lock loss and returns to acquisition/search so a later epoch can be reacquired.
 
-Payload/token streams remain CRC-free; the CRC is limited to the robust RF stream header.
+The RF symbol payload has no separate block CRC; message integrity is handled at the message-stream layer so messages can still be emitted with delimiter-level latency.
 
 ## Convolutional/Viterbi Stream
 
@@ -83,11 +84,13 @@ The AES-128-CTR counter and session key are supplied by the control plane.
 
 Before the first message byte of each acquired stream, the transmitter sends an 8-byte native Intel IEEE double containing seconds since the Unix epoch. The receiver validates that timestamp after Viterbi decode and before message deframing. `SyncTimestampConfig` controls the allowed clock skew and can disable the check for deterministic tests.
 
-Messages are byte strings whose first byte is the retained start delimiter `0` or `1`; body bytes must be in `[2,255]`. The receiver emits a message only after it sees the next clear delimiter, so messages can cross RF frame boundaries. Zero-length delimiter runs from padding are ignored. If a fade or decoder erasure touches a message, the partial message is dropped and later bytes are ignored until a new clear delimiter arrives.
+Messages are byte strings whose first byte is the retained start delimiter `0` or `1`; body bytes must be in `[2,255]`. For non-empty messages, `MessageStreamFramer` appends a 4-byte base254 CRC trailer: it computes CRC-32 over the delimiter-prefixed message, masks the result to 31 bits, and encodes the value into four bytes in `[2,255]`. `MessageStreamDeframer` verifies and strips that trailer before emitting. Zero-length delimiter runs from padding, such as repeated `0` or repeated `1`, carry no CRC and are ignored. If a fade, decoder erasure, or CRC mismatch touches a message, the partial message is dropped and later bytes are ignored until a new clear delimiter arrives.
+
+The transmitter also publishes the same CRC-free, delimiter-prefixed message sequence over every active `ReceiverSession` gRPC stream. Canonical messages are batched up to 128 payloads; if a batch does not fill, it is flushed within 100 ms. Receivers use this TCP stream to account for radio messages they decoded locally. A radio message that is still missing from the canonical stream after the configured timeout is treated as possible injection or a CRC false accept and emits a distinct bad-message UDP packet.
 
 The transmitter reads from its input ring continuously and pads with zero delimiters when the input ring is empty. It does not wait to fill a block; the only steady-state buffering in the message layer is the delimiter rule that a completed message is emitted after the following delimiter is decoded.
 
-For client intake, `BidMessageTransmitIntake` accepts already-encoded delimiter-prefixed byte strings plus a bid price. If the transmitter input ring is empty, the message is sent immediately and a `BidMessageLogRecord` is written with `status=sent`. If the transmitter is backed up, the intake keeps only the current standing best bid by bid-price-per-byte, including the delimiter byte. New losing bids are logged as `rejected` immediately with the standing winning bid price; a new better bid replaces the standing bid and logs the displaced bid as rejected. When the transmitter ring clears, only the standing winner advances to the radio queue and is logged as sent. This keeps the auction buffer bounded to one waiting candidate instead of building message latency.
+For client intake, `BidMessageTransmitIntake` accepts already-encoded delimiter-prefixed byte strings plus a bid price. If the transmitter input ring is empty, the message is sent immediately and a `BidMessageLogRecord` is written with `status=sent`. If the transmitter is backed up, the intake keeps only the current standing best bid by bid-price-per-byte, including the delimiter byte and the 4 CRC trailer bytes that will be added on the radio stream. New losing bids are logged as `rejected` immediately with the standing winning bid price; a new better bid replaces the standing bid and logs the displaced bid as rejected. When the transmitter ring clears, only the standing winner advances to the radio queue and is logged as sent. This keeps the auction buffer bounded to one waiting candidate instead of building message latency.
 
 `Clients` is a compile-time constant currently set to `20`. Market-price symbols occupy `[2, 256 - Clients - 1]`; the top `Clients` symbols are per-client symbols. With `Clients=20`, client symbols are `236..255`, and a client id maps to `236 + client_id`.
 
@@ -156,7 +159,7 @@ shadow = K * W[i] * (abs(log(P_now) - log(P_last_sent))
          + H * abs(log(P_now) - log(P_prev)) / dt_ms) / billable_bytes
 ```
 
-When `P_last_sent` or `P_prev` is not known, the bridge uses `K` as the bid. Public market symbols are not charged against client budgets; their shadow bids only decide which candidate uses the next radio slot.
+`billable_bytes` is the actual radio message length used by the auction, including the delimiter byte and the 4-byte message CRC trailer. When `P_last_sent` or `P_prev` is not known, the bridge uses `K` as the bid. Public market symbols are not charged against client budgets; their shadow bids only decide which candidate uses the next radio slot.
 
 For local hand testing, build the examples and start a loopback receiver/transmitter pair:
 

@@ -76,67 +76,48 @@ include(CheckCXXSourceCompiles)
 include(CheckCXXSourceRuns)
 
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-  message(FATAL_ERROR "wbhf_modem requires an x86_64 AVX-512 host build.")
+  message(FATAL_ERROR "wbhf_modem requires an x86_64 host build.")
 endif()
 
-check_cxx_compiler_flag("-march=native" WBHF_MODEM_COMPILER_HAS_MARCH_NATIVE)
-if(NOT WBHF_MODEM_COMPILER_HAS_MARCH_NATIVE)
-  message(FATAL_ERROR "wbhf_modem requires compiler support for -march=native.")
+# Core library baseline: AVX (Sandy Bridge, 2012). This is the minimum the
+# *transmitter* needs and lets the same binary run on a Dell R820 (Xeon
+# E5-4600 v1/v2). The receiver binary lifts its own baseline to AVX2 + FMA.
+# The demapper kernels are compiled at higher ISAs in their own TUs and
+# selected at runtime by detail::pick_isa.
+check_cxx_compiler_flag("-mavx" WBHF_MODEM_COMPILER_HAS_AVX)
+if(NOT WBHF_MODEM_COMPILER_HAS_AVX)
+  message(FATAL_ERROR "wbhf_modem requires compiler support for -mavx.")
+endif()
+check_cxx_compiler_flag("-mavx2 -mfma" WBHF_MODEM_COMPILER_HAS_AVX2_FMA)
+if(NOT WBHF_MODEM_COMPILER_HAS_AVX2_FMA)
+  message(FATAL_ERROR "wbhf_modem requires compiler support for -mavx2 -mfma.")
+endif()
+check_cxx_compiler_flag("-mavx512f -mavx512dq -mavx512bw -mavx512vl"
+                         WBHF_MODEM_COMPILER_HAS_AVX512)
+if(NOT WBHF_MODEM_COMPILER_HAS_AVX512)
+  message(FATAL_ERROR "wbhf_modem requires compiler support for AVX-512 codegen "
+                      "(the actual ISA is selected at runtime).")
 endif()
 
-set(CMAKE_REQUIRED_FLAGS "-march=native")
-check_cxx_source_compiles(
-  "#include <immintrin.h>
-   int main() {
-     __m512 v = _mm512_set1_ps(1.0f);
-     return static_cast<int>(_mm512_reduce_add_ps(v));
-   }"
-  WBHF_MODEM_HOST_COMPILES_AVX512)
-unset(CMAKE_REQUIRED_FLAGS)
+target_sources(wbhf_modem PRIVATE src/demapper_avx2.cpp src/demapper_avx512.cpp)
 
-if(NOT WBHF_MODEM_HOST_COMPILES_AVX512)
-  message(FATAL_ERROR "wbhf_modem requires a host/compiler combination that supports AVX-512 with -march=native.")
-endif()
+# Library baseline -mavx -- works on R820 (Sandy Bridge-EP / Ivy Bridge-EP).
+target_compile_options(wbhf_modem PRIVATE -mavx)
 
-set(CMAKE_REQUIRED_FLAGS "-march=native")
-check_cxx_source_runs(
-  "#include <immintrin.h>
-   int main() {
-     if (!__builtin_cpu_supports(\"avx512f\")) return 1;
-     if (!__builtin_cpu_supports(\"avx512dq\")) return 2;
-     if (!__builtin_cpu_supports(\"avx512bw\")) return 3;
-     if (!__builtin_cpu_supports(\"avx512vl\")) return 4;
-     __m512 a = _mm512_set1_ps(1.0f);
-     __m512 b = _mm512_set1_ps(2.0f);
-     __mmask16 m = _mm512_cmp_ps_mask(a, b, _CMP_LT_OQ);
-     return m == 0xFFFF ? 0 : 5;
-   }"
-  WBHF_MODEM_HOST_RUNS_REQUIRED_AVX512)
-unset(CMAKE_REQUIRED_FLAGS)
+# Per-TU upgrades for the SIMD demappers. These objects only get *called*
+# when the runtime CPU supports them; building them at higher ISAs is safe
+# because no code path reaches them otherwise.
+set_source_files_properties(src/demapper_avx2.cpp
+  PROPERTIES COMPILE_OPTIONS "-mavx2;-mfma")
+set_source_files_properties(src/demapper_avx512.cpp
+  PROPERTIES COMPILE_OPTIONS "-mavx512f;-mavx512dq;-mavx512bw;-mavx512vl")
 
-if(NOT WBHF_MODEM_HOST_RUNS_REQUIRED_AVX512)
-  message(FATAL_ERROR "wbhf_modem requires a build host that can execute AVX-512F/DQ/BW/VL.")
-endif()
+target_compile_definitions(wbhf_modem PRIVATE
+  WBHF_MODEM_COMPILED_AVX=1
+  WBHF_MODEM_COMPILED_AVX2=1
+  WBHF_MODEM_COMPILED_AVX512=1)
 
-target_sources(wbhf_modem PRIVATE src/demapper_avx512.cpp)
-target_compile_options(wbhf_modem PRIVATE -march=native)
-target_compile_definitions(wbhf_modem PRIVATE WBHF_MODEM_COMPILED_AVX512=1)
-
-if(EXISTS "/proc/cpuinfo")
-  file(READ "/proc/cpuinfo" WBHF_MODEM_CPUINFO)
-  string(TOLOWER "${WBHF_MODEM_CPUINFO}" WBHF_MODEM_CPUINFO_LOWER)
-  foreach(feature IN ITEMS
-      avx512f avx512dq avx512ifma avx512cd avx512bw avx512vl
-      avx512vbmi avx512_vbmi2 avx512_vnni avx512_bitalg
-      avx512_vpopcntdq avx512_vp2intersect vaes vpclmulqdq gfni)
-    string(TOUPPER "${feature}" feature_upper)
-    if(WBHF_MODEM_CPUINFO_LOWER MATCHES "(^|[ \n])${feature}($|[ \n])")
-      target_compile_definitions(wbhf_modem PRIVATE "WBHF_MODEM_HOST_${feature_upper}=1")
-    endif()
-  endforeach()
-endif()
-
-message(STATUS "wbhf_modem: compiling DSP with -march=native and mandatory AVX-512F/DQ/BW/VL")
+message(STATUS "wbhf_modem: library baseline -mavx, runtime dispatch to AVX2/AVX-512 demappers")
 
 if(MSVC)
   target_compile_options(wbhf_modem PRIVATE /W4 /permissive-)
@@ -148,15 +129,25 @@ else()
 endif()
 
 if(WBHF_MODEM_BUILD_EXAMPLES)
+  # Transmitter, loopback, and local node only need the AVX baseline of the
+  # library; they don't exercise the SIMD demappers.
   add_executable(wbhf_stream_loopback examples/stream_loopback.cpp)
   target_link_libraries(wbhf_stream_loopback PRIVATE wbhf_modem::wbhf_modem)
+  target_compile_options(wbhf_stream_loopback PRIVATE -mavx)
   add_executable(wbhf_local_node examples/local_node.cpp)
   target_link_libraries(wbhf_local_node PRIVATE wbhf_modem::wbhf_modem)
+  target_compile_options(wbhf_local_node PRIVATE -mavx)
   add_executable(wbhf_radio_sender examples/radio_sender.cpp)
   target_link_libraries(wbhf_radio_sender PRIVATE wbhf_modem::wbhf_modem)
+  target_compile_options(wbhf_radio_sender PRIVATE -mavx)
+
+  # The receiver binary lifts its baseline to AVX2 + FMA so its own code
+  # (and the demapper kernels it actually calls) can target AVX2 directly.
+  # It still runtime-dispatches to AVX-512 when the host supports it.
   add_executable(wbhf_radio_receiver examples/radio_receiver.cpp)
   target_link_libraries(wbhf_radio_receiver PRIVATE wbhf_modem::wbhf_modem)
   target_include_directories(wbhf_radio_receiver PRIVATE "${WBHF_MODEM_GENERATED_DIR}")
+  target_compile_options(wbhf_radio_receiver PRIVATE -mavx2 -mfma)
 endif()
 
 if(WBHF_MODEM_BUILD_TESTS)
@@ -165,6 +156,8 @@ if(WBHF_MODEM_BUILD_TESTS)
     add_executable(wbhf_modem_tests tests/test_modem.cpp)
     target_link_libraries(wbhf_modem_tests PRIVATE wbhf_modem::wbhf_modem)
     target_include_directories(wbhf_modem_tests PRIVATE "${WBHF_MODEM_GENERATED_DIR}")
+    # Tests exercise the receive path; require AVX2 baseline like the receiver.
+    target_compile_options(wbhf_modem_tests PRIVATE -mavx2 -mfma)
     add_test(NAME wbhf_modem_tests COMMAND wbhf_modem_tests)
   endif()
 endif()
