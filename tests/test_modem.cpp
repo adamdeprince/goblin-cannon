@@ -1,16 +1,16 @@
-#include "wbhf_modem/control/v1/receiver_control.grpc.pb.h"
-#include "wbhf_modem/accounting.hpp"
-#include "wbhf_modem/client_udp.hpp"
-#include "wbhf_modem/control_server.hpp"
-#include "wbhf_modem/crypto.hpp"
-#include "wbhf_modem/integer_codec.hpp"
-#include "wbhf_modem/io.hpp"
-#include "wbhf_modem/market_data_shm.hpp"
-#include "wbhf_modem/modem.hpp"
-#include "wbhf_modem/message_stream.hpp"
-#include "wbhf_modem/quote_udp.hpp"
-#include "wbhf_modem/rf_stream.hpp"
-#include "wbhf_modem/ring_buffer.hpp"
+#include "goblin_cannon/control/v1/receiver_control.grpc.pb.h"
+#include "goblin_cannon/accounting.hpp"
+#include "goblin_cannon/client_udp.hpp"
+#include "goblin_cannon/control_server.hpp"
+#include "goblin_cannon/crypto.hpp"
+#include "goblin_cannon/integer_codec.hpp"
+#include "goblin_cannon/io.hpp"
+#include "goblin_cannon/market_data_shm.hpp"
+#include "goblin_cannon/modem.hpp"
+#include "goblin_cannon/message_stream.hpp"
+#include "goblin_cannon/quote_udp.hpp"
+#include "goblin_cannon/rf_stream.hpp"
+#include "goblin_cannon/ring_buffer.hpp"
 
 #include <grpcpp/grpcpp.h>
 
@@ -26,6 +26,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -34,11 +35,11 @@
 #include <utility>
 #include <vector>
 
-using namespace wbhf_modem;
+using namespace goblin_cannon;
 
 namespace {
 
-namespace pb = ::wbhf_modem::control::v1;
+namespace pb = ::goblin_cannon::control::v1;
 
 constexpr std::size_t message_test_frame_bytes = 40;
 
@@ -900,70 +901,46 @@ void test_message_crc_trailer_rejects_corruption_and_allows_padding() {
 }
 
 void test_bid_message_transmit_intake() {
-  auto make_bid = [](DelimitedMessage message, std::uint64_t bid_price) {
-    return BidMessage{.payload = std::move(message.bytes), .bid_price = bid_price};
+  // Simulated channel, deterministic source order. A standing bid is neither
+  // transmitted nor billed until the framer claims it.
+  auto bid = [](DelimitedMessage message, std::uint64_t price) {
+    return BidMessage{.payload = std::move(message.bytes), .bid_price = price};
   };
-
   BidMessageTransmitIntake intake;
-  SpscRingBuffer<DelimitedMessage> transmit_queue(1);
-  SpscRingBuffer<BidMessageLogRecord> log_queue(8);
-
-  const auto immediate_payload = make_message(0, 2, 3);
-  auto result = intake.submit(make_bid(immediate_payload, 90), transmit_queue, log_queue);
-  check(result.transmitted, "bid intake did not transmit immediate message");
-  check(result.pending_bids == 0U, "bid intake left immediate message pending");
-
-  DelimitedMessage transmitted;
-  check(transmit_queue.try_pop(transmitted), "bid intake immediate transmit queue empty");
-  check(transmitted.bytes == immediate_payload.bytes, "bid intake immediate payload mismatch");
+  TransmitMessageQueue queue(1);
+  SpscRingBuffer<BidMessageLogRecord> logs(32);
+  const auto low = make_message(0, 3, 10);
+  const auto high = make_message(1, 1, 20);
+  auto result = intake.submit(bid(low,100),queue,logs);
+  check(result.queued_for_arbitration && !result.transmitted && logs.empty(),
+        "standing candidate was declared sent before consumption");
+  result = intake.submit(bid(high,100),queue,logs);
+  check(result.pending_bids == 1U && queue.size_approx() == 1U, "auction queue grew beyond one winner");
+  DelimitedMessage sent;
+  check(queue.try_pop(sent) && sent.bytes == high.bytes, "ready higher bid per wire byte was not selected");
+  check(queue.empty(), "displaced auction candidate remained queued");
   BidMessageLogRecord log;
-  check(log_queue.try_pop(log), "bid intake immediate log missing");
-  check(log.status == BidMessageLogStatus::sent, "bid intake immediate log status mismatch");
-  check(log.bid_price == 90U && log.winning_bid_price == 90U, "bid intake immediate log price mismatch");
-
-  check(transmit_queue.try_push(make_message(0, 1, 99)), "failed to seed backed-up transmit queue");
-  const auto low = make_message(0, 3, 10);    // 100 / (4 + CRC) = 12.5
-  const auto high = make_message(1, 1, 20);   // 80 / (2 + CRC) = 13.3
-  const auto lower = make_message(0, 2, 30);  // 70 / (3 + CRC) = 10.0
-  result = intake.submit(make_bid(low, 100), transmit_queue, log_queue);
-  check(!result.transmitted && result.pending_bids == 1U, "bid intake did not hold first backed-up bid");
-  result = intake.submit(make_bid(high, 80), transmit_queue, log_queue);
-  check(result.pending_bids == 1U, "bid intake kept more than one standing bid");
-  result = intake.submit(make_bid(lower, 70), transmit_queue, log_queue);
-  check(result.pending_bids == 1U, "bid intake queued losing backed-up bid");
-
-  check(transmit_queue.try_pop(transmitted), "failed to clear backed-up transmit queue");
-  result = intake.pump(transmit_queue, log_queue);
-  check(result.transmitted && result.pending_bids == 0U, "bid intake did not transmit standing winner");
-  check(transmit_queue.try_pop(transmitted), "bid intake standing winner missing from transmit queue");
-  check(transmitted.bytes == high.bytes, "bid intake chose wrong standing winner");
-
-  std::vector<BidMessageLogRecord> logs;
-  while (log_queue.try_pop(log)) {
-    logs.push_back(std::move(log));
-  }
-  check(logs.size() == 3U, "bid intake backed-up log count mismatch");
-  check(logs[0].status == BidMessageLogStatus::rejected &&
-            logs[0].payload == low.bytes &&
-            logs[0].bid_price == 100U &&
-            logs[0].winning_bid_price == 80U,
-        "bid intake did not log displaced bid");
-  check(logs[1].status == BidMessageLogStatus::rejected &&
-            logs[1].payload == lower.bytes &&
-            logs[1].bid_price == 70U &&
-            logs[1].winning_bid_price == 80U,
-        "bid intake did not log losing bid");
-  check(logs[2].status == BidMessageLogStatus::sent &&
-            logs[2].payload == high.bytes &&
-            logs[2].bid_price == 80U &&
-            logs[2].winning_bid_price == 80U,
-        "bid intake did not log sent winner");
+  check(logs.try_pop(log) && log.status == BidMessageLogStatus::rejected && log.payload == low.bytes,
+        "displaced bid did not receive a rejection");
+  check(logs.try_pop(log) && log.status == BidMessageLogStatus::sent && log.payload == high.bytes,
+        "selected bid was not logged on consumption");
+  const auto old = encode_bank_symbol_integer(0,2,100);
+  const auto fresh = encode_bank_symbol_integer(0,2,99); // Value may fall; time advances.
+  (void)intake.submit(bid(old,1000),queue,logs);
+  (void)intake.submit(bid(fresh,1),queue,logs);
+  check(queue.try_pop(sent) && sent.bytes == fresh.bytes && queue.empty(),
+        "superseded high bid displaced a fresher value of the same key");
+  // After ownership transfers, a subsequent update belongs to the next airtime
+  // decision; it cannot mutate a message already being serialized.
+  (void)intake.submit(bid(old,1),queue,logs);
+  check(sent.bytes == fresh.bytes, "producer changed an in-flight message");
+  check(queue.try_pop(sent) && sent.bytes == old.bytes, "next update was lost");
 }
 
 void test_market_data_shared_memory_ring() {
   const auto suffix = std::chrono::steady_clock::now().time_since_epoch().count();
   const auto path = std::filesystem::temp_directory_path() /
-                    ("wbhf_market_data_shm_test_" + std::to_string(suffix));
+                    ("goblin_cannon_market_data_shm_test_" + std::to_string(suffix));
   std::filesystem::remove(path);
 
   MarketDataShmConfig config;
@@ -990,17 +967,15 @@ void test_market_data_shared_memory_ring() {
   check(producer.stats().dropped_full == 1U, "market shared-memory full-drop stat mismatch");
 
   BidMessageTransmitIntake intake;
-  SpscRingBuffer<DelimitedMessage> transmit_queue(1);
+  TransmitMessageQueue transmit_queue(1);
   SpscRingBuffer<BidMessageLogRecord> log_queue(8);
-  check(transmit_queue.try_push(make_message(0, 1, 99)), "failed to seed market auction transmit queue");
 
   while (consumer.try_pop(message)) {
     (void)intake.submit(std::move(message), transmit_queue, log_queue);
   }
   DelimitedMessage transmitted;
-  check(transmit_queue.try_pop(transmitted), "failed to clear seeded market transmit queue");
   const auto pumped = intake.pump(transmit_queue, log_queue);
-  check(pumped.transmitted, "market shared-memory auction did not transmit winner");
+  check(pumped.pending_bids == 1U, "market shared-memory auction lost its standing winner");
   check(transmit_queue.try_pop(transmitted), "market shared-memory auction winner missing");
   check(transmitted.bytes == std::vector<std::uint8_t>(high.begin(), high.end()),
         "market shared-memory auction chose wrong winner");
@@ -1013,7 +988,7 @@ void test_client_udp_message_handler() {
   check(client_id_to_symbol(Clients - 1U) == 255U, "last client symbol mismatch");
   check(market_symbol_count == total_symbol_count - Clients, "market symbol count mismatch");
 
-  const auto config_path = std::filesystem::temp_directory_path() / "wbhf_client_udp_test.conf";
+  const auto config_path = std::filesystem::temp_directory_path() / "goblin_cannon_client_udp_test.conf";
   {
     std::ofstream out(config_path);
     out << "backend=kernel_udp\n"
@@ -1027,7 +1002,7 @@ void test_client_udp_message_handler() {
   check(parsed_config.authorized_client_ips[3] == "192.0.2.3", "client UDP config authorized IP mismatch");
   std::filesystem::remove(config_path);
 
-  const auto latency_path = std::filesystem::temp_directory_path() / "wbhf_client_latency_test.conf";
+  const auto latency_path = std::filesystem::temp_directory_path() / "goblin_cannon_client_latency_test.conf";
   {
     std::ofstream out(latency_path);
     out << "client.3.expected_latency_ns=123456\n"
@@ -1044,7 +1019,7 @@ void test_client_udp_message_handler() {
   auto status_sink = std::make_shared<CapturingClientUdpStatusSink>();
   ClientUdpMessageHandler handler(config, status_sink);
   BidMessageTransmitIntake intake;
-  SpscRingBuffer<DelimitedMessage> transmit_queue(1);
+  TransmitMessageQueue transmit_queue(1);
   SpscRingBuffer<BidMessageLogRecord> log_queue(16);
 
   const std::array<std::uint8_t, 3> message = {0, 44, 45};
@@ -1053,7 +1028,7 @@ void test_client_udp_message_handler() {
                                         intake,
                                         transmit_queue,
                                         log_queue);
-  check(result.accepted && result.transmitted, "client UDP handler did not transmit immediate valid message");
+  check(result.accepted && result.queued_for_arbitration && !result.transmitted, "client UDP handler did not admit a replaceable candidate");
   DelimitedMessage transmitted;
   check(transmit_queue.try_pop(transmitted), "client UDP handler transmit queue empty");
   check(transmitted.bytes.size() == message.size() + 1U, "client UDP transmitted message size mismatch");
@@ -1080,7 +1055,6 @@ void test_client_udp_message_handler() {
             status_sink->records[0].bid_price == 500U,
         "client UDP sent status mismatch");
 
-  check(transmit_queue.try_push(make_message(0, 1, 90)), "failed to seed client UDP backed-up queue");
   const std::array<std::uint8_t, 3> low_message = {1, 50, 51};
   const std::array<std::uint8_t, 2> high_message = {1, 60};
   result = handler.handle_datagram(ClientUdpDatagram{.source = {.ip = "192.0.2.3", .port = 40000},
@@ -1095,9 +1069,8 @@ void test_client_udp_message_handler() {
                                    transmit_queue,
                                    log_queue);
   check(result.queued_for_arbitration, "client UDP high backed-up bid did not replace standing bid");
-  check(transmit_queue.try_pop(transmitted), "failed to clear client UDP backed-up queue");
   const auto pumped = intake.pump(transmit_queue, log_queue, &handler);
-  check(pumped.transmitted, "client UDP intake did not send standing winner");
+  check(pumped.pending_bids == 1U, "client UDP intake lost standing winner before consumption");
   check(transmit_queue.try_pop(transmitted), "client UDP standing winner missing");
   check(transmitted.bytes[1] == client_id_to_symbol(3), "client UDP standing winner client symbol mismatch");
 
@@ -1177,7 +1150,7 @@ void test_client_budget_accounting() {
             refunds[0].remaining_budget_cents == 700U,
         "accounting did not refund expired outstanding message");
 
-  const auto budget_path = std::filesystem::temp_directory_path() / "wbhf_client_budget_test.conf";
+  const auto budget_path = std::filesystem::temp_directory_path() / "goblin_cannon_client_budget_test.conf";
   {
     std::ofstream out(budget_path);
     out << "client.3.budget_pennies=1234\n"
@@ -1187,7 +1160,7 @@ void test_client_budget_accounting() {
   check(loaded[3] == 1234U && loaded[4] == 5678U, "client budget config parse mismatch");
   std::filesystem::remove(budget_path);
 
-  const auto replay_path = std::filesystem::temp_directory_path() / "wbhf_accounting_replay_test.jsonl";
+  const auto replay_path = std::filesystem::temp_directory_path() / "goblin_cannon_accounting_replay_test.jsonl";
   {
     std::ofstream out(replay_path);
     out << "{\"ts_ns\":100,\"event\":\"udp_decision\",\"status\":\"sent\","
@@ -1215,7 +1188,7 @@ void test_client_udp_budget_rejection() {
   auto accounting = std::make_shared<ClientBudgetAccounting>(budgets, latencies);
   ClientUdpMessageHandler handler(config, status_sink, {}, accounting);
   BidMessageTransmitIntake intake;
-  SpscRingBuffer<DelimitedMessage> transmit_queue(1);
+  TransmitMessageQueue transmit_queue(1);
   SpscRingBuffer<BidMessageLogRecord> log_queue(8);
 
   const std::array<std::uint8_t, 2> message = {0, 44};
@@ -1243,7 +1216,7 @@ void test_client_udp_budget_rejection() {
 }
 
 void test_quote_udp_config_and_emitter() {
-  const auto config_path = std::filesystem::temp_directory_path() / "wbhf_quote_udp_test.conf";
+  const auto config_path = std::filesystem::temp_directory_path() / "goblin_cannon_quote_udp_test.conf";
   {
     std::ofstream out(config_path);
     out << "backend=kernel_udp\n"
@@ -1658,6 +1631,14 @@ pb::RestartRequest make_restart_request(const ReceiverRestartConfig& restart) {
   request.set_frame_counter_start(pipeline.frame_counter_start);
   request.set_rrc_rolloff(rf.modem.rrc_rolloff);
   request.set_filter_span_symbols(static_cast<std::uint32_t>(rf.modem.filter_span_symbols));
+  request.set_carrier_correction(rf.carrier_correction);
+  request.set_adaptive_equalization(rf.adaptive_equalization);
+  request.set_sample_clock_recovery(rf.sample_clock_recovery);
+  request.set_recursive_equalization(rf.recursive_equalization);
+  request.set_equalizer_delay_symbols(rf.equalizer_delay_symbols);
+  request.set_message_sequence_numbers(pipeline.sequence_numbers);
+  request.set_equalizer_feedforward_taps(rf.equalizer_feedforward_taps);
+  request.set_equalizer_feedback_taps(rf.equalizer_feedback_taps);
   return request;
 }
 
@@ -1829,6 +1810,14 @@ void test_receiver_control_grpc_server() {
   restart.pipeline.rf.modem.symbol_rate_hz = 24'000.0;
   restart.pipeline.rf.modem.receiver_oversampling = 8;
   restart.pipeline.rf.pilot_sequence = {0, 1023};
+  restart.pipeline.rf.carrier_correction = false;
+  restart.pipeline.rf.adaptive_equalization = false;
+  restart.pipeline.rf.sample_clock_recovery = false;
+  restart.pipeline.rf.recursive_equalization = false;
+  restart.pipeline.rf.equalizer_delay_symbols = 2;
+  restart.pipeline.sequence_numbers = false;
+  restart.pipeline.rf.equalizer_feedforward_taps = 5;
+  restart.pipeline.rf.equalizer_feedback_taps = 0;
   auto restart_request = make_restart_request(restart);
   grpc::ClientContext restart_context;
   ack.Clear();
@@ -1849,10 +1838,49 @@ void test_receiver_control_grpc_server() {
         "gRPC restart did not preserve explicit 24 ksym/s symbol rate");
   check(pending->pipeline.rf.modem.receiver_oversampling == 8U,
         "gRPC restart did not preserve 8x receiver oversampling");
+  check(!pending->pipeline.rf.carrier_correction && !pending->pipeline.rf.adaptive_equalization &&
+            !pending->pipeline.rf.sample_clock_recovery &&
+            !pending->pipeline.rf.recursive_equalization && !pending->pipeline.sequence_numbers &&
+            pending->pipeline.rf.equalizer_delay_symbols == 2U &&
+            pending->pipeline.rf.equalizer_feedforward_taps == 5U &&
+            pending->pipeline.rf.equalizer_feedback_taps == 0U,
+        "gRPC restart did not preserve explicit tracking settings, including false and zero");
   check(pending->pipeline.convolutional.generator0 == restart.pipeline.convolutional.generator0,
         "gRPC restart FEC generator mismatch");
   check(pending->pipeline.aes_key.bytes == key.bytes, "gRPC restart did not use active AES key");
   check(!control->has_bank(0), "gRPC receiver restart did not clear bank cache");
+
+  auto invalid_tracking = restart_request;
+  invalid_tracking.set_equalizer_feedforward_taps(0);
+  grpc::ClientContext invalid_tracking_context;
+  ack.Clear();
+  status = stub->Restart(&invalid_tracking_context, invalid_tracking, &ack);
+  check(!status.ok() && status.error_code() == grpc::StatusCode::INVALID_ARGUMENT,
+        "gRPC restart accepted zero feedforward taps");
+  check(!control->take_pending_restart().has_value(), "invalid tracking settings scheduled a restart");
+
+  auto legacy_restart = restart_request;
+  legacy_restart.clear_carrier_correction();
+  legacy_restart.clear_adaptive_equalization();
+  legacy_restart.clear_sample_clock_recovery();
+  legacy_restart.clear_recursive_equalization();
+  legacy_restart.clear_equalizer_delay_symbols();
+  legacy_restart.clear_message_sequence_numbers();
+  legacy_restart.clear_equalizer_feedforward_taps();
+  legacy_restart.clear_equalizer_feedback_taps();
+  grpc::ClientContext legacy_restart_context;
+  ack.Clear();
+  status = stub->Restart(&legacy_restart_context, legacy_restart, &ack);
+  check(status.ok(), "gRPC restart rejected a client without tracking fields");
+  const auto legacy_pending = control->take_pending_restart();
+  check(legacy_pending.has_value() && legacy_pending->pipeline.rf.carrier_correction &&
+            legacy_pending->pipeline.rf.adaptive_equalization &&
+            legacy_pending->pipeline.rf.sample_clock_recovery &&
+            !legacy_pending->pipeline.rf.recursive_equalization && legacy_pending->pipeline.sequence_numbers &&
+            legacy_pending->pipeline.rf.equalizer_delay_symbols == 0U &&
+            legacy_pending->pipeline.rf.equalizer_feedforward_taps == 3U &&
+            legacy_pending->pipeline.rf.equalizer_feedback_taps == 4U,
+        "omitted gRPC tracking fields did not preserve modem defaults");
 
   pb::BankUpdate bad_bank_request;
   bad_bank_request.set_bank(2);
@@ -1876,7 +1904,7 @@ void test_receiver_control_grpc_server() {
 
 void test_transmitter_control_grpc_server() {
   auto control = std::make_shared<TransmitterControlState>();
-  auto transmit_queue = std::make_shared<SpscRingBuffer<DelimitedMessage>>(4);
+  auto transmit_queue = std::make_shared<TransmitMessageQueue>(4);
   TransmitterControlServer server(control, {.listen_address = "127.0.0.1:0", .transmit_queue = transmit_queue});
   server.start();
   check(server.running(), "gRPC transmitter control server did not start");
@@ -1991,7 +2019,7 @@ void test_transmitter_control_grpc_server() {
 
 void test_transmitter_receiver_session_stream_and_bank_switch() {
   auto control = std::make_shared<TransmitterControlState>();
-  auto transmit_queue = std::make_shared<SpscRingBuffer<DelimitedMessage>>(4);
+  auto transmit_queue = std::make_shared<TransmitMessageQueue>(4);
   TransmitterControlServer server(control, {.listen_address = "127.0.0.1:0", .transmit_queue = transmit_queue});
   server.start();
 
@@ -2155,7 +2183,7 @@ void test_transmitter_receiver_session_broadcasts_canonical_messages() {
 
 void test_receiver_session_logs_client_and_signal_events() {
   auto control = std::make_shared<TransmitterControlState>();
-  auto transmit_queue = std::make_shared<SpscRingBuffer<DelimitedMessage>>(4);
+  auto transmit_queue = std::make_shared<TransmitMessageQueue>(4);
   auto log_queue = std::make_shared<SpscRingBuffer<BidMessageLogRecord>>(16);
   std::array<std::uint64_t, Clients> expected_latencies{};
   expected_latencies.fill(5'000'000U);
@@ -2315,10 +2343,97 @@ void test_realtime_timestamp_rejects_stale_stream() {
   check(rx_messages.empty(), "stale timestamp stream emitted a message");
 }
 
+struct RoutePoint {
+  double latitude_degrees;
+  double longitude_degrees;
+};
+
+struct RouteEstimate {
+  double great_circle_km;
+  double northern_vertex_latitude_degrees;
+  double sky_path_km;
+  double propagation_seconds;
+  double ideal_fiber_seconds;
+};
+
+RouteEstimate estimate_route(RoutePoint from, RoutePoint to, std::size_t skips) {
+  constexpr double earth_radius_km = 6371.0;
+  constexpr double virtual_layer_height_km = 300.0;
+  constexpr double light_speed_km_per_second = 299792.458;
+  constexpr double fiber_refractive_index = 1.468;
+  const auto radians = [](double degrees) { return degrees * std::numbers::pi / 180.0; };
+  const auto unit_vector = [&](RoutePoint point) {
+    const auto latitude = radians(point.latitude_degrees);
+    const auto longitude = radians(point.longitude_degrees);
+    return std::array<double, 3>{std::cos(latitude) * std::cos(longitude),
+                                 std::cos(latitude) * std::sin(longitude),
+                                 std::sin(latitude)};
+  };
+
+  check(skips > 0U, "route model requires at least one skip");
+  const auto a = unit_vector(from);
+  const auto b = unit_vector(to);
+  const auto dot = std::clamp(a[0] * b[0] + a[1] * b[1] + a[2] * b[2], -1.0, 1.0);
+  const auto central_angle = std::acos(dot);
+  const std::array<double, 3> normal = {a[1] * b[2] - a[2] * b[1],
+                                        a[2] * b[0] - a[0] * b[2],
+                                        a[0] * b[1] - a[1] * b[0]};
+  const auto normal_length = std::hypot(normal[0], normal[1], normal[2]);
+  const auto northern_vertex = std::acos(std::abs(normal[2]) / normal_length);
+  const auto great_circle_km = earth_radius_km * central_angle;
+  const auto half_skip_angle = central_angle / (2.0 * static_cast<double>(skips));
+  const auto layer_radius_km = earth_radius_km + virtual_layer_height_km;
+  const auto skip_leg_km = std::sqrt(earth_radius_km * earth_radius_km +
+                                     layer_radius_km * layer_radius_km -
+                                     2.0 * earth_radius_km * layer_radius_km *
+                                         std::cos(half_skip_angle));
+  const auto sky_path_km = 2.0 * static_cast<double>(skips) * skip_leg_km;
+
+  return {.great_circle_km = great_circle_km,
+          .northern_vertex_latitude_degrees = northern_vertex * 180.0 / std::numbers::pi,
+          .sky_path_km = sky_path_km,
+          .propagation_seconds = sky_path_km / light_speed_km_per_second,
+          .ideal_fiber_seconds = great_circle_km * fiber_refractive_index / light_speed_km_per_second};
+}
+
+void test_route_planning_model() {
+  const auto chicago_shanghai =
+      estimate_route({41.8781, -87.6298}, {31.2304, 121.4737}, 4U);
+  check(std::abs(chicago_shanghai.great_circle_km - 11356.633) < 0.001,
+        "Chicago-Shanghai great-circle distance mismatch");
+  check(std::abs(chicago_shanghai.northern_vertex_latitude_degrees - 71.533836) < 0.000001,
+        "Chicago-Shanghai northern vertex mismatch");
+  check(std::abs(chicago_shanghai.sky_path_km - 11842.653) < 0.001,
+        "Chicago-Shanghai sky-path distance mismatch");
+  check(std::abs(chicago_shanghai.propagation_seconds - 0.039502838) < 0.000000001,
+        "Chicago-Shanghai propagation mismatch");
+  check(std::abs(chicago_shanghai.ideal_fiber_seconds - 0.055610261) < 0.000000001,
+        "Chicago-Shanghai fiber floor mismatch");
+
+  const auto new_york_london =
+      estimate_route({40.7128, -74.0060}, {51.5074, -0.1278}, 2U);
+  check(std::abs(new_york_london.great_circle_km - 5570.222) < 0.001,
+        "New York-London great-circle distance mismatch");
+  check(std::abs(new_york_london.sky_path_km - 5813.713) < 0.001,
+        "New York-London sky-path distance mismatch");
+  check(std::abs(new_york_london.propagation_seconds - 0.019392460) < 0.000000001,
+        "New York-London propagation mismatch");
+  check(std::abs(new_york_london.ideal_fiber_seconds - 0.027275823) < 0.000000001,
+        "New York-London fiber floor mismatch");
+
+  const auto chicago_london =
+      estimate_route({41.8781, -87.6298}, {51.5074, -0.1278}, 2U);
+  check(std::abs(chicago_london.great_circle_km - 6352.978) < 0.001,
+        "Chicago-London great-circle distance mismatch");
+  check(std::abs(chicago_london.propagation_seconds - 0.021995616) < 0.000000001,
+        "Chicago-London propagation mismatch");
+}
+
 void test_convolutional_latency_estimates() {
   auto rf = make_rf_config();
   rf.modem.bandwidth_hz = 24000.0;
   const auto symbol_rate = derived_symbol_rate_hz(rf.modem);
+  check(std::abs(symbol_rate - 19200.0) < 0.000001, "24 kHz derived symbol rate mismatch");
 
   const auto q64_byte = estimate_convolutional_latency(
       1, static_cast<std::uint8_t>(bits_per_symbol(Modulation::qam64)), symbol_rate,
@@ -2362,6 +2477,26 @@ void test_convolutional_latency_estimates() {
   check(q16_message_with_next_delimiter.encode_decode_latency_seconds > 0.00207 &&
             q16_message_with_next_delimiter.encode_decode_latency_seconds < 0.00210,
         "rate 1/2 Q16 five-byte latency mismatch");
+
+  auto rf_10khz = make_rf_config();
+  rf_10khz.modem.bandwidth_hz = 10000.0;
+  const auto symbol_rate_10khz = derived_symbol_rate_hz(rf_10khz.modem);
+  check(std::abs(symbol_rate_10khz - 8000.0) < 0.000001,
+        "10 kHz derived symbol rate mismatch");
+  check(std::abs(symbol_rate_10khz * static_cast<double>(bits_per_symbol(Modulation::qam16)) * 0.5 -
+                     16000.0) < 0.000001,
+        "10 kHz rate 1/2 Q16 throughput mismatch");
+
+  const auto q16_10khz_message_with_next_delimiter = estimate_convolutional_latency(
+      5, static_cast<std::uint8_t>(bits_per_symbol(Modulation::qam16)), symbol_rate_10khz,
+      PuncturedConvolutionalCodeConfig::rate_1_2());
+  check(q16_10khz_message_with_next_delimiter.coded_bits == 80U,
+        "10 kHz rate 1/2 Q16 five-byte coded bit count mismatch");
+  check(q16_10khz_message_with_next_delimiter.qam_symbols == 20U,
+        "10 kHz rate 1/2 Q16 five-byte symbol count mismatch");
+  check(q16_10khz_message_with_next_delimiter.encode_decode_latency_seconds > 0.00499 &&
+            q16_10khz_message_with_next_delimiter.encode_decode_latency_seconds < 0.00501,
+        "10 kHz rate 1/2 Q16 five-byte latency mismatch");
 
   const auto q64_punctured = estimate_convolutional_latency(
       4, static_cast<std::uint8_t>(bits_per_symbol(Modulation::qam64)), symbol_rate,
@@ -2447,7 +2582,8 @@ int main() {
   test_transmitter_bank_switch_price_provider();
   test_realtime_timestamp_accepts_fresh_stream();
   test_realtime_timestamp_rejects_stale_stream();
+  test_route_planning_model();
   test_convolutional_latency_estimates();
-  std::cout << "wbhf_modem_tests passed\n";
+  std::cout << "goblin_cannon_tests passed\n";
   return 0;
 }

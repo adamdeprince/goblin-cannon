@@ -1,5 +1,5 @@
-#include "wbhf_modem/control_server.hpp"
-#include "wbhf_modem/quote_udp.hpp"
+#include "goblin_cannon/control_server.hpp"
+#include "goblin_cannon/quote_udp.hpp"
 
 #include <array>
 #include <atomic>
@@ -21,43 +21,43 @@ void handle_signal(int) {
   running.store(false);
 }
 
-wbhf_modem::Modulation parse_modulation(const std::string& value) {
+goblin_cannon::Modulation parse_modulation(const std::string& value) {
   if (value == "qpsk") {
-    return wbhf_modem::Modulation::qpsk;
+    return goblin_cannon::Modulation::qpsk;
   }
   if (value == "8psk") {
-    return wbhf_modem::Modulation::psk8;
+    return goblin_cannon::Modulation::psk8;
   }
   if (value == "16qam") {
-    return wbhf_modem::Modulation::qam16;
+    return goblin_cannon::Modulation::qam16;
   }
   if (value == "64qam") {
-    return wbhf_modem::Modulation::qam64;
+    return goblin_cannon::Modulation::qam64;
   }
   if (value == "256qam") {
-    return wbhf_modem::Modulation::qam256;
+    return goblin_cannon::Modulation::qam256;
   }
   if (value == "1024qam") {
-    return wbhf_modem::Modulation::qam1024;
+    return goblin_cannon::Modulation::qam1024;
   }
   if (value == "16qci" || value == "16-qci") {
-    return wbhf_modem::Modulation::qci16;
+    return goblin_cannon::Modulation::qci16;
   }
   if (value == "64qci" || value == "64-qci") {
-    return wbhf_modem::Modulation::qci64;
+    return goblin_cannon::Modulation::qci64;
   }
   if (value == "256qci" || value == "256-qci") {
-    return wbhf_modem::Modulation::qci256;
+    return goblin_cannon::Modulation::qci256;
   }
   if (value == "1024qci" || value == "1024-qci") {
-    return wbhf_modem::Modulation::qci1024;
+    return goblin_cannon::Modulation::qci1024;
   }
   throw std::invalid_argument("unknown modulation: " + value);
 }
 
-wbhf_modem::RealtimePipelineConfig make_pipeline(wbhf_modem::Modulation modulation,
+goblin_cannon::RealtimePipelineConfig make_pipeline(goblin_cannon::Modulation modulation,
                                                  double bandwidth_hz) {
-  wbhf_modem::RealtimePipelineConfig pipeline;
+  goblin_cannon::RealtimePipelineConfig pipeline;
   pipeline.rf.modem.sample_rate_hz = 48000.0;
   pipeline.rf.modem.bandwidth_hz = bandwidth_hz;
   pipeline.rf.modem.symbol_rate_hz = 24000.0;
@@ -66,13 +66,13 @@ wbhf_modem::RealtimePipelineConfig make_pipeline(wbhf_modem::Modulation modulati
   pipeline.rf.modem.filter_span_symbols = 8;
   pipeline.rf.modem.receiver_oversampling = 8;
   pipeline.rf.expected_schedule_epoch = 1;
-  pipeline.rf.acquisition_sequence = wbhf_modem::make_default_qpsk_sequence(64, 0x12345678U);
-  pipeline.rf.equalizer_training_sequence = wbhf_modem::make_default_qpsk_sequence(64, 0x87654321U);
+  pipeline.rf.acquisition_sequence = goblin_cannon::make_default_qpsk_sequence(64, 0x12345678U);
+  pipeline.rf.equalizer_training_sequence = goblin_cannon::make_default_qpsk_sequence(64, 0x87654321U);
   pipeline.rf.pilot_sequence = {0, 1, 2, 3};
   pipeline.rf.symbols_per_frame = 64;
   pipeline.rf.pilot_interval_symbols = 32;
   pipeline.rf.header_repetition = 3;
-  pipeline.convolutional = wbhf_modem::PuncturedConvolutionalCodeConfig::rate_1_2();
+  pipeline.convolutional = goblin_cannon::PuncturedConvolutionalCodeConfig::rate_1_2();
   pipeline.sync_timestamp.enabled = false;
   pipeline.frame_counter_start = 1;
   for (std::size_t i = 0; i < pipeline.aes_key.bytes.size(); ++i) {
@@ -86,7 +86,7 @@ struct Args {
   std::string transmitter_address = "127.0.0.1:50052";
   std::string quote_destination_ip = "127.0.0.1";
   std::uint16_t quote_destination_port = 9001;
-  wbhf_modem::Modulation modulation = wbhf_modem::Modulation::qam64;
+  goblin_cannon::Modulation modulation = goblin_cannon::Modulation::qam64;
   double bandwidth_hz = 48000.0;
 };
 
@@ -120,14 +120,14 @@ Args parse_args(int argc, char** argv) {
 } // namespace
 
 int main(int argc, char** argv) {
-  using namespace wbhf_modem;
+  using namespace goblin_cannon;
 
   try {
     const auto args = parse_args(argc, argv);
     std::signal(SIGINT, handle_signal);
     std::signal(SIGTERM, handle_signal);
 
-    auto tx_queue = std::make_shared<SpscRingBuffer<DelimitedMessage>>(4096);
+    auto tx_queue = std::make_shared<TransmitMessageQueue>(4096);
     SpscRingBuffer<DelimitedMessage> rx_messages(4096);
     const auto pipeline = make_pipeline(args.modulation, args.bandwidth_hz);
 

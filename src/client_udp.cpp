@@ -1,6 +1,6 @@
-#include "wbhf_modem/client_udp.hpp"
+#include "goblin_cannon/client_udp.hpp"
 
-#include "wbhf_modem/control_server.hpp"
+#include "goblin_cannon/control_server.hpp"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -18,7 +18,7 @@
 #include <stdexcept>
 #include <string_view>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -244,7 +244,7 @@ ClientUdpMessageHandler::ClientUdpMessageHandler(ClientUdpIngressConfig config,
 ClientUdpHandleResult ClientUdpMessageHandler::handle_datagram(const ClientUdpDatagram& datagram,
                                                                std::uint32_t source_addr_be,
                                                                BidMessageTransmitIntake& intake,
-                                                               SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                               TransmitMessageQueue& transmit_queue,
                                                                SpscRingBuffer<BidMessageLogRecord>& log_queue) {
   ClientUdpHandleResult result;
   const auto client_id = source_addr_be != 0U
@@ -313,13 +313,13 @@ ClientUdpHandleResult ClientUdpMessageHandler::handle_datagram(const ClientUdpDa
 
 ClientUdpHandleResult ClientUdpMessageHandler::handle_datagram(const ClientUdpDatagram& datagram,
                                                                BidMessageTransmitIntake& intake,
-                                                               SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                               TransmitMessageQueue& transmit_queue,
                                                                SpscRingBuffer<BidMessageLogRecord>& log_queue) {
   return handle_datagram(datagram, 0U, intake, transmit_queue, log_queue);
 }
 
 BidMessageIntakeResult ClientUdpMessageHandler::pump_pending(BidMessageTransmitIntake& intake,
-                                                             SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                             TransmitMessageQueue& transmit_queue,
                                                              SpscRingBuffer<BidMessageLogRecord>& log_queue) {
   return intake.pump(transmit_queue, log_queue, this, accountant_.get());
 }
@@ -378,7 +378,7 @@ ClientUdpIngressSocket::ClientUdpIngressSocket(ClientUdpIngressConfig config,
     : handler_(config, std::move(status_sink), std::move(control), std::move(accountant)) {
   validate_ingress_config(config);
   if (config.backend == ClientUdpBackend::dpdk) {
-    throw std::runtime_error("DPDK client UDP ingress requested, but wbhf_modem was built without DPDK support");
+    throw std::runtime_error("DPDK client UDP ingress requested, but goblin_cannon was built without DPDK support");
   }
 
   socket_fd_ = ::socket(AF_INET, SOCK_DGRAM, 0);
@@ -430,7 +430,7 @@ ClientUdpIngressSocket& ClientUdpIngressSocket::operator=(ClientUdpIngressSocket
 }
 
 ClientUdpHandleResult ClientUdpIngressSocket::poll_once(BidMessageTransmitIntake& intake,
-                                                        SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                        TransmitMessageQueue& transmit_queue,
                                                         SpscRingBuffer<BidMessageLogRecord>& log_queue) {
   std::array<std::uint8_t, 1500> bytes{};
   sockaddr_in source{};
@@ -462,7 +462,7 @@ ClientUdpHandleResult ClientUdpIngressSocket::poll_once(BidMessageTransmitIntake
 }
 
 BidMessageIntakeResult ClientUdpIngressSocket::pump_pending(BidMessageTransmitIntake& intake,
-                                                            SpscRingBuffer<DelimitedMessage>& transmit_queue,
+                                                            TransmitMessageQueue& transmit_queue,
                                                             SpscRingBuffer<BidMessageLogRecord>& log_queue) {
   return handler_.pump_pending(intake, transmit_queue, log_queue);
 }
@@ -596,4 +596,4 @@ std::array<std::uint8_t, 9> encode_client_udp_status(ClientUdpStatusCode status,
   return payload;
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

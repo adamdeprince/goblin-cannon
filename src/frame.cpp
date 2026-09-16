@@ -1,4 +1,4 @@
-#include "wbhf_modem/modem.hpp"
+#include "goblin_cannon/modem.hpp"
 
 #include <algorithm>
 #include <array>
@@ -6,7 +6,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -537,4 +537,4 @@ void FrameDecoder::update_carrier(Complex sample) {
   }
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

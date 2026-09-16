@@ -1,0 +1,4 @@
+simulated channel: 8 cases, tier=full, jobs=4
+simulated channel: 6/8 A8_cochannel_-10dB fail
+simulated channel: 8/8 A9_dropout_300s xfail
+simulated channel: 7.697s {'xfail': 7, 'fail': 1}; results-header-fix/SUMMARY.md

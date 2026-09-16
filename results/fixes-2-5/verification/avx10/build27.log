@@ -1,0 +1,10 @@
+[1/10] Building CXX object CMakeFiles/goblin_cannon.dir/src/rf_stream.cpp.o
+[2/10] Linking CXX static library libgoblin_cannon.a
+[3/10] Linking CXX executable goblin_cannon_radio_sender
+[4/10] Linking CXX executable goblin_cannon_stream_loopback
+[5/10] Linking CXX executable goblin_cannon_local_node
+[6/10] Linking CXX executable goblin_cannon_channel_tests
+[7/10] Linking CXX executable goblin_cannon_radio_receiver
+[8/10] Linking CXX executable goblin_cannon_tests
+[9/10] Linking CXX executable goblin_cannon_simulated_channel_probe
+[10/10] Linking CXX executable goblin_cannon_data_path_tests

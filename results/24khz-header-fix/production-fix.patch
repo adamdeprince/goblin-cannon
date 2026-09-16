@@ -1,0 +1,15 @@
+--- a/src/modem.cpp
++++ b/src/modem.cpp
+@@ -419,8 +419,11 @@
+ bool Decoder::can_decode_next_symbol() const {
+   const double half_span = static_cast<double>(config_.filter_span_symbols) / 2.0;
+   const double symbol_time = static_cast<double>(next_symbol_index_) + timing_offset_symbols_;
++  // Match the inclusive right edge used by matched_filter_symbol(). Rounding
++  // up would wait for a sample outside the filter support at fractional symbol
++  // times, withholding the last symbol of a finite training/header block.
+   const auto latest = static_cast<std::int64_t>(
+-      std::ceil((symbol_time + half_span) * info_.samples_per_symbol));
++      std::floor((symbol_time + half_span) * info_.samples_per_symbol));
+   return static_cast<std::int64_t>(next_sample_index_) > latest;
+ }
+ 

@@ -19,9 +19,9 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback.
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "demo_instruments.toml"
-PROTO_PATH = REPO_ROOT / "proto" / "wbhf_modem" / "control" / "v1" / "receiver_control.proto"
+PROTO_PATH = REPO_ROOT / "proto" / "goblin_cannon" / "control" / "v1" / "receiver_control.proto"
 GENERATED_DIR = REPO_ROOT / "build" / "python_grpc"
-SYMBOLS_HEADER = REPO_ROOT / "include" / "wbhf_modem" / "symbols.hpp"
+SYMBOLS_HEADER = REPO_ROOT / "include" / "goblin_cannon" / "symbols.hpp"
 SYMBOL_MIN_BYTE = 2
 TOTAL_SYMBOL_COUNT = 254
 
@@ -244,8 +244,8 @@ def midpoint_to_units(bid: Any, ask: Any, instrument: Instrument) -> int | None:
 
 def ensure_python_grpc_stubs() -> tuple[Any, Any]:
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-    output_pb = GENERATED_DIR / "wbhf_modem" / "control" / "v1" / "receiver_control_pb2.py"
-    output_grpc = GENERATED_DIR / "wbhf_modem" / "control" / "v1" / "receiver_control_pb2_grpc.py"
+    output_pb = GENERATED_DIR / "goblin_cannon" / "control" / "v1" / "receiver_control_pb2.py"
+    output_grpc = GENERATED_DIR / "goblin_cannon" / "control" / "v1" / "receiver_control_pb2_grpc.py"
     if (
         not output_pb.exists()
         or not output_grpc.exists()
@@ -284,6 +284,6 @@ def ensure_python_grpc_stubs() -> tuple[Any, Any]:
             raise RuntimeError("failed to generate Python gRPC stubs")
 
     sys.path.insert(0, str(GENERATED_DIR))
-    pb2 = importlib.import_module("wbhf_modem.control.v1.receiver_control_pb2")
-    pb2_grpc = importlib.import_module("wbhf_modem.control.v1.receiver_control_pb2_grpc")
+    pb2 = importlib.import_module("goblin_cannon.control.v1.receiver_control_pb2")
+    pb2_grpc = importlib.import_module("goblin_cannon.control.v1.receiver_control_pb2_grpc")
     return pb2, pb2_grpc

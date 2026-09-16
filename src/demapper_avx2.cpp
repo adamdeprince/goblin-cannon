@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace wbhf_modem::detail {
+namespace goblin_cannon::detail {
 
 std::size_t nearest_symbol_avx2(float sample_i,
                                 float sample_q,
@@ -113,4 +113,4 @@ NearestSymbolDecision nearest_symbol_decision_avx2(float sample_i,
   return {.symbol = best_symbol, .nearest_distance = best, .next_distance = second};
 }
 
-} // namespace wbhf_modem::detail
+} // namespace goblin_cannon::detail

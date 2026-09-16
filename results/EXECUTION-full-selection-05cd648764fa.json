@@ -1,0 +1,41 @@
+{
+  "budget_seconds": 1800,
+  "complete_tier": false,
+  "elapsed_seconds": 45.98695212928578,
+  "executed_cases": 9,
+  "git_commit": "adb3e6d72fac540712255792a1836df655ca4f4f",
+  "host": "Linux-7.0.0-1008-aws-x86_64-with-glibc2.43",
+  "jobs": 4,
+  "parameter_records": [
+    "D1_overload_1.5/7446529.json",
+    "D1_overload_3/7446529.json",
+    "D1_overload_10/7446529.json",
+    "D2_survival_0.3/7446529.json",
+    "D2_freshness_agreement_0.3/7446529.json",
+    "D2_survival_0.5/7446529.json",
+    "D2_freshness_agreement_0.5/7446529.json",
+    "D2_survival_0.8/7446529.json",
+    "D2_freshness_agreement_0.8/7446529.json"
+  ],
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "report_header": "simulated channel non-canonical execution observations",
+  "selected_cases": 9,
+  "selection": {
+    "cases": [],
+    "groups": [
+      "D1",
+      "D2"
+    ],
+    "resume": false,
+    "seed": null
+  },
+  "source_tree_sha256": "c060cd257627197371aefae62d11736c8e48b91b86553fd16d6955124a31eefa",
+  "statuses": {
+    "THRESHOLD_TBD": 1,
+    "characterized": 3,
+    "fail": 1,
+    "pending_analysis": 3,
+    "xfail": 1
+  },
+  "tier": "full"
+}

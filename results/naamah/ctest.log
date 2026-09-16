@@ -1,0 +1,35 @@
+Test project /tmp/goblin-cannon-naamah.R2foOc/build
+      Start  1: goblin_cannon_tests
+      Start  2: goblin_cannon_channel_acquisition
+      Start  3: goblin_cannon_channel_noise
+      Start  4: goblin_cannon_channel_phase
+ 1/11 Test  #2: goblin_cannon_channel_acquisition .........   Passed    0.02 sec
+      Start  5: goblin_cannon_channel_fading
+ 2/11 Test  #5: goblin_cannon_channel_fading ..............   Passed    0.04 sec
+      Start  6: goblin_cannon_channel_combined
+ 3/11 Test  #3: goblin_cannon_channel_noise ...............   Passed    0.09 sec
+      Start  7: goblin_cannon_channel_recovery
+ 4/11 Test  #6: goblin_cannon_channel_combined ............   Passed    0.05 sec
+      Start  8: goblin_cannon_channel_equalization
+ 5/11 Test  #7: goblin_cannon_channel_recovery ............   Passed    0.10 sec
+      Start  9: goblin_cannon_channel_streaming
+ 6/11 Test  #4: goblin_cannon_channel_phase ...............   Passed    0.23 sec
+      Start 10: goblin_cannon_channel_config
+ 7/11 Test #10: goblin_cannon_channel_config ..............   Passed    0.01 sec
+      Start 11: goblin_cannon_simulated_channel_harness
+ 8/11 Test  #9: goblin_cannon_channel_streaming ...........   Passed    0.05 sec
+ 9/11 Test  #8: goblin_cannon_channel_equalization ........   Passed    0.33 sec
+10/11 Test #11: goblin_cannon_simulated_channel_harness ...   Passed    0.68 sec
+11/11 Test  #1: goblin_cannon_tests .......................   Passed    6.39 sec
+
+100% tests passed, 0 tests failed out of 11
+
+Label Time Summary:
+E1                   =   0.68 sec*proc (1 test)
+assert               =   8.00 sec*proc (11 tests)
+channel              =   0.92 sec*proc (9 tests)
+legacy               =   7.31 sec*proc (10 tests)
+quick                =   8.00 sec*proc (11 tests)
+simulated_channel    =   0.68 sec*proc (1 test)
+
+Total Test time (real) =   6.40 sec

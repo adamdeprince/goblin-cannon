@@ -1,11 +1,11 @@
 #include "radio_common.hpp"
 
-#include "wbhf_modem/control_server.hpp"
-#include "wbhf_modem/control/v1/receiver_control.grpc.pb.h"
-#include "wbhf_modem/integer_codec.hpp"
-#include "wbhf_modem/io.hpp"
-#include "wbhf_modem/quote_udp.hpp"
-#include "wbhf_modem/ring_buffer.hpp"
+#include "goblin_cannon/control_server.hpp"
+#include "goblin_cannon/control/v1/receiver_control.grpc.pb.h"
+#include "goblin_cannon/integer_codec.hpp"
+#include "goblin_cannon/io.hpp"
+#include "goblin_cannon/quote_udp.hpp"
+#include "goblin_cannon/ring_buffer.hpp"
 
 #include <grpcpp/grpcpp.h>
 
@@ -43,7 +43,7 @@ struct Args {
   std::string quote_destination_ip = "127.0.0.1";
   std::uint16_t quote_destination_port = 9001;
   std::uint8_t client_id = 0;
-  wbhf_modem::SampleFormat sample_format = wbhf_modem::SampleFormat::s16_stereo_iq;
+  goblin_cannon::SampleFormat sample_format = goblin_cannon::SampleFormat::s16_stereo_iq;
   std::size_t chunk_samples = 256;
   float scale = 0.95F;
   std::size_t pipe_capacity_bytes = 4096;
@@ -58,20 +58,20 @@ std::uint64_t epoch_nanos() {
   return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
 }
 
-void set_permission_bit(wbhf_modem::SymbolPermissionMask& mask, std::uint8_t symbol) {
-  const auto index = static_cast<std::size_t>(symbol - wbhf_modem::symbol_min_byte);
+void set_permission_bit(goblin_cannon::SymbolPermissionMask& mask, std::uint8_t symbol) {
+  const auto index = static_cast<std::size_t>(symbol - goblin_cannon::symbol_min_byte);
   mask[index / 8U] = static_cast<std::uint8_t>(mask[index / 8U] |
                                               (static_cast<std::uint8_t>(1U) << (index % 8U)));
 }
 
-wbhf_modem::SymbolPermissionMask default_receiver_permissions(std::uint8_t client_id) {
-  wbhf_modem::SymbolPermissionMask mask{};
-  for (std::uint16_t symbol = wbhf_modem::symbol_min_byte;
-       symbol <= wbhf_modem::market_symbol_max_byte;
+goblin_cannon::SymbolPermissionMask default_receiver_permissions(std::uint8_t client_id) {
+  goblin_cannon::SymbolPermissionMask mask{};
+  for (std::uint16_t symbol = goblin_cannon::symbol_min_byte;
+       symbol <= goblin_cannon::market_symbol_max_byte;
        ++symbol) {
     set_permission_bit(mask, static_cast<std::uint8_t>(symbol));
   }
-  set_permission_bit(mask, wbhf_modem::client_id_to_symbol(client_id));
+  set_permission_bit(mask, goblin_cannon::client_id_to_symbol(client_id));
   return mask;
 }
 
@@ -140,9 +140,9 @@ private:
 // Wraps a real QuotePacketSink so the decode thread only does a non-blocking
 // ring push instead of a sendto() syscall per decoded quote. A background
 // thread drains the ring and calls the underlying sink.
-class AsyncQuotePacketSink final : public wbhf_modem::QuotePacketSink {
+class AsyncQuotePacketSink final : public goblin_cannon::QuotePacketSink {
 public:
-  AsyncQuotePacketSink(std::shared_ptr<wbhf_modem::QuotePacketSink> inner,
+  AsyncQuotePacketSink(std::shared_ptr<goblin_cannon::QuotePacketSink> inner,
                        std::size_t capacity = 4096)
       : inner_(std::move(inner)),
         ring_(capacity) {
@@ -206,8 +206,8 @@ private:
     }
   }
 
-  std::shared_ptr<wbhf_modem::QuotePacketSink> inner_;
-  wbhf_modem::SpscRingBuffer<ReceiverUdpPacket> ring_;
+  std::shared_ptr<goblin_cannon::QuotePacketSink> inner_;
+  goblin_cannon::SpscRingBuffer<ReceiverUdpPacket> ring_;
   std::atomic_bool stop_{false};
   std::atomic_uint64_t dropped_{0};
   std::thread thread_;
@@ -227,7 +227,7 @@ std::uint64_t checked_add_price_delta(std::uint64_t base, std::int64_t delta) {
 
 class CanonicalRadioMessageVerifier {
 public:
-  CanonicalRadioMessageVerifier(std::shared_ptr<wbhf_modem::ReceiverControlState> control,
+  CanonicalRadioMessageVerifier(std::shared_ptr<goblin_cannon::ReceiverControlState> control,
                                 std::chrono::milliseconds timeout,
                                 std::chrono::milliseconds bad_window,
                                 std::uint64_t shutdown_threshold)
@@ -236,7 +236,7 @@ public:
         bad_window_(bad_window),
         shutdown_threshold_(shutdown_threshold) {}
 
-  void note_radio_message(const wbhf_modem::DelimitedMessage& message) {
+  void note_radio_message(const goblin_cannon::DelimitedMessage& message) {
     const auto now = std::chrono::steady_clock::now();
     PendingRadioMessage pending;
     pending.payload = message.bytes;
@@ -267,7 +267,7 @@ public:
     canonical_.push_back(CanonicalMessage{.payload = std::move(bytes), .received_steady = now});
   }
 
-  bool sweep(wbhf_modem::QuotePacketSink& sink,
+  bool sweep(goblin_cannon::QuotePacketSink& sink,
              ReceiverSessionEventQueue& session_events) {
     const auto now = std::chrono::steady_clock::now();
     std::vector<PendingRadioMessage> expired;
@@ -289,7 +289,7 @@ public:
     }
 
     for (const auto& bad : expired) {
-      const auto packet = wbhf_modem::make_bad_message_udp_payload(bad.bank,
+      const auto packet = goblin_cannon::make_bad_message_udp_payload(bad.bank,
                                                                    bad.symbol,
                                                                    bad.base_price_units,
                                                                    bad.reconstructed_price_units);
@@ -297,7 +297,7 @@ public:
       session_events.push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::signal_event,
                                                .timestamp_ns = epoch_nanos(),
                                                .event_type = "unaccounted_radio_message",
-                                               .detail = wbhf_modem::is_client_symbol_byte(bad.symbol)
+                                               .detail = goblin_cannon::is_client_symbol_byte(bad.symbol)
                                                    ? "client_symbol"
                                                    : "market_symbol",
                                                .count = 1});
@@ -349,8 +349,8 @@ private:
     if (pending.payload.size() >= 2U) {
       pending.symbol = pending.payload[1];
     }
-    const auto decoded = wbhf_modem::decode_bank_symbol_integer(std::span<const std::uint8_t>(pending.payload));
-    if (!decoded.has_value() || !wbhf_modem::is_market_symbol_byte(decoded->symbol) || !control_) {
+    const auto decoded = goblin_cannon::decode_bank_symbol_integer(std::span<const std::uint8_t>(pending.payload));
+    if (!decoded.has_value() || !goblin_cannon::is_market_symbol_byte(decoded->symbol) || !control_) {
       return;
     }
     const auto prices = control_->bank_prices_units(decoded->bank);
@@ -359,11 +359,11 @@ private:
     }
     pending.bank = decoded->bank;
     pending.symbol = decoded->symbol;
-    pending.base_price_units = (*prices)[wbhf_modem::market_symbol_to_index(decoded->symbol)];
+    pending.base_price_units = (*prices)[goblin_cannon::market_symbol_to_index(decoded->symbol)];
     pending.reconstructed_price_units = checked_add_price_delta(pending.base_price_units, decoded->value);
   }
 
-  std::shared_ptr<wbhf_modem::ReceiverControlState> control_;
+  std::shared_ptr<goblin_cannon::ReceiverControlState> control_;
   std::chrono::milliseconds timeout_;
   std::chrono::milliseconds bad_window_;
   std::uint64_t shutdown_threshold_ = 0;
@@ -373,23 +373,23 @@ private:
   std::deque<std::chrono::steady_clock::time_point> bad_message_times_;
 };
 
-class ReceiverMessageObserver final : public wbhf_modem::DelimitedMessageObserver {
+class ReceiverMessageObserver final : public goblin_cannon::DelimitedMessageObserver {
 public:
-  ReceiverMessageObserver(wbhf_modem::QuotePacketEmitter& quote_emitter,
+  ReceiverMessageObserver(goblin_cannon::QuotePacketEmitter& quote_emitter,
                           std::shared_ptr<ReceiverSessionEventQueue> session_events,
                           std::shared_ptr<CanonicalRadioMessageVerifier> verifier)
       : quote_emitter_(quote_emitter),
         session_events_(std::move(session_events)),
         verifier_(std::move(verifier)) {}
 
-  void on_delimited_message(const wbhf_modem::DelimitedMessage& message) override {
+  void on_delimited_message(const goblin_cannon::DelimitedMessage& message) override {
     if (verifier_) {
       verifier_->note_radio_message(message);
     }
-    if (message.bytes.size() >= 2U && wbhf_modem::is_client_symbol_byte(message.bytes[1])) {
+    if (message.bytes.size() >= 2U && goblin_cannon::is_client_symbol_byte(message.bytes[1])) {
       session_events_->push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::client_message,
                                                  .timestamp_ns = epoch_nanos(),
-                                                 .client_id = wbhf_modem::client_symbol_to_id(message.bytes[1]),
+                                                 .client_id = goblin_cannon::client_symbol_to_id(message.bytes[1]),
                                                  .payload = message.bytes});
       return;
     }
@@ -397,17 +397,17 @@ public:
   }
 
 private:
-  wbhf_modem::QuotePacketEmitter& quote_emitter_;
+  goblin_cannon::QuotePacketEmitter& quote_emitter_;
   std::shared_ptr<ReceiverSessionEventQueue> session_events_;
   std::shared_ptr<CanonicalRadioMessageVerifier> verifier_;
 };
 
-void receiver_session_loop(std::shared_ptr<wbhf_modem::ReceiverControlState> control,
+void receiver_session_loop(std::shared_ptr<goblin_cannon::ReceiverControlState> control,
                            std::shared_ptr<ReceiverSessionEventQueue> session_events,
                            std::shared_ptr<CanonicalRadioMessageVerifier> verifier,
                            std::string transmitter_address,
                            std::uint8_t client_id) {
-  namespace pb = ::wbhf_modem::control::v1;
+  namespace pb = ::goblin_cannon::control::v1;
   auto steady_millis = [] {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
                std::chrono::steady_clock::now().time_since_epoch())
@@ -547,9 +547,9 @@ Args parse_args(int argc, char** argv) {
       args.quote_destination_port = static_cast<std::uint16_t>(std::stoul(value));
     } else if (key == "--client-id") {
       const auto client_id = std::stoul(value);
-      if (client_id >= wbhf_modem::Clients) {
+      if (client_id >= goblin_cannon::Clients) {
         throw std::invalid_argument("client-id must be in [0, " +
-                                    std::to_string(wbhf_modem::Clients - 1U) +
+                                    std::to_string(goblin_cannon::Clients - 1U) +
                                     "]");
       }
       args.client_id = static_cast<std::uint8_t>(client_id);
@@ -585,7 +585,7 @@ Args parse_args(int argc, char** argv) {
 } // namespace
 
 int main(int argc, char** argv) {
-  using namespace wbhf_modem;
+  using namespace goblin_cannon;
 
 #if defined(__GNUC__) || defined(__clang__)
   if (!__builtin_cpu_supports("avx2") || !__builtin_cpu_supports("fma")) {
@@ -676,6 +676,12 @@ int main(int argc, char** argv) {
         }
         const auto result = receiver.push_samples(std::span<const Complex>(samples).first(n));
         consumed_samples += result.consumed_samples;
+        if (result.gap_events != 0U) {
+          session_events->push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::signal_event,
+                                                    .timestamp_ns = epoch_nanos(),
+                                                    .event_type = "message_gap",
+                                                    .count = result.gap_events});
+        }
         if (result.lock_lost) {
           session_events->push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::signal_event,
                                                     .timestamp_ns = epoch_nanos(),

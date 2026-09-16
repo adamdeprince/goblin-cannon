@@ -1,0 +1,519 @@
+{
+  "report_header": "Goblin Cannon simulated channel expected-failure review",
+  "before_count": 83,
+  "after_count": 13,
+  "removed": [
+    {
+      "case_assertion": "A4_10000_16qam_-50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_10000_16qam_-50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_10000_16qam_50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_10000_16qam_50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_10000_16qam_drift_10min.sync_held",
+      "previous_reason": "With carrier correction disabled, this residual-offset/drift trace loses synchronization.",
+      "current_status": "pass",
+      "evidence": "A4_10000_16qam_drift_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_10000_64qam_-50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_10000_64qam_-50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_10000_64qam_50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_10000_64qam_50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_10000_64qam_drift_10min.sync_held",
+      "previous_reason": "With carrier correction disabled, this residual-offset/drift trace loses synchronization.",
+      "current_status": "pass",
+      "evidence": "A4_10000_64qam_drift_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_10000_64qam_offset_-5.sync_held",
+      "previous_reason": "With carrier correction disabled, this residual-offset/drift trace loses synchronization.",
+      "current_status": "pass",
+      "evidence": "A4_10000_64qam_offset_-5/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_10000_64qam_offset_5.sync_held",
+      "previous_reason": "With carrier correction disabled, this residual-offset/drift trace loses synchronization.",
+      "current_status": "pass",
+      "evidence": "A4_10000_64qam_offset_5/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_10000_qpsk_-50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_10000_qpsk_-50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_10000_qpsk_50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_10000_qpsk_50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_24000_16qam_-50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_24000_16qam_-50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_24000_16qam_50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_24000_16qam_50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_24000_64qam_-50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_24000_64qam_-50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_24000_64qam_50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_24000_64qam_50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_24000_qpsk_-50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_24000_qpsk_-50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "A4_24000_qpsk_50ppm_10min.no_frame_boundary_loss",
+      "previous_reason": "No sample-clock recovery is implemented; the requested clock mismatch loses frame boundaries.",
+      "current_status": "pass",
+      "evidence": "A4_24000_qpsk_50ppm_10min/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_16qam_-20dB_10_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_16qam_-20dB_10_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_16qam_-20dB_10_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_16qam_-20dB_10_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_16qam_-20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_16qam_-20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_16qam_-20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_16qam_-20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_16qam_20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_16qam_20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_16qam_20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_16qam_20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_64qam_-20dB_10_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_64qam_-20dB_10_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_64qam_-20dB_10_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_64qam_-20dB_10_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_64qam_-20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_64qam_-20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_64qam_-20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_64qam_-20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_64qam_20dB_10_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_64qam_20dB_10_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_64qam_20dB_10_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_64qam_20dB_10_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_64qam_20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_64qam_20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_64qam_20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_64qam_20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_qpsk_-20dB_10_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_qpsk_-20dB_10_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_qpsk_-20dB_10_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_qpsk_-20dB_10_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_qpsk_-20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_qpsk_-20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_10000_qpsk_-20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_10000_qpsk_-20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_16qam_-20dB_10_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_16qam_-20dB_10_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_16qam_-20dB_10_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_16qam_-20dB_10_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_16qam_-20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_16qam_-20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_16qam_-20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_16qam_-20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_16qam_20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_16qam_20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_16qam_20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_16qam_20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_64qam_-20dB_10_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_64qam_-20dB_10_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_64qam_-20dB_10_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_64qam_-20dB_10_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_64qam_-20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_64qam_-20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_64qam_-20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_64qam_-20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_64qam_20dB_10_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_64qam_20dB_10_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_64qam_20dB_10_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_64qam_20dB_10_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_64qam_20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_64qam_20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_64qam_20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_64qam_20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_qpsk_-20dB_10_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_qpsk_-20dB_10_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_qpsk_-20dB_10_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_qpsk_-20dB_10_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_qpsk_-20dB_1_100.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_qpsk_-20dB_1_100/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B1_24000_qpsk_-20dB_1_1000.sync_held",
+      "previous_reason": "The receiver loses synchronization through this specified 20 dB AGC excursion.",
+      "current_status": "pass",
+      "evidence": "B1_24000_qpsk_-20dB_1_1000/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B4_jitter.audio_gap_reported",
+      "previous_reason": "The sample-array interface has no block deadline or explicit gap event for injected audio delivery jitter.",
+      "current_status": "pass",
+      "evidence": "B4_jitter/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B4_overrun.audio_gap_reported",
+      "previous_reason": "Raw IQ/audio interface has no explicit underrun/overrun gap report.",
+      "current_status": "pass",
+      "evidence": "B4_overrun/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B4_underrun.audio_gap_reported",
+      "previous_reason": "Raw IQ/audio interface has no explicit underrun/overrun gap report.",
+      "current_status": "pass",
+      "evidence": "B4_underrun/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "B5_10000_16qam_null.latency_2_1ms",
+      "previous_reason": "Source-to-sink latency including startup and audio buffering exceeds the 2.1 ms allowance.",
+      "current_status": "pass",
+      "evidence": "B5_10000_16qam_null/7446529.json",
+      "review_note": "B5 uses Adam-approved added processing/buffering budget and paired reference."
+    },
+    {
+      "case_assertion": "B5_10000_64qam_null.latency_2_1ms",
+      "previous_reason": "Source-to-sink latency including startup and audio buffering exceeds the 2.1 ms allowance.",
+      "current_status": "pass",
+      "evidence": "B5_10000_64qam_null/7446529.json",
+      "review_note": "B5 uses Adam-approved added processing/buffering budget and paired reference."
+    },
+    {
+      "case_assertion": "B5_10000_qpsk_null.latency_2_1ms",
+      "previous_reason": "Source-to-sink latency including startup and audio buffering exceeds the 2.1 ms allowance.",
+      "current_status": "pass",
+      "evidence": "B5_10000_qpsk_null/7446529.json",
+      "review_note": "B5 uses Adam-approved added processing/buffering budget and paired reference."
+    },
+    {
+      "case_assertion": "B5_24000_16qam_null.latency_2_1ms",
+      "previous_reason": "Source-to-sink latency including startup and audio buffering exceeds the 2.1 ms allowance.",
+      "current_status": "pass",
+      "evidence": "B5_24000_16qam_null/7446529.json",
+      "review_note": "B5 uses Adam-approved added processing/buffering budget and paired reference."
+    },
+    {
+      "case_assertion": "B5_24000_64qam_null.latency_2_1ms",
+      "previous_reason": "Source-to-sink latency including startup and audio buffering exceeds the 2.1 ms allowance.",
+      "current_status": "pass",
+      "evidence": "B5_24000_64qam_null/7446529.json",
+      "review_note": "B5 uses Adam-approved added processing/buffering budget and paired reference."
+    },
+    {
+      "case_assertion": "B5_24000_qpsk_null.latency_2_1ms",
+      "previous_reason": "Source-to-sink latency including startup and audio buffering exceeds the 2.1 ms allowance.",
+      "current_status": "pass",
+      "evidence": "B5_24000_qpsk_null/7446529.json",
+      "review_note": "B5 uses Adam-approved added processing/buffering budget and paired reference."
+    },
+    {
+      "case_assertion": "D1_overload_10.no_superseded_transmissions",
+      "previous_reason": "The auction does not coalesce queued updates by source key; superseded updates transmit under 10x overload.",
+      "current_status": "pass",
+      "evidence": "D1_overload_10/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "D1_overload_3.no_superseded_transmissions",
+      "previous_reason": "The real auction-to-modem overload fixture passes superseded source updates to the framer at 3x payload capacity.",
+      "current_status": "pass",
+      "evidence": "D1_overload_3/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "D3_auction_contention.no_priority_inversion",
+      "previous_reason": "The auction does not preempt an already queued winner when a higher-priority bid becomes ready.",
+      "current_status": "pass",
+      "evidence": "D3_auction_contention/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "D3_auction_flood.no_priority_inversion",
+      "previous_reason": "The auction does not preempt an already queued winner when a higher-priority bid becomes ready.",
+      "current_status": "pass",
+      "evidence": "D3_auction_flood/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "D4_duplicate.no_duplicates",
+      "previous_reason": "Receiver delivered a repeated valid message again.",
+      "current_status": "pass",
+      "evidence": "D4_duplicate/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "D4_fec_failure.fec_gap_reported",
+      "previous_reason": "Uncertain/FEC-failed data is discarded without a downstream gap event.",
+      "current_status": "pass",
+      "evidence": "D4_fec_failure/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "D4_out_of_order.no_stale_messages",
+      "previous_reason": "Stale messages were delivered, or no delivery established this property.",
+      "current_status": "pass",
+      "evidence": "D4_out_of_order/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "D4_wrap.sequence_wrap_supported",
+      "previous_reason": "The message envelope has no sequence number or wraparound semantics.",
+      "current_status": "pass",
+      "evidence": "D4_wrap/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    },
+    {
+      "case_assertion": "D6_crypto_errors_replay_restart.replays_rejected",
+      "previous_reason": "The production deframer delivers captured valid framed messages again; it has no message-level replay suppression.",
+      "current_status": "pass",
+      "evidence": "D6_crypto_errors_replay_restart/7446529.json",
+      "review_note": "Observed assertion passes on the final tested source; acceptance input and threshold retained."
+    }
+  ],
+  "remaining": {
+    "A8_cochannel_-10dB.authenticated_delivery": "Production provides AES-CTR plus CRC, with no AEAD authentication or authentication-failure counter.",
+    "A8_cochannel_-10dB.no_corrupt_messages": "With a co-channel interferer at -10 dB SIR, the message sink receives payloads outside the expected source stream; authenticated delivery is not implemented.",
+    "A8_cochannel_0dB.authenticated_delivery": "Production provides AES-CTR plus CRC, with no AEAD authentication or authentication-failure counter.",
+    "A8_cochannel_10dB.authenticated_delivery": "Production provides AES-CTR plus CRC, with no AEAD authentication or authentication-failure counter.",
+    "A9_dropout_2s.no_stale_messages": "The high_lat_moderate trace does not validate a header; dropout recovery and stale-message rejection cannot be established.",
+    "A9_dropout_300s.no_stale_messages": "The high_lat_moderate trace does not validate a header; dropout recovery and stale-message rejection cannot be established.",
+    "A9_dropout_30s.no_stale_messages": "The high_lat_moderate trace does not validate a header; dropout recovery and stale-message rejection cannot be established.",
+    "C2_24000_acquire_0dB.acquired": "At the requested low SNR, the receiver detects the preamble but loses lock without validating a header.",
+    "C2_24000_acquire_3dB.acquired": "At the requested low SNR, the receiver detects the preamble but loses lock without validating a header.",
+    "D3_auction_flood.no_starvation": "Policy conflict: strict bid priority permits starvation during an endless higher-bid flood; Adam rejected increasing priority with age. No cross-key expiry/decay interval is approved.",
+    "D6_crypto_errors_replay_restart.authenticated_delivery": "Production provides AES-CTR plus CRC, with no AEAD authentication or authentication-failure counter.",
+    "D6_crypto_errors_replay_restart.no_nonce_reuse": "Restarting the production AES-CTR generator with the unchanged key and default counter repeats its keystream.",
+    "D6_key_rotation.rotation_supported": "No coordinated mid-stream key-rotation and old-key retirement contract is exposed."
+  },
+  "reason_changes": {
+    "D3_auction_flood.no_starvation": {
+      "before": "A sustained high-bid flood starves offered lower-bid instruments; the auction has no starvation prevention.",
+      "after": "Policy conflict: strict bid priority permits starvation during an endless higher-bid flood; Adam rejected increasing priority with age. No cross-key expiry/decay interval is approved."
+    }
+  },
+  "note": "Execution logs preserve initial classifications. Reclassification changes expected-failure status only; observations and channel parameters are retained."
+}

@@ -1,4 +1,4 @@
-#include "wbhf_modem/io.hpp"
+#include "goblin_cannon/io.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -324,4 +324,4 @@ std::size_t decode_samples(std::span<const std::uint8_t> in,
   return count;
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

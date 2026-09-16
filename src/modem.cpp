@@ -1,4 +1,4 @@
-#include "wbhf_modem/modem.hpp"
+#include "goblin_cannon/modem.hpp"
 
 #include <algorithm>
 #include <array>
@@ -7,7 +7,7 @@
 #include <numbers>
 #include <stdexcept>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -338,6 +338,7 @@ DecodeResult Decoder::push_samples(std::span<const Complex> samples, std::span<s
   std::array<std::uint8_t, max_bits_per_symbol> bits{};
   while (result.produced_bits + info_.bits_per_symbol <= out_bits.size() && can_decode_next_symbol()) {
     Complex sample = matched_filter_symbol(next_symbol_index_);
+    advance_symbol(sample);
     sample = apply_agc(sample, 0);
     const auto symbol = constellation_.nearest_symbol(sample);
     constellation_.symbol_to_bits(symbol, std::span<std::uint8_t>(bits).first(info_.bits_per_symbol));
@@ -345,7 +346,6 @@ DecodeResult Decoder::push_samples(std::span<const Complex> samples, std::span<s
                 static_cast<std::ptrdiff_t>(info_.bits_per_symbol),
                 out_bits.begin() + static_cast<std::ptrdiff_t>(result.produced_bits));
     result.produced_bits += info_.bits_per_symbol;
-    ++next_symbol_index_;
     prune_samples(next_symbol_index_);
   }
   return result;
@@ -360,6 +360,7 @@ DecodeResult Decoder::push_samples_soft(std::span<const Complex> samples, std::s
   std::array<std::uint8_t, max_bits_per_symbol> bits{};
   while (result.produced_bits + info_.bits_per_symbol <= out_bits.size() && can_decode_next_symbol()) {
     Complex sample = matched_filter_symbol(next_symbol_index_);
+    advance_symbol(sample);
     sample = apply_agc(sample, 0);
     const auto decision = constellation_.decide(sample);
     constellation_.symbol_to_bits(decision.symbol, std::span<std::uint8_t>(bits).first(info_.bits_per_symbol));
@@ -368,7 +369,6 @@ DecodeResult Decoder::push_samples_soft(std::span<const Complex> samples, std::s
       out_bits[result.produced_bits + i] = {.value = bits[i], .certain = certain, .confidence = decision.confidence};
     }
     result.produced_bits += info_.bits_per_symbol;
-    ++next_symbol_index_;
     prune_samples(next_symbol_index_);
   }
   return result;
@@ -383,13 +383,81 @@ DecodeSymbolsResult Decoder::push_samples_symbols(std::span<const Complex> sampl
   DecodeSymbolsResult result{.consumed_samples = samples.size(), .produced_symbols = 0};
   while (result.produced_symbols < out_symbols.size() && can_decode_next_symbol()) {
     Complex sample = matched_filter_symbol(next_symbol_index_);
+    advance_symbol(sample);
     sample = apply_agc(sample, 0);
     out_symbols[result.produced_symbols] = constellation_.decide(sample);
     ++result.produced_symbols;
-    ++next_symbol_index_;
     prune_samples(next_symbol_index_);
   }
   return result;
+}
+
+DecodeSymbolsResult Decoder::push_samples_matched(std::span<const Complex> samples,
+                                                  std::span<Complex> out_symbols) {
+  for (const auto sample : samples) {
+    append_sample(sample);
+  }
+  DecodeSymbolsResult result{.consumed_samples = samples.size()};
+  while (result.produced_symbols < out_symbols.size() && can_decode_next_symbol()) {
+    const auto sample = matched_filter_symbol(next_symbol_index_);
+    out_symbols[result.produced_symbols++] = sample;
+    advance_symbol(sample);
+    prune_samples(next_symbol_index_);
+  }
+  return result;
+}
+
+void Decoder::set_sample_clock_recovery(bool enabled) {
+  if (next_sample_index_ != 0) {
+    throw std::logic_error("configure sample clock recovery before feeding audio");
+  }
+  sample_clock_recovery_ = enabled;
+  if (enabled && fractional_rrc_.empty()) {
+    // Interpolate the pulse, not the received symbols. The table avoids
+    // trigonometric work in both the symbol and midpoint matched filters.
+    fractional_rrc_.resize(config_.filter_span_symbols * 1024U + 1U);
+    const double half = config_.filter_span_symbols / 2.0;
+    for (std::size_t i = 0; i < fractional_rrc_.size(); ++i) {
+      fractional_rrc_[i] = static_cast<float>(rrc_impulse(i / 1024.0 - half, config_.rrc_rolloff));
+    }
+  }
+}
+
+Complex Decoder::matched_filter_at(double symbol_time) const {
+  const double half = config_.filter_span_symbols / 2.0;
+  const double sps = info_.samples_per_symbol;
+  const auto start = std::max(first_sample_index_, static_cast<std::int64_t>(std::ceil((symbol_time - half) * sps)));
+  const auto stop = std::min(static_cast<std::int64_t>(next_sample_index_) - 1,
+                           static_cast<std::int64_t>(std::floor((symbol_time + half) * sps)));
+  Complex value{};
+  for (auto i = start; i <= stop; ++i) {
+    const double position = std::clamp((i / sps - symbol_time + half) * 1024.0,
+                                      0.0, static_cast<double>(fractional_rrc_.size() - 1));
+    const auto index = std::min(static_cast<std::size_t>(position), fractional_rrc_.size() - 2);
+    const auto fraction = static_cast<float>(position - index);
+    const auto tap = fractional_rrc_[index] + fraction * (fractional_rrc_[index + 1] - fractional_rrc_[index]);
+    value += samples_[samples_head_ + static_cast<std::size_t>(i - first_sample_index_)] * tap;
+  }
+  return value / static_cast<float>(sps);
+}
+
+void Decoder::advance_symbol(Complex matched) {
+  if (sample_clock_recovery_) {
+    timing_power_ += 0.01F * (std::norm(matched) - timing_power_);
+    double error = 0.0;
+    if (next_symbol_index_ >= 16 && timing_power_ > 1.0e-8F) {
+      const auto midpoint = matched_filter_at((previous_symbol_time_ + next_symbol_time_) * 0.5);
+      // Gardner timing error: invariant under a common phase rotation. A PI
+      // loop adjusts sampling instants only; the rate bound is +/-1000 ppm.
+      error = std::clamp(static_cast<double>(std::real((previous_matched_ - matched) * std::conj(midpoint))) /
+                             timing_power_, -2.0, 2.0);
+      clock_rate_ = std::clamp(clock_rate_ + 5.0e-7 * error, -0.001, 0.001);
+    }
+    previous_matched_ = matched;
+    previous_symbol_time_ = next_symbol_time_;
+    next_symbol_time_ += 1.0 + clock_rate_ + 0.001 * error;
+  }
+  ++next_symbol_index_;
 }
 
 void Decoder::reset() {
@@ -398,19 +466,29 @@ void Decoder::reset() {
   first_sample_index_ = 0;
   next_sample_index_ = 0;
   next_symbol_index_ = 0;
+  next_symbol_time_ = timing_offset_symbols_;
+  previous_symbol_time_ = timing_offset_symbols_;
+  clock_rate_ = 0.0;
+  timing_power_ = 1.0F;
+  previous_matched_ = {};
   agc_power_ = target_symbol_power_ * config_.tx_gain * config_.tx_gain;
   agc_gain_ = std::sqrt(target_symbol_power_ / std::max(agc_power_, 1.0e-8F));
 }
 
 bool Decoder::can_decode_next_symbol() const {
   const double half_span = static_cast<double>(config_.filter_span_symbols) / 2.0;
-  const double symbol_time = static_cast<double>(next_symbol_index_) + timing_offset_symbols_;
+  const double symbol_time = sample_clock_recovery_ ? next_symbol_time_
+      : static_cast<double>(next_symbol_index_) + timing_offset_symbols_;
+  // Match the inclusive right edge used by matched_filter_symbol(). Rounding
+  // up would wait for a sample outside the filter support at fractional symbol
+  // times, withholding the last symbol of a finite training/header block.
   const auto latest = static_cast<std::int64_t>(
-      std::ceil((symbol_time + half_span) * info_.samples_per_symbol));
+      std::floor((symbol_time + half_span) * info_.samples_per_symbol));
   return static_cast<std::int64_t>(next_sample_index_) > latest;
 }
 
 Complex Decoder::matched_filter_symbol(std::int64_t symbol_index) const {
+  if (sample_clock_recovery_) return matched_filter_at(next_symbol_time_);
   if (!taps_.empty()) {
     // Fast path: integer SPS -> precomputed taps, straight FMA accumulation.
     const auto sps = static_cast<std::int64_t>(sps_int_);
@@ -455,7 +533,8 @@ void Decoder::append_sample(Complex sample) {
 
 void Decoder::prune_samples(std::int64_t decoded_symbol) {
   const double half_span = static_cast<double>(config_.filter_span_symbols) / 2.0;
-  const double symbol_time = static_cast<double>(decoded_symbol) + timing_offset_symbols_;
+  const double symbol_time = sample_clock_recovery_ ? next_symbol_time_ - 1.0
+      : static_cast<double>(decoded_symbol) + timing_offset_symbols_;
   const auto keep_from = static_cast<std::int64_t>(
       std::floor((symbol_time - half_span) * info_.samples_per_symbol)) - 1;
   if (keep_from <= first_sample_index_) {
@@ -519,4 +598,4 @@ void BytePacker::reset() noexcept {
   has_pending_ = false;
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

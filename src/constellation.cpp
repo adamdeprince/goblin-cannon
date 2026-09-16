@@ -1,4 +1,4 @@
-#include "wbhf_modem/modem.hpp"
+#include "goblin_cannon/modem.hpp"
 
 #include "demapper.hpp"
 
@@ -8,7 +8,7 @@
 #include <numbers>
 #include <stdexcept>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -260,7 +260,7 @@ std::size_t bits_per_symbol(Modulation modulation) {
 
 Constellation::Constellation(Modulation modulation, ConstellationProfile profile)
     : modulation_(modulation),
-      bits_per_symbol_(wbhf_modem::bits_per_symbol(modulation)),
+      bits_per_symbol_(goblin_cannon::bits_per_symbol(modulation)),
       points_(is_qci(modulation)
                   ? make_qci_points(modulation)
                   : ((profile == ConstellationProfile::square_gray || modulation == Modulation::qam1024)
@@ -353,4 +353,4 @@ void Constellation::symbol_to_bits(std::uint32_t symbol, std::span<std::uint8_t>
   }
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

@@ -1,10 +1,10 @@
-#include "wbhf_modem/integer_codec.hpp"
+#include "goblin_cannon/integer_codec.hpp"
 
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -140,4 +140,4 @@ std::optional<BankSymbolInteger> decode_bank_symbol_integer(std::span<const std:
   return BankSymbolInteger{.bank = bytes[0], .symbol = bytes[1], .value = *value};
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

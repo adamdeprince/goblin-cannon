@@ -1,6 +1,7 @@
 *.pyc
 build/
 .venv/
+*.egg-info/
 cmake-build-*/
 *.o
 *.a

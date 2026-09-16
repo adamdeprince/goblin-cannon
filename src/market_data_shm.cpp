@@ -1,4 +1,4 @@
-#include "wbhf_modem/market_data_shm.hpp"
+#include "goblin_cannon/market_data_shm.hpp"
 
 #include <algorithm>
 #include <cerrno>
@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -291,4 +291,4 @@ void MarketDataShmProducer::close() noexcept {
   }
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

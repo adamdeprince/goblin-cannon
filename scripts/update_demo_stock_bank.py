@@ -312,7 +312,7 @@ def update_controls(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Update a WBHF demo price bank from Massive quotes and request BankSwitch.")
+    parser = argparse.ArgumentParser(description="Update a Goblin Cannon demo price bank from Massive quotes and request BankSwitch.")
     parser.add_argument("bank", type=int, choices=(0, 1), help="next bank number to update before BankSwitch")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="instrument config TOML")
     parser.add_argument("--receiver", help="ignored compatibility option; receivers learn banks from the transmitter stream")

@@ -1,0 +1,480 @@
+Start testing: Sep 16 06:56 UTC
+----------------------------------------------------------
+11/13 Testing: goblin_cannon_channel_sample_support
+11/13 Test: goblin_cannon_channel_sample_support
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "sample_support" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_sample_support" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+simulated channel sample_support: samples_per_symbol=2 symbols=32 seed=3222383390
+simulated channel sample_support: samples_per_symbol=2 symbols=33 seed=3222383390
+simulated channel sample_support: samples_per_symbol=2.5 symbols=32 seed=3222383390
+simulated channel sample_support: samples_per_symbol=2.5 symbols=33 seed=3222383390
+simulated channel sample_support: samples_per_symbol=3.125 symbols=32 seed=3222383390
+simulated channel sample_support: samples_per_symbol=3.125 symbols=33 seed=3222383390
+simulated channel sample_support: samples_per_symbol=5 symbols=32 seed=3222383390
+simulated channel sample_support: samples_per_symbol=5 symbols=33 seed=3222383390
+simulated channel sample_support: samples_per_symbol=6 symbols=32 seed=3222383390
+simulated channel sample_support: samples_per_symbol=6 symbols=33 seed=3222383390
+sample_support channel tests passed
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_sample_support" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_sample_support" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/13 Testing: goblin_cannon_channel_acquisition
+2/13 Test: goblin_cannon_channel_acquisition
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "acquisition" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_acquisition" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+acquisition channel tests passed
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_acquisition" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_acquisition" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/13 Testing: goblin_cannon_channel_profiles
+12/13 Test: goblin_cannon_channel_profiles
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "profiles" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_profiles" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+simulated channel clean_profile: bandwidth_hz=24000 modulation=QPSK (4-QAM) chunk_samples=1 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=QPSK (4-QAM) chunk_samples=48 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=QPSK (4-QAM) chunk_samples=157 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=QPSK (4-QAM) chunk_samples=512 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=16QAM chunk_samples=1 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=16QAM chunk_samples=48 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=16QAM chunk_samples=157 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=16QAM chunk_samples=512 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=64QAM chunk_samples=1 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=64QAM chunk_samples=48 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=64QAM chunk_samples=157 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=24000 modulation=64QAM chunk_samples=512 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=QPSK (4-QAM) chunk_samples=1 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=QPSK (4-QAM) chunk_samples=48 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=QPSK (4-QAM) chunk_samples=157 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=QPSK (4-QAM) chunk_samples=512 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=16QAM chunk_samples=1 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=16QAM chunk_samples=48 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=16QAM chunk_samples=157 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=16QAM chunk_samples=512 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=64QAM chunk_samples=1 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=64QAM chunk_samples=48 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=64QAM chunk_samples=157 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+simulated channel clean_profile: bandwidth_hz=10000 modulation=64QAM chunk_samples=512 carrier_correction=0 adaptive_equalization=1 symbols=1024 seed=3222383390
+profiles channel tests passed
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_profiles" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_profiles" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/13 Testing: goblin_cannon_channel_fading
+5/13 Test: goblin_cannon_channel_fading
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "fading" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_fading" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+QPSK (4-QAM) smooth fade clean control
+QPSK (4-QAM) smooth fade SNR=inf dB fade=12 dB seed=7446529
+QPSK (4-QAM) smooth fade SNR=inf dB fade=12 dB seed=7446530
+QPSK (4-QAM) smooth fade SNR=inf dB fade=12 dB seed=7446531
+16QAM smooth fade clean control
+16QAM smooth fade SNR=inf dB fade=6 dB seed=7446529
+16QAM smooth fade SNR=inf dB fade=6 dB seed=7446530
+16QAM smooth fade SNR=inf dB fade=6 dB seed=7446531
+64QAM smooth fade clean control
+64QAM smooth fade SNR=inf dB fade=3 dB seed=7446529
+64QAM smooth fade SNR=inf dB fade=3 dB seed=7446530
+64QAM smooth fade SNR=inf dB fade=3 dB seed=7446531
+fading channel tests passed
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_fading" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_fading" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/13 Testing: goblin_cannon_channel_noise
+3/13 Test: goblin_cannon_channel_noise
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "noise" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_noise" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+QPSK (4-QAM) AWGN clean control
+QPSK (4-QAM) AWGN SNR=14 dB fade=0 dB seed=7446529
+QPSK (4-QAM) AWGN SNR=14 dB fade=0 dB seed=7446530
+QPSK (4-QAM) AWGN SNR=14 dB fade=0 dB seed=7446531
+QPSK (4-QAM) AWGN at 24 ksym/s clean control
+QPSK (4-QAM) AWGN at 24 ksym/s SNR=14 dB fade=0 dB seed=7446529
+QPSK (4-QAM) AWGN at 24 ksym/s SNR=14 dB fade=0 dB seed=7446530
+QPSK (4-QAM) AWGN at 24 ksym/s SNR=14 dB fade=0 dB seed=7446531
+16QAM AWGN clean control
+16QAM AWGN SNR=24 dB fade=0 dB seed=7446529
+16QAM AWGN SNR=24 dB fade=0 dB seed=7446530
+16QAM AWGN SNR=24 dB fade=0 dB seed=7446531
+16QAM AWGN at 24 ksym/s clean control
+16QAM AWGN at 24 ksym/s SNR=24 dB fade=0 dB seed=7446529
+16QAM AWGN at 24 ksym/s SNR=24 dB fade=0 dB seed=7446530
+16QAM AWGN at 24 ksym/s SNR=24 dB fade=0 dB seed=7446531
+64QAM AWGN clean control
+64QAM AWGN SNR=34 dB fade=0 dB seed=7446529
+64QAM AWGN SNR=34 dB fade=0 dB seed=7446530
+64QAM AWGN SNR=34 dB fade=0 dB seed=7446531
+64QAM AWGN at 24 ksym/s clean control
+64QAM AWGN at 24 ksym/s SNR=34 dB fade=0 dB seed=7446529
+64QAM AWGN at 24 ksym/s SNR=34 dB fade=0 dB seed=7446530
+64QAM AWGN at 24 ksym/s SNR=34 dB fade=0 dB seed=7446531
+noise channel tests passed
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_noise" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_noise" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/13 Testing: goblin_cannon_channel_combined
+6/13 Test: goblin_cannon_channel_combined
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "combined" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_combined" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+QPSK (4-QAM) fade/phase/noise clean control
+QPSK (4-QAM) fade/phase/noise SNR=24 dB fade=6 dB seed=7446529
+QPSK (4-QAM) fade/phase/noise SNR=24 dB fade=6 dB seed=7446530
+QPSK (4-QAM) fade/phase/noise SNR=24 dB fade=6 dB seed=7446531
+16QAM fade/phase/noise clean control
+16QAM fade/phase/noise SNR=30 dB fade=6 dB seed=7446529
+16QAM fade/phase/noise SNR=30 dB fade=6 dB seed=7446530
+16QAM fade/phase/noise SNR=30 dB fade=6 dB seed=7446531
+64QAM fade/phase/noise clean control
+64QAM fade/phase/noise SNR=36 dB fade=3 dB seed=7446529
+64QAM fade/phase/noise SNR=36 dB fade=3 dB seed=7446530
+64QAM fade/phase/noise SNR=36 dB fade=3 dB seed=7446531
+combined channel tests passed
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_combined" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_combined" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/13 Testing: goblin_cannon_channel_recovery
+7/13 Test: goblin_cannon_channel_recovery
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "recovery" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_recovery" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+QPSK (4-QAM) complete fade with receiver noise
+QPSK (4-QAM) 90 degree phase step
+QPSK (4-QAM) noise burst at -10 dB SNR
+QPSK (4-QAM) 1 ms delayed path
+QPSK (4-QAM) 3 ms delayed path
+QPSK (4-QAM) 7 ms delayed path
+16QAM complete fade with receiver noise
+16QAM 90 degree phase step
+16QAM noise burst at -10 dB SNR
+16QAM 1 ms delayed path
+16QAM 3 ms delayed path
+16QAM 7 ms delayed path
+64QAM complete fade with receiver noise
+64QAM 90 degree phase step
+64QAM noise burst at -10 dB SNR
+64QAM 1 ms delayed path
+64QAM 3 ms delayed path
+64QAM 7 ms delayed path
+recovery channel tests passed
+<end of output>
+Test time =   0.09 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_recovery" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_recovery" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/13 Testing: goblin_cannon_channel_streaming
+9/13 Test: goblin_cannon_channel_streaming
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "streaming" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_streaming" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+QPSK (4-QAM) output capacity=1
+QPSK (4-QAM) output capacity=7
+QPSK (4-QAM) output capacity=128
+16QAM output capacity=1
+16QAM output capacity=7
+16QAM output capacity=128
+64QAM output capacity=1
+64QAM output capacity=7
+64QAM output capacity=128
+streaming channel tests passed
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_streaming" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_streaming" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/13 Testing: goblin_cannon_channel_config
+10/13 Test: goblin_cannon_channel_config
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "config" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_config" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+config channel tests passed
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_config" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_config" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/13 Testing: goblin_cannon_channel_phase
+4/13 Test: goblin_cannon_channel_phase
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "phase" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_phase" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+QPSK (4-QAM) positive small phase clean control
+QPSK (4-QAM) positive small phase SNR=inf dB fade=0 dB seed=7446529
+QPSK (4-QAM) positive small phase SNR=inf dB fade=0 dB seed=7446530
+QPSK (4-QAM) positive small phase SNR=inf dB fade=0 dB seed=7446531
+QPSK (4-QAM) negative small phase clean control
+QPSK (4-QAM) negative small phase SNR=inf dB fade=0 dB seed=7446529
+QPSK (4-QAM) negative small phase SNR=inf dB fade=0 dB seed=7446530
+QPSK (4-QAM) negative small phase SNR=inf dB fade=0 dB seed=7446531
+QPSK (4-QAM) +0.1 Hz drift clean control
+QPSK (4-QAM) +0.1 Hz drift SNR=inf dB fade=0 dB seed=7446529
+QPSK (4-QAM) +0.1 Hz drift SNR=inf dB fade=0 dB seed=7446530
+QPSK (4-QAM) +0.1 Hz drift SNR=inf dB fade=0 dB seed=7446531
+QPSK (4-QAM) -0.1 Hz drift clean control
+QPSK (4-QAM) -0.1 Hz drift SNR=inf dB fade=0 dB seed=7446529
+QPSK (4-QAM) -0.1 Hz drift SNR=inf dB fade=0 dB seed=7446530
+QPSK (4-QAM) -0.1 Hz drift SNR=inf dB fade=0 dB seed=7446531
+QPSK (4-QAM) +135 degrees, +30 Hz clean control
+QPSK (4-QAM) +135 degrees, +30 Hz SNR=24 dB fade=0 dB seed=7446529
+QPSK (4-QAM) +135 degrees, +30 Hz SNR=24 dB fade=0 dB seed=7446530
+QPSK (4-QAM) +135 degrees, +30 Hz SNR=24 dB fade=0 dB seed=7446531
+QPSK (4-QAM) -135 degrees, -30 Hz clean control
+QPSK (4-QAM) -135 degrees, -30 Hz SNR=24 dB fade=0 dB seed=7446529
+QPSK (4-QAM) -135 degrees, -30 Hz SNR=24 dB fade=0 dB seed=7446530
+QPSK (4-QAM) -135 degrees, -30 Hz SNR=24 dB fade=0 dB seed=7446531
+QPSK (4-QAM) 180 degrees, frequency ramp 50 Hz/s clean control
+QPSK (4-QAM) 180 degrees, frequency ramp 50 Hz/s SNR=24 dB fade=0 dB seed=7446529
+QPSK (4-QAM) 180 degrees, frequency ramp 50 Hz/s SNR=24 dB fade=0 dB seed=7446530
+QPSK (4-QAM) 180 degrees, frequency ramp 50 Hz/s SNR=24 dB fade=0 dB seed=7446531
+16QAM positive small phase clean control
+16QAM positive small phase SNR=inf dB fade=0 dB seed=7446529
+16QAM positive small phase SNR=inf dB fade=0 dB seed=7446530
+16QAM positive small phase SNR=inf dB fade=0 dB seed=7446531
+16QAM negative small phase clean control
+16QAM negative small phase SNR=inf dB fade=0 dB seed=7446529
+16QAM negative small phase SNR=inf dB fade=0 dB seed=7446530
+16QAM negative small phase SNR=inf dB fade=0 dB seed=7446531
+16QAM +0.1 Hz drift clean control
+16QAM +0.1 Hz drift SNR=inf dB fade=0 dB seed=7446529
+16QAM +0.1 Hz drift SNR=inf dB fade=0 dB seed=7446530
+16QAM +0.1 Hz drift SNR=inf dB fade=0 dB seed=7446531
+16QAM -0.1 Hz drift clean control
+16QAM -0.1 Hz drift SNR=inf dB fade=0 dB seed=7446529
+16QAM -0.1 Hz drift SNR=inf dB fade=0 dB seed=7446530
+16QAM -0.1 Hz drift SNR=inf dB fade=0 dB seed=7446531
+16QAM +135 degrees, +30 Hz clean control
+16QAM +135 degrees, +30 Hz SNR=30 dB fade=0 dB seed=7446529
+16QAM +135 degrees, +30 Hz SNR=30 dB fade=0 dB seed=7446530
+16QAM +135 degrees, +30 Hz SNR=30 dB fade=0 dB seed=7446531
+16QAM -135 degrees, -30 Hz clean control
+16QAM -135 degrees, -30 Hz SNR=30 dB fade=0 dB seed=7446529
+16QAM -135 degrees, -30 Hz SNR=30 dB fade=0 dB seed=7446530
+16QAM -135 degrees, -30 Hz SNR=30 dB fade=0 dB seed=7446531
+16QAM 180 degrees, frequency ramp 50 Hz/s clean control
+16QAM 180 degrees, frequency ramp 50 Hz/s SNR=30 dB fade=0 dB seed=7446529
+16QAM 180 degrees, frequency ramp 50 Hz/s SNR=30 dB fade=0 dB seed=7446530
+16QAM 180 degrees, frequency ramp 50 Hz/s SNR=30 dB fade=0 dB seed=7446531
+64QAM positive small phase clean control
+64QAM positive small phase SNR=inf dB fade=0 dB seed=7446529
+64QAM positive small phase SNR=inf dB fade=0 dB seed=7446530
+64QAM positive small phase SNR=inf dB fade=0 dB seed=7446531
+64QAM negative small phase clean control
+64QAM negative small phase SNR=inf dB fade=0 dB seed=7446529
+64QAM negative small phase SNR=inf dB fade=0 dB seed=7446530
+64QAM negative small phase SNR=inf dB fade=0 dB seed=7446531
+64QAM +0.1 Hz drift clean control
+64QAM +0.1 Hz drift SNR=inf dB fade=0 dB seed=7446529
+64QAM +0.1 Hz drift SNR=inf dB fade=0 dB seed=7446530
+64QAM +0.1 Hz drift SNR=inf dB fade=0 dB seed=7446531
+64QAM -0.1 Hz drift clean control
+64QAM -0.1 Hz drift SNR=inf dB fade=0 dB seed=7446529
+64QAM -0.1 Hz drift SNR=inf dB fade=0 dB seed=7446530
+64QAM -0.1 Hz drift SNR=inf dB fade=0 dB seed=7446531
+64QAM +135 degrees, +30 Hz clean control
+64QAM +135 degrees, +30 Hz SNR=36 dB fade=0 dB seed=7446529
+64QAM +135 degrees, +30 Hz SNR=36 dB fade=0 dB seed=7446530
+64QAM +135 degrees, +30 Hz SNR=36 dB fade=0 dB seed=7446531
+64QAM -135 degrees, -30 Hz clean control
+64QAM -135 degrees, -30 Hz SNR=36 dB fade=0 dB seed=7446529
+64QAM -135 degrees, -30 Hz SNR=36 dB fade=0 dB seed=7446530
+64QAM -135 degrees, -30 Hz SNR=36 dB fade=0 dB seed=7446531
+64QAM 180 degrees, frequency ramp 50 Hz/s clean control
+64QAM 180 degrees, frequency ramp 50 Hz/s SNR=36 dB fade=0 dB seed=7446529
+64QAM 180 degrees, frequency ramp 50 Hz/s SNR=36 dB fade=0 dB seed=7446530
+64QAM 180 degrees, frequency ramp 50 Hz/s SNR=36 dB fade=0 dB seed=7446531
+QPSK (4-QAM) continuous-phase 10 Hz step
+16QAM continuous-phase 10 Hz step
+64QAM continuous-phase 10 Hz step
+phase channel tests passed
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_phase" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_phase" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/13 Testing: goblin_cannon_channel_equalization
+8/13 Test: goblin_cannon_channel_equalization
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_channel_tests" "equalization" "--require-avx512"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_channel_equalization" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+demapper=AVX-512
+QPSK (4-QAM) adaptive equalization, delay=1 ms clean control
+QPSK (4-QAM) adaptive equalization, delay=1 ms SNR=24 dB seed=7446529
+training EVM: equalized=0.0787811 bypass=0.414828
+QPSK (4-QAM) adaptive equalization, delay=1 ms SNR=24 dB seed=7446530
+QPSK (4-QAM) adaptive equalization, delay=1 ms SNR=24 dB seed=7446531
+QPSK (4-QAM) adaptive equalization, delay=3 ms clean control
+QPSK (4-QAM) adaptive equalization, delay=3 ms SNR=24 dB seed=7446529
+training EVM: equalized=0.0505663 bypass=0.474566
+QPSK (4-QAM) adaptive equalization, delay=3 ms SNR=24 dB seed=7446530
+QPSK (4-QAM) adaptive equalization, delay=3 ms SNR=24 dB seed=7446531
+QPSK (4-QAM) adaptive equalization, delay=7 ms clean control
+QPSK (4-QAM) adaptive equalization, delay=7 ms SNR=24 dB seed=7446529
+training EVM: equalized=0.0526675 bypass=0.442992
+QPSK (4-QAM) adaptive equalization, delay=7 ms SNR=24 dB seed=7446530
+QPSK (4-QAM) adaptive equalization, delay=7 ms SNR=24 dB seed=7446531
+16QAM adaptive equalization, delay=1 ms clean control
+16QAM adaptive equalization, delay=1 ms SNR=30 dB seed=7446529
+training EVM: equalized=0.0742548 bypass=0.413903
+16QAM adaptive equalization, delay=1 ms SNR=30 dB seed=7446530
+16QAM adaptive equalization, delay=1 ms SNR=30 dB seed=7446531
+16QAM adaptive equalization, delay=3 ms clean control
+16QAM adaptive equalization, delay=3 ms SNR=30 dB seed=7446529
+training EVM: equalized=0.0411833 bypass=0.473356
+16QAM adaptive equalization, delay=3 ms SNR=30 dB seed=7446530
+16QAM adaptive equalization, delay=3 ms SNR=30 dB seed=7446531
+16QAM adaptive equalization, delay=7 ms clean control
+16QAM adaptive equalization, delay=7 ms SNR=30 dB seed=7446529
+training EVM: equalized=0.0439811 bypass=0.44216
+16QAM adaptive equalization, delay=7 ms SNR=30 dB seed=7446530
+16QAM adaptive equalization, delay=7 ms SNR=30 dB seed=7446531
+64QAM adaptive equalization, delay=1 ms clean control
+64QAM adaptive equalization, delay=1 ms SNR=36 dB seed=7446529
+training EVM: equalized=0.0735889 bypass=0.413678
+64QAM adaptive equalization, delay=1 ms SNR=36 dB seed=7446530
+64QAM adaptive equalization, delay=1 ms SNR=36 dB seed=7446531
+64QAM adaptive equalization, delay=3 ms clean control
+64QAM adaptive equalization, delay=3 ms SNR=36 dB seed=7446529
+training EVM: equalized=0.0389003 bypass=0.472999
+64QAM adaptive equalization, delay=3 ms SNR=36 dB seed=7446530
+64QAM adaptive equalization, delay=3 ms SNR=36 dB seed=7446531
+64QAM adaptive equalization, delay=7 ms clean control
+64QAM adaptive equalization, delay=7 ms SNR=36 dB seed=7446529
+training EVM: equalized=0.0419309 bypass=0.441966
+64QAM adaptive equalization, delay=7 ms SNR=36 dB seed=7446530
+64QAM adaptive equalization, delay=7 ms SNR=36 dB seed=7446531
+equalization channel tests passed
+<end of output>
+Test time =   0.38 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_channel_equalization" end time: Sep 16 06:56 UTC
+"goblin_cannon_channel_equalization" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/13 Testing: goblin_cannon_simulated_channel_harness
+13/13 Test: goblin_cannon_simulated_channel_harness
+Command: "/usr/bin/python3" "-m" "unittest" "discover" "-s" "/tmp/goblin-cannon-header-fix.LMJ2ay/tests/simulated_channel" "-p" "test_*.py"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_simulated_channel_harness" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.570s
+
+OK
+<end of output>
+Test time =   0.63 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_simulated_channel_harness" end time: Sep 16 06:56 UTC
+"goblin_cannon_simulated_channel_harness" time elapsed: 00:00:00
+----------------------------------------------------------
+
+1/13 Testing: goblin_cannon_tests
+1/13 Test: goblin_cannon_tests
+Command: "/tmp/goblin-cannon-header-fix.LMJ2ay/build/goblin_cannon_tests"
+Directory: /tmp/goblin-cannon-header-fix.LMJ2ay/build
+"goblin_cannon_tests" start time: Sep 16 06:56 UTC
+Output:
+----------------------------------------------------------
+goblin_cannon_tests passed
+<end of output>
+Test time =   6.41 sec
+----------------------------------------------------------
+Test Passed.
+"goblin_cannon_tests" end time: Sep 16 06:56 UTC
+"goblin_cannon_tests" time elapsed: 00:00:06
+----------------------------------------------------------
+
+End testing: Sep 16 06:56 UTC
+
+E1 =   0.63 sec*proc
+
+assert =   8.15 sec*proc
+
+channel =   1.11 sec*proc
+
+legacy =   7.47 sec*proc
+
+quick =   8.15 sec*proc
+
+simulated_channel =   0.68 sec*proc
+

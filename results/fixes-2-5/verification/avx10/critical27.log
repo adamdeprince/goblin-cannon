@@ -1,0 +1,5 @@
+simulated channel: 120 cases, tier=quick, jobs=4
+simulated channel: 50/120 A4_24000_qpsk_offset_0 THRESHOLD_TBD
+simulated channel: 100/120 B1_24000_64qam_-20dB_1_1000 pass
+simulated channel: 120/120 A4_24000_64qam_200ppm_10min characterized
+simulated channel: 132.085s {'characterized': 12, 'pass': 60, 'THRESHOLD_TBD': 48}; results-critical27/SUMMARY.md

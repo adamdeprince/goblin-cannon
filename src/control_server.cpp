@@ -1,7 +1,7 @@
-#include "wbhf_modem/control_server.hpp"
+#include "goblin_cannon/control_server.hpp"
 
-#include "wbhf_modem/accounting.hpp"
-#include "wbhf_modem/control/v1/receiver_control.grpc.pb.h"
+#include "goblin_cannon/accounting.hpp"
+#include "goblin_cannon/control/v1/receiver_control.grpc.pb.h"
 
 #include <grpcpp/grpcpp.h>
 
@@ -18,11 +18,11 @@
 #include <utility>
 #include <vector>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
-namespace pb = ::wbhf_modem::control::v1;
+namespace pb = ::goblin_cannon::control::v1;
 
 void validate_bank(std::uint8_t bank) {
   if (bank > 1U) {
@@ -157,6 +157,30 @@ ReceiverRestartConfig parse_restart_request(const pb::RestartRequest& request) {
   config.pipeline.rf.acquisition_confidence_threshold = request.acquisition_confidence_threshold();
   config.pipeline.rf.pilot_confidence_threshold = request.pilot_confidence_threshold();
   config.pipeline.rf.symbol_confidence_threshold = request.symbol_confidence_threshold();
+  if (request.has_carrier_correction()) {
+    config.pipeline.rf.carrier_correction = request.carrier_correction();
+  }
+  if (request.has_adaptive_equalization()) {
+    config.pipeline.rf.adaptive_equalization = request.adaptive_equalization();
+  }
+  if (request.has_sample_clock_recovery()) {
+    config.pipeline.rf.sample_clock_recovery = request.sample_clock_recovery();
+  }
+  if (request.has_message_sequence_numbers()) {
+    config.pipeline.sequence_numbers = request.message_sequence_numbers();
+  }
+  if (request.has_recursive_equalization()) {
+    config.pipeline.rf.recursive_equalization = request.recursive_equalization();
+  }
+  if (request.has_equalizer_delay_symbols()) {
+    config.pipeline.rf.equalizer_delay_symbols = request.equalizer_delay_symbols();
+  }
+  if (request.has_equalizer_feedforward_taps()) {
+    config.pipeline.rf.equalizer_feedforward_taps = request.equalizer_feedforward_taps();
+  }
+  if (request.has_equalizer_feedback_taps()) {
+    config.pipeline.rf.equalizer_feedback_taps = request.equalizer_feedback_taps();
+  }
 
   const auto& fec = request.fec();
   config.pipeline.convolutional.constraint_length = static_cast<std::uint8_t>(fec.constraint_length());
@@ -364,7 +388,7 @@ private:
 class TransmitterControlService final : public pb::TransmitterControl::Service {
 public:
   TransmitterControlService(std::shared_ptr<TransmitterControlState> control,
-                            std::shared_ptr<SpscRingBuffer<DelimitedMessage>> transmit_queue,
+                            std::shared_ptr<TransmitMessageQueue> transmit_queue,
                             std::shared_ptr<SpscRingBuffer<BidMessageLogRecord>> log_queue,
                             std::shared_ptr<std::mutex> log_queue_mutex,
                             std::function<std::optional<PriceBank>(std::uint8_t)> bank_price_provider,
@@ -374,11 +398,13 @@ public:
       : control_(std::move(control)),
         transmit_queue_(std::move(transmit_queue)),
         log_queue_(std::move(log_queue)),
-        log_queue_mutex_(std::move(log_queue_mutex)),
+        log_queue_mutex_(log_queue_mutex ? std::move(log_queue_mutex) : std::make_shared<std::mutex>()),
         bank_price_provider_(std::move(bank_price_provider)),
         client_expected_latency_ns_(client_expected_latency_ns),
         accounting_(std::move(accounting)),
-        canonical_messages_(std::move(canonical_messages)) {}
+        canonical_messages_(std::move(canonical_messages)) {
+    if (transmit_queue_) transmit_queue_->set_decision_log_mutex(log_queue_mutex_);
+  }
 
   grpc::Status UpdateEncryptionKey(grpc::ServerContext*,
                                    const pb::EncryptionKeyUpdate* request,
@@ -793,7 +819,7 @@ private:
   }
 
   std::shared_ptr<TransmitterControlState> control_;
-  std::shared_ptr<SpscRingBuffer<DelimitedMessage>> transmit_queue_;
+  std::shared_ptr<TransmitMessageQueue> transmit_queue_;
   std::shared_ptr<SpscRingBuffer<BidMessageLogRecord>> log_queue_;
   std::shared_ptr<std::mutex> log_queue_mutex_;
   std::function<std::optional<PriceBank>(std::uint8_t)> bank_price_provider_;
@@ -1349,11 +1375,30 @@ RealtimeReceiveResult ControlledRealtimeReceiver::push_samples(std::span<const C
   return receiver_->push_samples(samples);
 }
 
-ControlledRealtimeTransmitter::ControlledRealtimeTransmitter(SpscRingBuffer<DelimitedMessage>& input)
+RealtimeReceiveResult ControlledRealtimeReceiver::push_audio_block(std::span<const Complex> samples,
+                                                                   std::uint64_t first_sample,
+                                                                   bool valid) {
+  apply_pending_restart();
+  if (!receiver_) {
+    return {};
+  }
+  return receiver_->push_audio_block(samples, first_sample, valid);
+}
+
+RealtimeReceiveResult ControlledRealtimeReceiver::push_timed_audio_block(std::span<const Complex> samples,
+    std::uint64_t first_sample, std::uint64_t arrival_sample,
+    std::size_t maximum_lateness_samples, bool valid) {
+  apply_pending_restart();
+  if (!receiver_) return {};
+  return receiver_->push_timed_audio_block(samples, first_sample, arrival_sample,
+                                          maximum_lateness_samples, valid);
+}
+
+ControlledRealtimeTransmitter::ControlledRealtimeTransmitter(QueueSource<DelimitedMessage>& input)
     : ControlledRealtimeTransmitter(std::make_shared<TransmitterControlState>(), input) {}
 
 ControlledRealtimeTransmitter::ControlledRealtimeTransmitter(std::shared_ptr<TransmitterControlState> control,
-                                                             SpscRingBuffer<DelimitedMessage>& input)
+                                                             QueueSource<DelimitedMessage>& input)
     : control_(std::move(control)),
       input_(input) {
   if (!control_) {
@@ -1363,7 +1408,7 @@ ControlledRealtimeTransmitter::ControlledRealtimeTransmitter(std::shared_ptr<Tra
 }
 
 ControlledRealtimeTransmitter::ControlledRealtimeTransmitter(RealtimePipelineConfig initial_pipeline,
-                                                             SpscRingBuffer<DelimitedMessage>& input)
+                                                             QueueSource<DelimitedMessage>& input)
     : ControlledRealtimeTransmitter(std::make_shared<TransmitterControlState>(std::move(initial_pipeline)), input) {}
 
 bool ControlledRealtimeTransmitter::apply_pending_restart() {
@@ -1651,4 +1696,4 @@ std::shared_ptr<TransmitterControlState> TransmitterControlServer::control_state
   return impl_->control_state();
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

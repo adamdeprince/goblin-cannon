@@ -1,0 +1,5 @@
+simulated channel: 120 cases, tier=quick, jobs=8
+simulated channel: 50/120 A4_24000_qpsk_offset_3 THRESHOLD_TBD
+simulated channel: 100/120 B1_24000_qpsk_-20dB_10_1000 pass
+simulated channel: 120/120 A4_24000_64qam_drift_10min THRESHOLD_TBD
+simulated channel: 50.841s {'pass': 60, 'characterized': 12, 'THRESHOLD_TBD': 48}; results-additional-seed27/SUMMARY.md

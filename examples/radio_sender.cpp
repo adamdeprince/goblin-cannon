@@ -1,11 +1,11 @@
 #include "radio_common.hpp"
 
-#include "wbhf_modem/accounting.hpp"
-#include "wbhf_modem/client_udp.hpp"
-#include "wbhf_modem/control_server.hpp"
-#include "wbhf_modem/io.hpp"
-#include "wbhf_modem/market_data_shm.hpp"
-#include "wbhf_modem/symbols.hpp"
+#include "goblin_cannon/accounting.hpp"
+#include "goblin_cannon/client_udp.hpp"
+#include "goblin_cannon/control_server.hpp"
+#include "goblin_cannon/io.hpp"
+#include "goblin_cannon/market_data_shm.hpp"
+#include "goblin_cannon/symbols.hpp"
 
 #include <array>
 #include <atomic>
@@ -38,10 +38,10 @@ void handle_signal(int) {
 struct Args {
   std::string transmitter_address = "127.0.0.1:50052";
   std::string iq_output = "/dev/audio";
-  wbhf_modem::SampleFormat sample_format = wbhf_modem::SampleFormat::s16_stereo_iq;
+  goblin_cannon::SampleFormat sample_format = goblin_cannon::SampleFormat::s16_stereo_iq;
   std::size_t chunk_samples = 256;
   float scale = 0.95F;
-  std::filesystem::path log_file = "/tmp/wbhf_transmitter.log";
+  std::filesystem::path log_file = "/tmp/goblin_cannon_transmitter.log";
   std::filesystem::path latency_config_file;
   std::filesystem::path budget_config_file = "config/client_budgets.conf";
   std::filesystem::path client_udp_config_file;
@@ -54,67 +54,67 @@ struct Args {
   std::uint64_t iq_trace_interval_ms = 1000;
 };
 
-const char* event_type_name(wbhf_modem::LogEventType event_type) noexcept {
+const char* event_type_name(goblin_cannon::LogEventType event_type) noexcept {
   switch (event_type) {
-  case wbhf_modem::LogEventType::udp_ingress:
+  case goblin_cannon::LogEventType::udp_ingress:
     return "udp_ingress";
-  case wbhf_modem::LogEventType::udp_decision:
+  case goblin_cannon::LogEventType::udp_decision:
     return "udp_decision";
-  case wbhf_modem::LogEventType::transmitter_enqueue:
+  case goblin_cannon::LogEventType::transmitter_enqueue:
     return "transmitter_enqueue";
-  case wbhf_modem::LogEventType::transmitter_framer:
+  case goblin_cannon::LogEventType::transmitter_framer:
     return "transmitter_framer";
-  case wbhf_modem::LogEventType::receiver_client_message:
+  case goblin_cannon::LogEventType::receiver_client_message:
     return "receiver_client_message";
-  case wbhf_modem::LogEventType::receiver_signal:
+  case goblin_cannon::LogEventType::receiver_signal:
     return "receiver_signal";
-  case wbhf_modem::LogEventType::iq_transport:
+  case goblin_cannon::LogEventType::iq_transport:
     return "iq_transport";
-  case wbhf_modem::LogEventType::budget_refund:
+  case goblin_cannon::LogEventType::budget_refund:
     return "budget_refund";
   }
   return "unknown";
 }
 
-const char* status_name(wbhf_modem::BidMessageLogStatus status) noexcept {
+const char* status_name(goblin_cannon::BidMessageLogStatus status) noexcept {
   switch (status) {
-  case wbhf_modem::BidMessageLogStatus::sent:
+  case goblin_cannon::BidMessageLogStatus::sent:
     return "sent";
-  case wbhf_modem::BidMessageLogStatus::rejected:
+  case goblin_cannon::BidMessageLogStatus::rejected:
     return "rejected";
-  case wbhf_modem::BidMessageLogStatus::invalid_message_format:
+  case goblin_cannon::BidMessageLogStatus::invalid_message_format:
     return "invalid_message_format";
-  case wbhf_modem::BidMessageLogStatus::unauthorized_source:
+  case goblin_cannon::BidMessageLogStatus::unauthorized_source:
     return "unauthorized_source";
-  case wbhf_modem::BidMessageLogStatus::budget_exhausted:
+  case goblin_cannon::BidMessageLogStatus::budget_exhausted:
     return "budget_exhausted";
-  case wbhf_modem::BidMessageLogStatus::expired_refunded:
+  case goblin_cannon::BidMessageLogStatus::expired_refunded:
     return "expired_refunded";
-  case wbhf_modem::BidMessageLogStatus::delivery_matched:
+  case goblin_cannon::BidMessageLogStatus::delivery_matched:
     return "delivery_matched";
-  case wbhf_modem::BidMessageLogStatus::delivery_unmatched:
+  case goblin_cannon::BidMessageLogStatus::delivery_unmatched:
     return "delivery_unmatched";
   }
   return "unknown";
 }
 
-wbhf_modem::ClientUdpStatusCode client_status_code_for_log(wbhf_modem::BidMessageLogStatus status) noexcept {
+goblin_cannon::ClientUdpStatusCode client_status_code_for_log(goblin_cannon::BidMessageLogStatus status) noexcept {
   switch (status) {
-  case wbhf_modem::BidMessageLogStatus::sent:
-    return wbhf_modem::ClientUdpStatusCode::message_sent;
-  case wbhf_modem::BidMessageLogStatus::rejected:
-    return wbhf_modem::ClientUdpStatusCode::insufficient_bid;
-  case wbhf_modem::BidMessageLogStatus::invalid_message_format:
-    return wbhf_modem::ClientUdpStatusCode::invalid_message_format;
-  case wbhf_modem::BidMessageLogStatus::budget_exhausted:
-    return wbhf_modem::ClientUdpStatusCode::insufficient_budget;
-  case wbhf_modem::BidMessageLogStatus::unauthorized_source:
-  case wbhf_modem::BidMessageLogStatus::expired_refunded:
-  case wbhf_modem::BidMessageLogStatus::delivery_matched:
-  case wbhf_modem::BidMessageLogStatus::delivery_unmatched:
+  case goblin_cannon::BidMessageLogStatus::sent:
+    return goblin_cannon::ClientUdpStatusCode::message_sent;
+  case goblin_cannon::BidMessageLogStatus::rejected:
+    return goblin_cannon::ClientUdpStatusCode::insufficient_bid;
+  case goblin_cannon::BidMessageLogStatus::invalid_message_format:
+    return goblin_cannon::ClientUdpStatusCode::invalid_message_format;
+  case goblin_cannon::BidMessageLogStatus::budget_exhausted:
+    return goblin_cannon::ClientUdpStatusCode::insufficient_budget;
+  case goblin_cannon::BidMessageLogStatus::unauthorized_source:
+  case goblin_cannon::BidMessageLogStatus::expired_refunded:
+  case goblin_cannon::BidMessageLogStatus::delivery_matched:
+  case goblin_cannon::BidMessageLogStatus::delivery_unmatched:
     break;
   }
-  return wbhf_modem::ClientUdpStatusCode::invalid_message_format;
+  return goblin_cannon::ClientUdpStatusCode::invalid_message_format;
 }
 
 std::string payload_hex(const std::vector<std::uint8_t>& payload) {
@@ -158,21 +158,21 @@ private:
   std::chrono::steady_clock::time_point start_;
 };
 
-class TransmitFramerTraceObserver final : public wbhf_modem::DelimitedMessageObserver {
+class TransmitFramerTraceObserver final : public goblin_cannon::DelimitedMessageObserver {
 public:
-  TransmitFramerTraceObserver(std::shared_ptr<wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>> log_queue,
+  TransmitFramerTraceObserver(std::shared_ptr<goblin_cannon::SpscRingBuffer<goblin_cannon::BidMessageLogRecord>> log_queue,
                               std::shared_ptr<std::mutex> log_queue_mutex)
       : log_queue_(std::move(log_queue)),
         log_queue_mutex_(std::move(log_queue_mutex)) {}
 
-  void on_delimited_message(const wbhf_modem::DelimitedMessage& message) override {
-    wbhf_modem::BidMessageLogRecord record;
-    record.event_type = wbhf_modem::LogEventType::transmitter_framer;
+  void on_delimited_message(const goblin_cannon::DelimitedMessage& message) override {
+    goblin_cannon::BidMessageLogRecord record;
+    record.event_type = goblin_cannon::LogEventType::transmitter_framer;
     record.local_timestamp_ns = epoch_nanos();
     record.payload = message.bytes;
-    record.status = wbhf_modem::BidMessageLogStatus::sent;
-    if (message.bytes.size() >= 2U && wbhf_modem::is_client_symbol_byte(message.bytes[1])) {
-      record.client_id = wbhf_modem::client_symbol_to_id(message.bytes[1]);
+    record.status = goblin_cannon::BidMessageLogStatus::sent;
+    if (message.bytes.size() >= 2U && goblin_cannon::is_client_symbol_byte(message.bytes[1])) {
+      record.client_id = goblin_cannon::client_symbol_to_id(message.bytes[1]);
       record.has_client_id = true;
     }
     std::scoped_lock lock(*log_queue_mutex_);
@@ -180,16 +180,16 @@ public:
   }
 
 private:
-  std::shared_ptr<wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>> log_queue_;
+  std::shared_ptr<goblin_cannon::SpscRingBuffer<goblin_cannon::BidMessageLogRecord>> log_queue_;
   std::shared_ptr<std::mutex> log_queue_mutex_;
 };
 
-class FanoutDelimitedMessageObserver final : public wbhf_modem::DelimitedMessageObserver {
+class FanoutDelimitedMessageObserver final : public goblin_cannon::DelimitedMessageObserver {
 public:
-  FanoutDelimitedMessageObserver(std::initializer_list<wbhf_modem::DelimitedMessageObserver*> observers)
+  FanoutDelimitedMessageObserver(std::initializer_list<goblin_cannon::DelimitedMessageObserver*> observers)
       : observers_(observers) {}
 
-  void on_delimited_message(const wbhf_modem::DelimitedMessage& message) override {
+  void on_delimited_message(const goblin_cannon::DelimitedMessage& message) override {
     for (auto* observer : observers_) {
       if (observer != nullptr) {
         observer->on_delimited_message(message);
@@ -198,22 +198,22 @@ public:
   }
 
 private:
-  std::vector<wbhf_modem::DelimitedMessageObserver*> observers_;
+  std::vector<goblin_cannon::DelimitedMessageObserver*> observers_;
 };
 
-class ClientBidStatusObserver final : public wbhf_modem::BidMessageLogObserver {
+class ClientBidStatusObserver final : public goblin_cannon::BidMessageLogObserver {
 public:
-  explicit ClientBidStatusObserver(std::shared_ptr<wbhf_modem::ClientUdpStatusSink> status_sink)
+  explicit ClientBidStatusObserver(std::shared_ptr<goblin_cannon::ClientUdpStatusSink> status_sink)
       : status_sink_(std::move(status_sink)) {}
 
-  void on_bid_message_log(const wbhf_modem::BidMessageLogRecord& record) override {
-    if (!status_sink_ || record.event_type != wbhf_modem::LogEventType::udp_decision) {
+  void on_bid_message_log(const goblin_cannon::BidMessageLogRecord& record) override {
+    if (!status_sink_ || record.event_type != goblin_cannon::LogEventType::udp_decision) {
       return;
     }
     if (record.reply_ip.empty() || record.reply_port == 0U) {
       return;
     }
-    if (record.status == wbhf_modem::BidMessageLogStatus::unauthorized_source) {
+    if (record.status == goblin_cannon::BidMessageLogStatus::unauthorized_source) {
       return;
     }
     status_sink_->send_client_status({.ip = record.reply_ip, .port = record.reply_port},
@@ -223,7 +223,7 @@ public:
   }
 
 private:
-  std::shared_ptr<wbhf_modem::ClientUdpStatusSink> status_sink_;
+  std::shared_ptr<goblin_cannon::ClientUdpStatusSink> status_sink_;
 };
 
 std::string json_escape(std::string_view value) {
@@ -258,7 +258,7 @@ std::string json_escape(std::string_view value) {
   return out.str();
 }
 
-void log_writer_loop(wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>& log_queue,
+void log_writer_loop(goblin_cannon::SpscRingBuffer<goblin_cannon::BidMessageLogRecord>& log_queue,
                      const std::filesystem::path& path) {
   std::ofstream out(path, std::ios::app);
   if (!out) {
@@ -271,7 +271,7 @@ void log_writer_loop(wbhf_modem::SpscRingBuffer<wbhf_modem::BidMessageLogRecord>
   std::size_t records_since_flush = 0;
   constexpr std::size_t flush_batch = 64;
   while (running.load() || !log_queue.empty()) {
-    wbhf_modem::BidMessageLogRecord record;
+    goblin_cannon::BidMessageLogRecord record;
     if (!log_queue.try_pop(record)) {
       if (records_since_flush != 0U) {
         out.flush();
@@ -399,7 +399,7 @@ Args parse_args(int argc, char** argv) {
 } // namespace
 
 int main(int argc, char** argv) {
-  using namespace wbhf_modem;
+  using namespace goblin_cannon;
 
   radio_example::prepare_realtime_process("radio_sender");
 
@@ -419,7 +419,7 @@ int main(int argc, char** argv) {
     std::signal(SIGINT, handle_signal);
     std::signal(SIGTERM, handle_signal);
 
-    auto tx_queue = std::make_shared<SpscRingBuffer<DelimitedMessage>>(4096);
+    auto tx_queue = std::make_shared<TransmitMessageQueue>(4096);
     auto log_queue = std::make_shared<SpscRingBuffer<BidMessageLogRecord>>(args.log_capacity);
     auto log_queue_mutex = std::make_shared<std::mutex>();
     BidMessageTransmitIntake shared_bid_intake;

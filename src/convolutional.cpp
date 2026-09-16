@@ -1,4 +1,4 @@
-#include "wbhf_modem/convolutional.hpp"
+#include "goblin_cannon/convolutional.hpp"
 
 #include <algorithm>
 #include <array>
@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -593,4 +593,4 @@ ConvolutionalLatencyEstimate estimate_convolutional_latency(std::size_t input_by
           .effective_code_rate = coded_bits == 0U ? 0.0 : static_cast<double>(input_bits) / coded_bits};
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

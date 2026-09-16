@@ -253,10 +253,10 @@ def summarize(sent: dict[str, dict[str, int]], result_path: Path | None) -> dict
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Benchmark local WBHF software-stack latency with Massive flow.")
+    parser = argparse.ArgumentParser(description="Benchmark local Goblin Cannon software-stack latency with Massive flow.")
     parser.add_argument("--build-dir", type=Path, default=REPO_ROOT / "build")
-    parser.add_argument("--fifo", type=Path, default=Path("/tmp/wbhf_latency_bench_iq.pipe"))
-    parser.add_argument("--log-file", type=Path, default=Path("/tmp/wbhf_latency_bench.jsonl"))
+    parser.add_argument("--fifo", type=Path, default=Path("/tmp/goblin_cannon_latency_bench_iq.pipe"))
+    parser.add_argument("--log-file", type=Path, default=Path("/tmp/goblin_cannon_latency_bench.jsonl"))
     parser.add_argument("--receiver", default="127.0.0.1:52051")
     parser.add_argument("--transmitter", default="127.0.0.1:52052")
     parser.add_argument("--quote-destination-port", type=int, default=9201)
@@ -302,8 +302,8 @@ def main() -> int:
         except FileNotFoundError:
             pass
 
-    client_udp_config = Path(f"/tmp/wbhf_latency_client_udp_{os.getpid()}.conf")
-    budget_config = Path(f"/tmp/wbhf_latency_client_budget_{os.getpid()}.conf")
+    client_udp_config = Path(f"/tmp/goblin_cannon_latency_client_udp_{os.getpid()}.conf")
+    budget_config = Path(f"/tmp/goblin_cannon_latency_client_budget_{os.getpid()}.conf")
     write_client_udp_config(client_udp_config, "127.0.0.1", args.client_udp_port, args.client_id, args.client_source_ip)
     write_budget_config(budget_config, clients, args.budget_cents)
 

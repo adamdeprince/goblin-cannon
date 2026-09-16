@@ -50,9 +50,9 @@ def terminate(processes: list[subprocess.Popen[object]]) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Start WBHF sender/receiver over a named pipe.")
+    parser = argparse.ArgumentParser(description="Start Goblin Cannon sender/receiver over a named pipe.")
     parser.add_argument("--build-dir", type=Path, default=REPO_ROOT / "build")
-    parser.add_argument("--fifo", type=Path, default=Path("/tmp/wbhf_iq.pipe"))
+    parser.add_argument("--fifo", type=Path, default=Path("/tmp/goblin_cannon_iq.pipe"))
     parser.add_argument("--receiver", default="127.0.0.1:50051")
     parser.add_argument("--transmitter", default="127.0.0.1:50052")
     parser.add_argument("--client-id", type=int, default=0)
@@ -69,14 +69,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--iq-trace-interval-ms", type=int, default=1000)
     parser.add_argument("--market-bank", type=int, choices=(0, 1), default=0)
     parser.add_argument("--no-market-stream", action="store_true", help="do not start the Massive websocket bridge")
-    parser.add_argument("--market-shm-path", type=Path, default=Path("/dev/shm/wbhf_market_data_ring"))
+    parser.add_argument("--market-shm-path", type=Path, default=Path("/dev/shm/goblin_cannon_market_data_ring"))
     parser.add_argument("--market-shm-capacity", type=int, default=256)
     parser.add_argument("--market-shm-payload-bytes", type=int, default=64)
     parser.add_argument("--keep-market-shm", action="store_true")
     parser.add_argument("--market-grpc-timeout", type=float, default=0.05)
     parser.add_argument("--bank-refresh-seconds", type=float, default=1.0)
     parser.add_argument("--market-asset-class", action="append", choices=("stock", "future", "currency", "crypto"))
-    parser.add_argument("--transmitter-log-file", type=Path, default=Path("/tmp/wbhf_transmitter.log"))
+    parser.add_argument("--transmitter-log-file", type=Path, default=Path("/tmp/goblin_cannon_transmitter.log"))
     parser.add_argument("--transmitter-log-capacity", type=int, default=65536)
     parser.add_argument("--client-latency-config", type=Path, default=REPO_ROOT / "config" / "client_latencies.conf")
     parser.add_argument("--client-budget-config", type=Path, default=REPO_ROOT / "config" / "client_budgets.conf")
@@ -94,12 +94,12 @@ def main() -> int:
         raise RuntimeError("--market-shm-capacity must be positive")
     if args.market_shm_payload_bytes < 2:
         raise RuntimeError("--market-shm-payload-bytes must be at least 2")
-    sender = args.build_dir / "wbhf_radio_sender"
-    receiver = args.build_dir / "wbhf_radio_receiver"
+    sender = args.build_dir / "goblin_cannon_radio_sender"
+    receiver = args.build_dir / "goblin_cannon_radio_receiver"
     if not sender.exists() or not receiver.exists():
         raise RuntimeError(
             f"missing radio binaries; build them with: cmake --build {args.build_dir} "
-            "--target wbhf_radio_sender wbhf_radio_receiver"
+            "--target goblin_cannon_radio_sender goblin_cannon_radio_receiver"
         )
 
     ensure_fifo(args.fifo)

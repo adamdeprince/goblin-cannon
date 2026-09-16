@@ -1,7 +1,7 @@
 #pragma once
 
-#include "wbhf_modem/io.hpp"
-#include "wbhf_modem/modem.hpp"
+#include "goblin_cannon/io.hpp"
+#include "goblin_cannon/modem.hpp"
 
 #include <pthread.h>
 #include <sched.h>
@@ -50,52 +50,52 @@ inline int parse_int_or(const std::string& value, int fallback) {
   }
 }
 
-inline wbhf_modem::Modulation parse_modulation(const std::string& value) {
+inline goblin_cannon::Modulation parse_modulation(const std::string& value) {
   if (value == "qpsk") {
-    return wbhf_modem::Modulation::qpsk;
+    return goblin_cannon::Modulation::qpsk;
   }
   if (value == "8psk") {
-    return wbhf_modem::Modulation::psk8;
+    return goblin_cannon::Modulation::psk8;
   }
   if (value == "16qam") {
-    return wbhf_modem::Modulation::qam16;
+    return goblin_cannon::Modulation::qam16;
   }
   if (value == "64qam") {
-    return wbhf_modem::Modulation::qam64;
+    return goblin_cannon::Modulation::qam64;
   }
   if (value == "256qam") {
-    return wbhf_modem::Modulation::qam256;
+    return goblin_cannon::Modulation::qam256;
   }
   if (value == "1024qam") {
-    return wbhf_modem::Modulation::qam1024;
+    return goblin_cannon::Modulation::qam1024;
   }
   if (value == "16qci" || value == "16-qci") {
-    return wbhf_modem::Modulation::qci16;
+    return goblin_cannon::Modulation::qci16;
   }
   if (value == "64qci" || value == "64-qci") {
-    return wbhf_modem::Modulation::qci64;
+    return goblin_cannon::Modulation::qci64;
   }
   if (value == "256qci" || value == "256-qci") {
-    return wbhf_modem::Modulation::qci256;
+    return goblin_cannon::Modulation::qci256;
   }
   if (value == "1024qci" || value == "1024-qci") {
-    return wbhf_modem::Modulation::qci1024;
+    return goblin_cannon::Modulation::qci1024;
   }
   throw std::invalid_argument("unknown modulation: " + value);
 }
 
-inline wbhf_modem::SampleFormat parse_sample_format(const std::string& value) {
+inline goblin_cannon::SampleFormat parse_sample_format(const std::string& value) {
   if (value == "fc32_iq") {
-    return wbhf_modem::SampleFormat::fc32_iq;
+    return goblin_cannon::SampleFormat::fc32_iq;
   }
   if (value == "sc16_iq") {
-    return wbhf_modem::SampleFormat::sc16_iq;
+    return goblin_cannon::SampleFormat::sc16_iq;
   }
   if (value == "f32_stereo_iq") {
-    return wbhf_modem::SampleFormat::f32_stereo_iq;
+    return goblin_cannon::SampleFormat::f32_stereo_iq;
   }
   if (value == "s16_stereo_iq") {
-    return wbhf_modem::SampleFormat::s16_stereo_iq;
+    return goblin_cannon::SampleFormat::s16_stereo_iq;
   }
   throw std::invalid_argument("unknown sample format: " + value);
 }

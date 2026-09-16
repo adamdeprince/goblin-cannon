@@ -415,12 +415,12 @@ async def run(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Stream Massive stock/futures/forex/crypto quote midpoint deltas into the WBHF transmitter."
+        description="Stream Massive stock/futures/forex/crypto quote midpoint deltas into the Goblin Cannon transmitter."
     )
     parser.add_argument("bank", type=int, choices=(0, 1), help="bank delimiter to use for emitted messages")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="instrument config TOML")
     parser.add_argument("--transmitter", help="transmitter gRPC address; overrides config")
-    parser.add_argument("--market-shm-path", type=Path, default=Path("/dev/shm/wbhf_market_data_ring"))
+    parser.add_argument("--market-shm-path", type=Path, default=Path("/dev/shm/goblin_cannon_market_data_ring"))
     parser.add_argument("--market-shm-timeout", type=float, default=5.0)
     parser.add_argument("--stock-websocket-url", help="Massive stocks websocket URL; overrides config")
     parser.add_argument("--future-websocket-url", help="Massive futures websocket URL; overrides config")

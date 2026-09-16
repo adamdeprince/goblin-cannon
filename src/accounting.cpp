@@ -1,4 +1,4 @@
-#include "wbhf_modem/accounting.hpp"
+#include "goblin_cannon/accounting.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -8,7 +8,7 @@
 #include <string>
 #include <string_view>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -378,4 +378,4 @@ ClientBudgetsCents load_client_budgets_cents_config(const std::filesystem::path&
   return budgets;
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

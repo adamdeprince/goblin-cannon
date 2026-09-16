@@ -1,4 +1,4 @@
-#include "wbhf_modem/crypto.hpp"
+#include "goblin_cannon/crypto.hpp"
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -97,4 +97,4 @@ void Aes128CtrKeystream::xor_bytes(std::span<const std::uint8_t> in, std::span<s
   impl_->xor_bytes(in, out);
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

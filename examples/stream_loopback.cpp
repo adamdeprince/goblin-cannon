@@ -1,5 +1,5 @@
-#include "wbhf_modem/io.hpp"
-#include "wbhf_modem/modem.hpp"
+#include "goblin_cannon/io.hpp"
+#include "goblin_cannon/modem.hpp"
 
 #include <array>
 #include <cstdint>
@@ -9,9 +9,9 @@
 #include <vector>
 
 int main(int argc, char** argv) {
-  using namespace wbhf_modem;
+  using namespace goblin_cannon;
 
-  const std::string payload = argc > 1 ? argv[1] : "WBHF modem loopback";
+  const std::string payload = argc > 1 ? argv[1] : "Goblin Cannon loopback";
 
   FrameConfig cfg;
   cfg.modem.sample_rate_hz = 48000.0;

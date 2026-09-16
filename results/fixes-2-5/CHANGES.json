@@ -1,0 +1,156 @@
+{
+  "report_header": "Goblin Cannon simulated channel change manifest",
+  "source_tree_sha256": "47db6749035027cc522e7fddff6f31d9ddf54eb3ff940f6ee07def6371639d86",
+  "files": [
+    {
+      "path": "CMakeLists.txt",
+      "before_sha256": "335ee7caaf8f2a59b8724b2b747a52a06643ea5754fac5a2a40ec35a589694ed",
+      "after_sha256": "4929500ee1f3f15ad1084b81b7b0786510f1f41b41299fd027e701208f60b877"
+    },
+    {
+      "path": "TESTING.md",
+      "before_sha256": "9239f286feb26a224b1b19a247739523cde80a59c83371803204c190a9a7a30e",
+      "after_sha256": "c2dfacbed73bd9ca9c553cc48ebadc452360cb7c62014faa8f1ee3a3b7315b12"
+    },
+    {
+      "path": "examples/local_node.cpp",
+      "before_sha256": "9b2d68603e32b3f1cb15e0572ab7b0bfeb13d96dfc6e99aa7f884a3d74bf826f",
+      "after_sha256": "5c358928a50fa9bd30041242330c5eeaab0c4eac5440c542e0270e817bc5dcec"
+    },
+    {
+      "path": "examples/radio_receiver.cpp",
+      "before_sha256": "929b6749f7a2c1dc7c34bf4039a95664e5d5660f996e930d4dd9b498e3d21b29",
+      "after_sha256": "042655f9e4d17ace1d6da67c6271e50ad6022e80787ab1975ab2b938b6de0d04"
+    },
+    {
+      "path": "examples/radio_sender.cpp",
+      "before_sha256": "39fbfe6db76d9496cc1ad2cb9b862c8d7e077c0b5221219e87216c4f032067a0",
+      "after_sha256": "09040a19fbeb9c89aa642848a9229cdd2f3d498eb90de4a5543f041f00ba20d6"
+    },
+    {
+      "path": "include/goblin_cannon/client_udp.hpp",
+      "before_sha256": "2d0c00369097de80f4a55911a18a44e85563c23142f605d6c8c084877700f482",
+      "after_sha256": "71ac77ea23f0d00fa90ee6b95e9fcf68581707264d4f4fa2de0a49a5c5ea567c"
+    },
+    {
+      "path": "include/goblin_cannon/control_server.hpp",
+      "before_sha256": "458f7ef4952e8ebcec6a5ccd8f05f9dd88b533afec1b99b08af1f362aae796d9",
+      "after_sha256": "f47c958dcf4c38968676f69181dd86e582c783e6255ce81e8855b61406cbb24f"
+    },
+    {
+      "path": "include/goblin_cannon/message_stream.hpp",
+      "before_sha256": "1311670145a4a91b5a793b1d96ef4476b68d5e84b60e93b1e20c9d80f70ec7f7",
+      "after_sha256": "79c2c9e8263021b84ad31d1505097d0c5aa51fb03819399a228af8ddbab3b9f9"
+    },
+    {
+      "path": "include/goblin_cannon/modem.hpp",
+      "before_sha256": "39b3257c50edc6b0750af55ceef7e8558351550d5e4c7a85f2106d25bf791a3a",
+      "after_sha256": "1396a2f8218c7ccc55dce12e5f93769508df6b936d3d1f9a2422d48aa66da356"
+    },
+    {
+      "path": "include/goblin_cannon/rf_stream.hpp",
+      "before_sha256": "e01a4b3f5afb0d021a0d8a3c0fc2ebdb837b7665620c622b2306e190ac6ba903",
+      "after_sha256": "2db6bbcd99cc8cc469416d9225a9a7f0155e8aaa351d80f12cf777ed8fc4347b"
+    },
+    {
+      "path": "include/goblin_cannon/ring_buffer.hpp",
+      "before_sha256": "fced42fffcf42a31660059a9d2ca0fa4dd7d3d8fac38047f3ec98d1be401591c",
+      "after_sha256": "42d93720e33992d59ef8abbb49ed84ff1494b8b96ebae5c329da3296a7b921d4"
+    },
+    {
+      "path": "proto/goblin_cannon/control/v1/receiver_control.proto",
+      "before_sha256": "a2fdd1d928a8f24c6b2cd1c071b643983df8991f07422d59101089f69474d62e",
+      "after_sha256": "b78730880cf3cf3c238eb44158a45966d7d993cd1bd777f6fb1ee14cd1d18d41"
+    },
+    {
+      "path": "scripts/configure_local_radios.py",
+      "before_sha256": "f1600655b9b8a3bd35a4f549ecb63d6236553c63cf639ae49d8b8b532b3ca261",
+      "after_sha256": "c4f8ec3fa68d31f79fa380224e9b7277e771dfabde602a881489f528f075c6f0"
+    },
+    {
+      "path": "src/client_udp.cpp",
+      "before_sha256": "db3a7323eb0dcadae1400660e5aaa69a0e67aca8e2ca9a2608b3654015be77d6",
+      "after_sha256": "ae25e7c7f23244710c11e252833976e41005dae1a9d575a4be13952fc0fcb62b"
+    },
+    {
+      "path": "src/control_server.cpp",
+      "before_sha256": "6be812a2f2b07e79bd7c617da65c07af9f0ecee98d5943ff7118388dd734c38c",
+      "after_sha256": "eeae52d25232418aeb1c94105357aa01cf95c56e4a3097aff7d5bb970bfb9f93"
+    },
+    {
+      "path": "src/message_stream.cpp",
+      "before_sha256": "d08daa64632c3c4fe690de706429194e90c2202f552da58de6bde328f91aa133",
+      "after_sha256": "9852855dd0831f5d7981259bbec7163980fddc2fa88c7e9ee07d6236d143828e"
+    },
+    {
+      "path": "src/modem.cpp",
+      "before_sha256": "b062627ed2088728bd0aa3bbd0c55c93408c116549059b2e8efdb51d3cc2477f",
+      "after_sha256": "8ea95248abbd5ee46e487d4106f9357131b7ee5f1625dff53771ee6305ea9f61"
+    },
+    {
+      "path": "src/rf_equalizer.hpp",
+      "before_sha256": "e4c2cfa2c6686d0591de4c9592a0700ff40095626840ea39c272daa6fe838cc9",
+      "after_sha256": "e93a248c65bf503cd07d11e3cd90de64c75f087d1f624b2ad4278d181116b8e4"
+    },
+    {
+      "path": "src/rf_stream.cpp",
+      "before_sha256": "a381292c0b8a4f0e3a3ddc3e046234ad76afe26f68f3d157d4fd29e73b94f2e0",
+      "after_sha256": "79c3f617d88949dd806568a768fe9558a204fa318cc4c163a9fb6d54be5511c4"
+    },
+    {
+      "path": "tests/README.md",
+      "before_sha256": "a0c17dda464368c0cda7a3123f406a2951e3680a8cfbb8d5259fd648ac746996",
+      "after_sha256": "26ee5365ac7ff055dabf66840fcae0d6e6c695b6e96609bdb24836944e836d5d"
+    },
+    {
+      "path": "tests/simulated_channel/QUESTIONS.md",
+      "before_sha256": "531b98ef456211c58eb343b2486bbc644a8dcbf6de83714da7dd98826fdc2769",
+      "after_sha256": "4b1448ee54524f0f41648eb77fd2c9a392fc708a1804559cc0be6a40d042c8b2"
+    },
+    {
+      "path": "tests/simulated_channel/catalog.py",
+      "before_sha256": "4ca479fbe83b5ac9cdf437283f12c5458809135db7d24b48528e8efc10f0ed4f",
+      "after_sha256": "5c6f30f91511b5bfd7dda9b235d136dc7230d67ae451d4bfffbbf24066852744"
+    },
+    {
+      "path": "tests/simulated_channel/expected_failures.json",
+      "before_sha256": "51269a918042b3bc83c1bf27d918b4d43bc73636b3d76d614afab9f892e05461",
+      "after_sha256": "b86c4cff3bcb987ccdfd8b62b371a1c3f6af719845c9583b4ff9468613ffa0b3"
+    },
+    {
+      "path": "tests/simulated_channel/metrics.py",
+      "before_sha256": "717f3dc0376d9c7a851e14bf0b7b8c979ac4791c8e72f6d1a0a45c301161e608",
+      "after_sha256": "871980305836655442d250fb3c9f2de09de7696d6dd360e239494a4394084ae2"
+    },
+    {
+      "path": "tests/simulated_channel/run.py",
+      "before_sha256": "68a9551a899754a31ca53e69855190b7c6e43c83cdefd35e7ed480b148147ff3",
+      "after_sha256": "2814dd332395593f841dee07d6f239b54649d9fc0519b30311a98afca3add15f"
+    },
+    {
+      "path": "tests/simulated_channel/test_harness.py",
+      "before_sha256": "4683bbec1b600a0db4132ac5fe5452bd3b0a5e2e7cac342e8fb4aaac6b66cc9f",
+      "after_sha256": "db7bf3423aef2b6a37b0e98e4fa13d9ac1d9ea9580ff1216fea773529e9fb99f"
+    },
+    {
+      "path": "tests/simulated_channel_probe.cpp",
+      "before_sha256": "3bda750666092cccbba18b599b2bec35e43da39a629970d8366164120947e852",
+      "after_sha256": "f6dca4c54a1e44b7e320387b449ce3d76043b98a0a6ebc7763a27b22702bf2e8"
+    },
+    {
+      "path": "tests/test_channel.cpp",
+      "before_sha256": "fa6976667539f465e6513fb4f030a02a6e9e835b5dc9e7d0ebbdb585df16826b",
+      "after_sha256": "ef8ddee92feab6144f072005e01e4bb21487601884645bb6aac98bfaae9dd41c"
+    },
+    {
+      "path": "tests/test_data_path.cpp",
+      "before_sha256": null,
+      "after_sha256": "97bb05f4ba4363323f743d8f8964821307e040ca250fa61c9b3763ef030d79ae"
+    },
+    {
+      "path": "tests/test_modem.cpp",
+      "before_sha256": "55524ab43e51bf198a0a7d171697bf8501b315fddb94f3846c3f7f33ae88ad79",
+      "after_sha256": "bf9768b60e13e45b83bea482e5b8e3ddf517cb2dac5d7e29aa59d79423fd59f6"
+    }
+  ]
+}

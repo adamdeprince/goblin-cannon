@@ -1,4 +1,6 @@
-#include "wbhf_modem/rf_stream.hpp"
+#include "goblin_cannon/rf_stream.hpp"
+
+#include "rf_equalizer.hpp"
 
 #include <algorithm>
 #include <array>
@@ -8,13 +10,18 @@
 #include <numbers>
 #include <stdexcept>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
 constexpr std::uint32_t header_magic = 0x57424846U; // WBHF
 constexpr std::size_t serialized_header_bytes = 32;
-constexpr float pi_f = std::numbers::pi_v<float>;
+constexpr float equalizer_step = 0.4F;
+constexpr float tracking_confidence = 0.4F;
+std::uint32_t startup_pilot_symbols(const RfStreamConfig& config) {
+  return static_cast<std::uint32_t>(std::max<std::size_t>(config.modem.filter_span_symbols,
+      config.equalizer_feedforward_taps + config.equalizer_feedback_taps));
+}
 
 std::uint32_t modulation_id(Modulation modulation) {
   switch (modulation) {
@@ -298,6 +305,17 @@ void validate(const RfStreamConfig& config) {
   if (config.equalizer_training_sequence.empty()) {
     throw std::invalid_argument("equalizer_training_sequence must not be empty");
   }
+  if (config.equalizer_feedforward_taps == 0 || config.equalizer_feedforward_taps > 512 ||
+      config.equalizer_feedback_taps > 512) {
+    throw std::invalid_argument("equalizer tap counts must be feedforward [1,512], feedback [0,512]");
+  }
+  if (config.equalizer_delay_symbols >= config.equalizer_feedforward_taps) {
+    throw std::invalid_argument("equalizer decision delay must be less than feedforward span");
+  }
+  if (config.adaptive_equalization && config.equalizer_training_sequence.size() <=
+      std::max(config.equalizer_feedforward_taps, config.equalizer_feedback_taps)) {
+    throw std::invalid_argument("equalizer training sequence must exceed equalizer memory");
+  }
   if (!symbol_vector_valid(config.acquisition_sequence, 4)) {
     throw std::invalid_argument("acquisition_sequence must contain QPSK symbols");
   }
@@ -389,7 +407,12 @@ public:
     result.confidence = std::clamp((result.peak_metric - sidelobe) / std::max(result.peak_metric, 1.0e-8F),
                                    0.0F,
                                    1.0F);
-    result.found = result.confidence >= config_.acquisition_confidence_threshold;
+    // A short scan can put every candidate inside the sidelobe guard, making
+    // even noise have confidence == 1. Require actual preamble correlation as
+    // well as peak prominence before committing to training/header decoding.
+    result.found = result.peak_metric > 0.0F &&
+                   result.peak_metric >= config_.acquisition_confidence_threshold &&
+                   result.confidence >= config_.acquisition_confidence_threshold;
     return result;
   }
 
@@ -463,8 +486,15 @@ public:
         break;
       }
 
+      // Drain already synthesized symbol support before accepting another
+      // symbol. Otherwise one-sample output buffers enqueue symbols faster
+      // than the sample clock can transmit them, creating unbounded latency.
+      const auto ready = data_encoder_.push_bits({}, out.subspan(result.produced_samples));
+      result.produced_samples += ready.produced;
+      if (result.produced_samples == out.size()) break;
+
       if (startup_pilots_remaining_ != 0) {
-        const auto idx = (config_.modem.filter_span_symbols - startup_pilots_remaining_) % config_.pilot_sequence.size();
+        const auto idx = (startup_pilot_symbols(config_) - startup_pilots_remaining_) % config_.pilot_sequence.size();
         push_modulation_symbol(config_.pilot_sequence[idx], out.subspan(result.produced_samples), result);
         --startup_pilots_remaining_;
         if (result.produced_samples == out.size()) {
@@ -502,6 +532,19 @@ public:
   }
 
   RfStreamEncodeResult drain(std::span<Complex> out) {
+    if (!closing_ && drain_padding_remaining_ != 0) {
+      std::array<std::uint32_t, 512> padding{};
+      auto result = push_symbols(std::span(padding).first(drain_padding_remaining_), out);
+      drain_padding_remaining_ -= result.consumed_symbols;
+      result.consumed_symbols = 0;
+      if (result.produced_samples != 0 || drain_padding_remaining_ != 0) return result;
+    }
+    if (!closing_ && symbols_until_pilot_ == 0) {
+      // A payload ending exactly at a pilot boundary must finish the same
+      // pilot group whether its last sample filled the caller's buffer or not.
+      auto result = push_symbols({}, out);
+      if (result.produced_samples != 0 || symbols_until_pilot_ == 0) return result;
+    }
     closing_ = true;
     return push_symbols({}, out);
   }
@@ -512,7 +555,8 @@ public:
     control_samples_.clear();
     control_offset_ = 0;
     symbols_until_pilot_ = config_.pilot_interval_symbols;
-    startup_pilots_remaining_ = static_cast<std::uint32_t>(config_.modem.filter_span_symbols);
+    startup_pilots_remaining_ = startup_pilot_symbols(config_);
+    drain_padding_remaining_ = config_.equalizer_delay_symbols;
     pilot_index_ = 0;
     closing_ = false;
     header_ = {};
@@ -538,6 +582,7 @@ private:
   std::uint32_t startup_pilots_remaining_ = 0;
   std::size_t pilot_index_ = 0;
   bool closing_ = false;
+  std::size_t drain_padding_remaining_ = 0;
 };
 
 RfStreamEncoder::RfStreamEncoder(RfStreamConfig config) : impl_(std::make_unique<Impl>(std::move(config))) {}
@@ -563,9 +608,11 @@ public:
         qpsk_decoder_(qpsk_config()),
         data_decoder_(config_.modem),
         data_constellation_(config_.modem.modulation, config_.modem.constellation_profile),
+        equalizer_(config_),
         reference_(build_reference_preamble(config_)),
         training_header_samples_(build_training_header_samples(config_, placeholder_header())) {
     validate(config_);
+    data_decoder_.set_sample_clock_recovery(config_.sample_clock_recovery);
   }
 
   [[nodiscard]] const RfStreamConfig& config() const noexcept { return config_; }
@@ -585,11 +632,11 @@ public:
         continue;
       }
       if ((state_ == RfStreamState::training || state_ == RfStreamState::header) &&
-          buffer_.size() >= training_header_samples_.size()) {
+          buffer_.size() >= training_header_input_size()) {
         progressed = try_decode_training_header(result);
         continue;
       }
-      if (state_ == RfStreamState::locked && !buffer_.empty() && result.produced_symbols < out.size()) {
+      if (state_ == RfStreamState::locked && result.produced_symbols < out.size()) {
         progressed = decode_payload_symbols(out, result);
       }
     }
@@ -606,9 +653,14 @@ public:
     first_sample_index_ = 0;
     qpsk_decoder_.reset();
     data_decoder_.reset();
+    bad_pilots_ = 0;
+    pilot_group_bad_ = false;
+    equalizer_.reset();
     header_ = std::nullopt;
     sync_ = {};
-    bit_accumulator_.clear();
+    carrier_origin_sample_ = 0;
+    pending_symbols_.clear();
+    pending_symbol_offset_ = 0;
     frame_counter_ = 0;
     frame_symbol_offset_ = 0;
     symbols_until_pilot_ = config_.pilot_interval_symbols;
@@ -617,6 +669,11 @@ public:
   }
 
 private:
+  std::size_t training_header_input_size() const {
+    return training_header_samples_.size() + static_cast<std::size_t>(std::ceil(
+        config_.equalizer_delay_symbols * describe(config_.modem).samples_per_symbol));
+  }
+
   ModemConfig qpsk_config() const {
     auto cfg = config_.modem;
     cfg.modulation = Modulation::qpsk;
@@ -646,10 +703,17 @@ private:
       return false;
     }
 
+    // The peak may still be rising if its window ends at the last available
+    // sample. Retain it until the next sample can confirm the peak; otherwise
+    // a chunk ending just before the true preamble end can acquire early.
+    if (scan.sample_index + reference_.size() == buffer_.size()) {
+      return false;
+    }
+
     result.acquisition = scan;
     result.acquisition.sample_index = static_cast<std::size_t>(first_sample_index_ + scan.sample_index);
     result.acquisition_found = true;
-    const auto corr = correlation_at(buffer_, reference_, scan.sample_index);
+    sync_.training_evm = 0.0F;
     const auto half = reference_.size() / 2U;
     if (half > 0) {
       const auto early = correlation_at(std::span<const Complex>(buffer_.data() + scan.sample_index, half),
@@ -660,13 +724,38 @@ private:
                                        std::span<const Complex>(reference_.data() + half, late_count),
                                        0);
       const auto phase_delta = std::atan2((late * std::conj(early)).imag(), (late * std::conj(early)).real());
-      const double time_delta = (static_cast<double>(half) / config_.modem.sample_rate_hz);
+      double early_energy = 0.0, late_energy = 0.0;
+      double early_time = 0.0, late_time = 0.0;
+      for (std::size_t i = 0; i < reference_.size(); ++i) {
+        const double energy = std::norm(reference_[i]);
+        if (i < half) {
+          early_energy += energy;
+          early_time += energy * static_cast<double>(i);
+        } else {
+          late_energy += energy;
+          late_time += energy * static_cast<double>(i);
+        }
+      }
+      // Pulse shaping makes the two halves' energy centroids differ from their
+      // geometric centers. Using those centroids removes the coarse CFO bias.
+      const double time_delta = (late_time / std::max(late_energy, 1.0e-12) -
+                                 early_time / std::max(early_energy, 1.0e-12)) / config_.modem.sample_rate_hz;
       sync_.carrier_frequency_offset_hz = time_delta > 0.0
           ? static_cast<double>(phase_delta) / (2.0 * std::numbers::pi * time_delta)
           : 0.0;
     }
-    sync_.carrier_phase_rad = std::atan2(corr.imag(), corr.real());
-    sync_.channel = corr / std::max(window_energy(buffer_, scan.sample_index, reference_.size()), 1.0e-8F);
+    Complex channel_sum{};
+    float reference_energy = 0.0F;
+    for (std::size_t i = 0; i < reference_.size(); ++i) {
+      const auto phase = -2.0 * std::numbers::pi * sync_.carrier_frequency_offset_hz *
+                         static_cast<double>(i) / config_.modem.sample_rate_hz;
+      channel_sum += buffer_[scan.sample_index + i] * std::conj(reference_[i]) *
+                     std::polar(1.0F, static_cast<float>(phase));
+      reference_energy += std::norm(reference_[i]);
+    }
+    sync_.channel = channel_sum / std::max(reference_energy, 1.0e-8F);
+    sync_.carrier_phase_rad = std::arg(sync_.channel);
+    carrier_origin_sample_ = result.acquisition.sample_index;
     sync_.symbol_timing_offset_samples = std::fmod(static_cast<double>(result.acquisition.sample_index),
                                                    describe(config_.modem).samples_per_symbol);
 
@@ -677,37 +766,75 @@ private:
     return true;
   }
 
+  std::span<const Complex> correct_samples(std::span<const Complex> samples) {
+    corrected_samples_.resize(samples.size());
+    const float scale = 1.0F / (std::max(std::abs(sync_.channel), 1.0e-6F) * config_.modem.tx_gain);
+    const double omega = 2.0 * std::numbers::pi * sync_.carrier_frequency_offset_hz / config_.modem.sample_rate_hz;
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+      const auto phase = config_.carrier_correction
+          ? -sync_.carrier_phase_rad - omega * static_cast<double>(first_sample_index_ + i - carrier_origin_sample_)
+          : 0.0;
+      corrected_samples_[i] = samples[i] * std::polar(scale, static_cast<float>(std::remainder(phase, 2.0 * std::numbers::pi)));
+    }
+    return corrected_samples_;
+  }
+
   bool try_decode_training_header(RfStreamReceiveResult& result) {
-    std::vector<SoftBit> bits(expected_training_header_bits(config_) + 16U);
+    const auto delay = config_.equalizer_delay_symbols;
+    const auto expected_symbols = expected_training_header_bits(config_) / 2U + delay;
+    std::vector<Complex> symbols(expected_symbols + 8U);
     qpsk_decoder_.reset();
-    const auto decoded = qpsk_decoder_.push_samples_soft(
-        std::span<const Complex>(buffer_.data(), training_header_samples_.size()),
-        std::span<SoftBit>(bits));
-    if (decoded.produced_bits < expected_training_header_bits(config_)) {
+    const auto decoded = qpsk_decoder_.push_samples_matched(
+        correct_samples(std::span<const Complex>(buffer_).first(training_header_input_size())), symbols);
+    if (decoded.produced_symbols < expected_symbols) {
       return false;
     }
-    bits.resize(decoded.produced_bits);
-
-    const auto training_bits = config_.equalizer_training_sequence.size() * 2U;
-    bool training_ok = true;
-    for (std::size_t i = 0; i < config_.equalizer_training_sequence.size(); ++i) {
-      const auto symbol = static_cast<std::uint32_t>((bits[i * 2U].value << 1U) | bits[i * 2U + 1U].value);
-      training_ok = training_ok && symbol == config_.equalizer_training_sequence[i];
+    Constellation qpsk(Modulation::qpsk);
+    const auto training_count = config_.equalizer_training_sequence.size();
+    equalizer_.reset();
+    const auto guard = std::max(equalizer_.memory_symbols(), config_.modem.filter_span_symbols / 2U);
+    double error_power = 0.0;
+    std::size_t error_count = 0;
+    const std::size_t passes = config_.adaptive_equalization ? (config_.recursive_equalization ? 13 : 12) : 1;
+    for (std::size_t pass = 0; pass < passes; ++pass) {
+      // Reuse the already received training block; no extra RF symbols or
+      // steady-state buffering are introduced by these convergence passes.
+      equalizer_.restart_training_pass();
+      if (pass == 12 && config_.recursive_equalization) equalizer_.start_recursive_tracking();
+      for (std::size_t i = 0; i < training_count + delay; ++i) {
+        const auto observed = equalizer_.filter(symbols[i]);
+        const auto desired = i >= delay ? qpsk.map_symbol(config_.equalizer_training_sequence[i-delay]) : Complex{};
+        if (pass + 1 == passes && i >= guard) {
+          error_power += std::norm(desired - observed);
+          ++error_count;
+        }
+        equalizer_.update(desired, observed, equalizer_step, i >= guard, true);
+      }
     }
-    if (!training_ok) {
+    sync_.training_evm = static_cast<float>(std::sqrt(error_power / std::max<std::size_t>(error_count, 1U)));
+    if (!std::isfinite(sync_.training_evm) || sync_.training_evm > 0.45F) {
       lose_lock(result);
       return true;
     }
 
-    auto repeated_bits = std::vector<std::uint8_t>();
+    std::vector<std::uint8_t> repeated_bits;
     repeated_bits.reserve(serialized_header_bytes * 8U * config_.header_repetition);
-    for (std::size_t i = training_bits; i < training_bits + serialized_header_bytes * 8U * config_.header_repetition; ++i) {
-      repeated_bits.push_back(bits[i].value);
+    for (std::size_t i = training_count + delay; i < expected_symbols; ++i) {
+      const auto observed = equalizer_.filter(symbols[i]);
+      const auto decision = qpsk.decide(observed);
+      std::array<std::uint8_t, 2> bits{};
+      qpsk.symbol_to_bits(decision.symbol, bits);
+      repeated_bits.insert(repeated_bits.end(), bits.begin(), bits.end());
+      equalizer_.update(qpsk.map_symbol(decision.symbol), observed, equalizer_step,
+                        decision.confidence >= tracking_confidence);
     }
     const auto header_bytes = majority_header_bytes(repeated_bits, config_.header_repetition);
     auto parsed = parse_header(header_bytes);
-    if (!parsed.has_value() ||
-        parsed->schedule_epoch_low != static_cast<std::uint32_t>(config_.expected_schedule_epoch & 0xFFFFFFFFULL) ||
+    if (!parsed.has_value()) {
+      lose_lock(result);
+      return true;
+    }
+    if (parsed->schedule_epoch_low != static_cast<std::uint32_t>(config_.expected_schedule_epoch & 0xFFFFFFFFULL) ||
         parsed->modulation != config_.modem.modulation ||
         parsed->symbols_per_frame != config_.symbols_per_frame ||
         parsed->pilot_interval_symbols != config_.pilot_interval_symbols) {
@@ -721,10 +848,17 @@ private:
     frame_counter_ = parsed->frame_counter_start;
     frame_symbol_offset_ = 0;
     symbols_until_pilot_ = config_.pilot_interval_symbols;
-    startup_pilots_remaining_ = static_cast<std::uint32_t>(config_.modem.filter_span_symbols);
+    startup_pilots_remaining_ = startup_pilot_symbols(config_);
+    startup_discard_symbols_ = delay;
     pilot_index_ = 0;
-    bit_accumulator_.clear();
+    pending_symbols_.clear();
+    pending_symbol_offset_ = 0;
     data_decoder_.reset();
+    bad_pilots_ = 0;
+    pilot_group_bad_ = false;
+    equalizer_.clear_history();
+    equalizer_.advance_phase(static_cast<double>(training_header_samples_.size()) /
+                                 describe(config_.modem).samples_per_symbol - static_cast<double>(expected_symbols));
     erase_prefix(buffer_, training_header_samples_.size(), first_sample_index_);
     state_ = RfStreamState::locked;
     result.header_valid = true;
@@ -734,21 +868,29 @@ private:
   }
 
   bool decode_payload_symbols(std::span<RfStreamSymbol> out, RfStreamReceiveResult& result) {
-    const auto remaining_out = out.size() - result.produced_symbols;
-    const auto pilot_budget = remaining_out / std::max<std::uint32_t>(config_.pilot_interval_symbols, 1U) +
-                              config_.pilot_sequence.size() + startup_pilots_remaining_ + 8U;
-    const auto max_symbols = remaining_out + pilot_budget;
-    symbol_decision_buffer_.resize(max_symbols);
-    const auto decoded = data_decoder_.push_samples_symbols(buffer_, symbol_decision_buffer_);
-    erase_prefix(buffer_, buffer_.size(), first_sample_index_);
-    if (decoded.produced_symbols == 0) {
-      return false;
+    if (pending_symbol_offset_ == pending_symbols_.size()) {
+      pending_symbols_.resize(256);
+      const auto decoded = data_decoder_.push_samples_matched(correct_samples(buffer_), pending_symbols_);
+      sync_.sample_clock_error_ppm = data_decoder_.recovered_clock_ppm();
+      erase_prefix(buffer_, buffer_.size(), first_sample_index_);
+      pending_symbols_.resize(decoded.produced_symbols);
+      pending_symbol_offset_ = 0;
+      if (pending_symbols_.empty()) {
+        return false;
+      }
     }
-    for (std::size_t i = 0; i < decoded.produced_symbols; ++i) {
-      if (!consume_modulation_symbol(symbol_decision_buffer_[i], out, result)) {
+    while (pending_symbol_offset_ < pending_symbols_.size() && result.produced_symbols < out.size()) {
+      auto observed = equalizer_.filter(pending_symbols_[pending_symbol_offset_++]);
+      if (!std::isfinite(observed.real()) || !std::isfinite(observed.imag())) {
+        lose_lock(result);
         return true;
       }
-      if (state_ != RfStreamState::locked || result.produced_symbols == out.size()) {
+      if (startup_pilots_remaining_ == 0 && symbols_until_pilot_ == 0) {
+        observed = equalizer_.track_pilot_gain(
+            data_constellation_.map_symbol(config_.pilot_sequence[pilot_index_]), observed);
+      }
+      const auto decision = data_constellation_.decide(observed);
+      if (!consume_modulation_symbol(decision, observed, out, result)) {
         return true;
       }
     }
@@ -756,12 +898,22 @@ private:
   }
 
   bool consume_modulation_symbol(const SymbolDecision& decision,
+                                 Complex observed,
                                  std::span<RfStreamSymbol> out,
                                  RfStreamReceiveResult& result) {
     const auto symbol = decision.symbol;
     const auto confidence = decision.confidence;
 
+    if (startup_discard_symbols_ != 0) {
+      equalizer_.update({}, observed, equalizer_step, false);
+      --startup_discard_symbols_;
+      return true;
+    }
+
     if (startup_pilots_remaining_ != 0) {
+      const auto index = (startup_pilot_symbols(config_) - startup_pilots_remaining_) % config_.pilot_sequence.size();
+      equalizer_.update(data_constellation_.map_symbol(config_.pilot_sequence[index]), observed, equalizer_step,
+                        startup_pilot_symbols(config_) - startup_pilots_remaining_ >= equalizer_.memory_symbols(), true);
       --startup_pilots_remaining_;
       return true;
     }
@@ -769,11 +921,21 @@ private:
     if (symbols_until_pilot_ == 0) {
       const auto expected = config_.pilot_sequence[pilot_index_];
       if (symbol != expected || confidence < config_.pilot_confidence_threshold) {
-        lose_lock(result);
-        return false;
+        pilot_group_bad_ = true;
       }
+      // A single damaged pilot is not a sample/bit slip. Its known value can
+      // retrain the equalizer; sustained disagreement still drops lock.
+      equalizer_.update(data_constellation_.map_symbol(expected), observed, equalizer_step,
+                        config_.recursive_equalization ||
+                            (symbol == expected && confidence >= config_.pilot_confidence_threshold), true);
       pilot_index_ = (pilot_index_ + 1U) % config_.pilot_sequence.size();
       if (pilot_index_ == 0) {
+        bad_pilots_ = pilot_group_bad_ ? bad_pilots_ + 1U : 0U;
+        pilot_group_bad_ = false;
+        if (bad_pilots_ >= 2U) {
+          lose_lock(result);
+          return false;
+        }
         symbols_until_pilot_ = config_.pilot_interval_symbols;
       }
       return true;
@@ -782,6 +944,8 @@ private:
     if (result.produced_symbols == out.size()) {
       return false;
     }
+    equalizer_.update(data_constellation_.map_symbol(symbol), observed, equalizer_step,
+                      confidence >= tracking_confidence);
     out[result.produced_symbols++] = {.value = symbol,
                                       .bits_per_symbol = static_cast<std::uint8_t>(data_constellation_.bits_per_symbol()),
                                       .frame_counter = frame_counter_,
@@ -802,12 +966,16 @@ private:
     state_ = RfStreamState::search;
     qpsk_decoder_.reset();
     data_decoder_.reset();
-    bit_accumulator_.clear();
+    bad_pilots_ = 0;
+    pilot_group_bad_ = false;
+    equalizer_.reset();
+    pending_symbols_.clear();
+    pending_symbol_offset_ = 0;
     header_ = std::nullopt;
     symbols_until_pilot_ = config_.pilot_interval_symbols;
     startup_pilots_remaining_ = 0;
     pilot_index_ = 0;
-    buffer_.clear();
+    erase_prefix(buffer_, buffer_.size(), first_sample_index_);
     result.state = RfStreamState::lock_lost;
   }
 
@@ -816,6 +984,10 @@ private:
   Decoder qpsk_decoder_;
   Decoder data_decoder_;
   Constellation data_constellation_;
+  detail::RfEqualizer equalizer_;
+  std::size_t bad_pilots_ = 0;
+  bool pilot_group_bad_ = false;
+  std::size_t startup_discard_symbols_ = 0;
   std::vector<Complex> reference_;
   std::vector<Complex> training_header_samples_;
   RfStreamState state_ = RfStreamState::search;
@@ -823,9 +995,10 @@ private:
   std::uint64_t first_sample_index_ = 0;
   std::optional<RfStreamHeader> header_ = std::nullopt;
   RfSyncEstimate sync_ = {};
-  std::vector<SoftBit> bit_accumulator_;
-  // Reusable scratch for symbol-direct decode on the data path.
-  std::vector<SymbolDecision> symbol_decision_buffer_;
+  std::uint64_t carrier_origin_sample_ = 0;
+  std::vector<Complex> corrected_samples_;
+  std::vector<Complex> pending_symbols_;
+  std::size_t pending_symbol_offset_ = 0;
   std::uint64_t frame_counter_ = 0;
   std::uint32_t frame_symbol_offset_ = 0;
   std::uint32_t symbols_until_pilot_ = 0;
@@ -846,4 +1019,4 @@ RfStreamReceiveResult RfStreamReceiver::push_samples(std::span<const Complex> sa
 }
 void RfStreamReceiver::reset() { impl_->reset(); }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

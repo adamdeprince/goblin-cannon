@@ -1,4 +1,4 @@
-#include "wbhf_modem/message_stream.hpp"
+#include "goblin_cannon/message_stream.hpp"
 
 #include <algorithm>
 #include <array>
@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -46,6 +46,9 @@ double decode_native_double(std::span<const std::uint8_t, 8> bytes) {
 }
 
 void validate_message(const DelimitedMessage& message) {
+  if (message.bytes.size() > maximum_message_bytes) {
+    throw std::invalid_argument("message exceeds maximum_message_bytes");
+  }
   if (message.bytes.empty()) {
     throw std::invalid_argument("message must include a 0/1 start delimiter");
   }
@@ -142,11 +145,12 @@ std::optional<std::vector<std::uint8_t>> verify_and_strip_message_crc(std::vecto
   return message;
 }
 
-bool bid_score_better(const BidMessage& candidate, const BidMessage& incumbent) noexcept {
+bool bid_score_better(const BidMessage& candidate, const BidMessage& incumbent, bool sequenced) noexcept {
+  const std::size_t overhead = sequenced ? 5U : 0U;
   const auto candidate_score = static_cast<long double>(candidate.bid_price) /
-                               static_cast<long double>(message_wire_bytes(candidate.payload));
+                               static_cast<long double>(message_wire_bytes(candidate.payload) + overhead);
   const auto incumbent_score = static_cast<long double>(incumbent.bid_price) /
-                               static_cast<long double>(message_wire_bytes(incumbent.payload));
+                               static_cast<long double>(message_wire_bytes(incumbent.payload) + overhead);
   if (candidate_score != incumbent_score) {
     return candidate_score > incumbent_score;
   }
@@ -212,7 +216,7 @@ void validate_realtime_config(const RealtimePipelineConfig& config) {
 
 } // namespace
 
-MessageFrameEncodeResult MessageStreamFramer::next_payload_frame(SpscRingBuffer<DelimitedMessage>& input,
+MessageFrameEncodeResult MessageStreamFramer::next_payload_frame(QueueSource<DelimitedMessage>& input,
                                                                  std::span<std::uint8_t> payload_out) {
   if (payload_out.empty()) {
     throw std::invalid_argument("message payload frame must not be empty");
@@ -231,8 +235,20 @@ MessageFrameEncodeResult MessageStreamFramer::next_payload_frame(SpscRingBuffer<
       if (active_bank_override_.has_value()) {
         current_.front() = *active_bank_override_;
       }
+      if (sequence_numbers_ && current_.size() > 1U && !next.sequence.has_value()) {
+        next.sequence = next_sequence_++;
+      }
       if (observer_ != nullptr) {
-        observer_->on_delimited_message(DelimitedMessage{.bytes = current_});
+        observer_->on_delimited_message(DelimitedMessage{.bytes = current_, .sequence = next.sequence});
+      }
+      if (sequence_numbers_ && current_.size() > 1U) {
+        auto sequence = *next.sequence;
+        std::array<std::uint8_t, 5> encoded{};
+        for (auto& byte : encoded) {
+          byte = static_cast<std::uint8_t>(2U + sequence % 254U);
+          sequence /= 254U;
+        }
+        current_.insert(current_.begin() + 2, encoded.begin(), encoded.end());
       }
       append_message_crc(current_);
       current_offset_ = 0;
@@ -281,159 +297,126 @@ void MessageStreamFramer::reset() {
   current_offset_ = 0;
 }
 
-BidMessageIntakeResult BidMessageTransmitIntake::submit(BidMessage message,
-                                                        SpscRingBuffer<DelimitedMessage>& transmit_queue,
-                                                        SpscRingBuffer<BidMessageLogRecord>& log_queue,
-                                                        BidMessageLogObserver* observer,
-                                                        BidBudgetAccountant* accountant) {
+TransmitMessageQueue::TransmitMessageQueue(std::size_t capacity, std::shared_ptr<std::mutex> decision_log_mutex)
+    : capacity_(capacity), decision_log_mutex_(std::move(decision_log_mutex)) {
+  if (capacity == 0) throw std::invalid_argument("transmit queue capacity must be positive");
+}
+
+bool TransmitMessageQueue::try_push(DelimitedMessage message) {
+  validate_message(message);
+  std::scoped_lock lock(mutex_);
+  if (fifo_.size() == capacity_) return false;
+  fifo_.push_back(std::move(message));
+  return true;
+}
+
+std::size_t TransmitMessageQueue::size_approx() const {
+  std::scoped_lock lock(mutex_);
+  return fifo_.size() + (best_ ? 1U : 0U);
+}
+
+bool TransmitMessageQueue::full() const {
+  std::scoped_lock lock(mutex_);
+  return fifo_.size() == capacity_;
+}
+
+std::size_t TransmitMessageQueue::pending_bids() const {
+  std::scoped_lock lock(mutex_);
+  return best_ ? 1U : 0U;
+}
+
+void TransmitMessageQueue::clear_pending_bid() {
+  std::scoped_lock lock(mutex_);
+  best_.reset(); // Not yet sent or charged.
+}
+
+BidMessageIntakeResult TransmitMessageQueue::offer(BidMessage message,
+    SpscRingBuffer<BidMessageLogRecord>& logs, BidMessageLogObserver* observer,
+    BidBudgetAccountant* accountant) {
   validate_bid_message(message);
-
-  auto result = pump(transmit_queue, log_queue, observer, accountant);
-  if (result.log_backpressure) {
-    result.pending_bids = pending_bids();
-    return result;
-  }
-
-  if (!can_afford_bid(message, accountant)) {
-    if (!log_has_capacity(log_queue, 1U)) {
-      result.log_backpressure = true;
-      result.pending_bids = pending_bids();
-      return result;
-    }
-    emit_log(make_budget_exhausted_log(message), log_queue, observer);
-    result.budget_rejected = true;
-    result.logged_records += 1U;
-    result.pending_bids = pending_bids();
-    return result;
-  }
-
-  if (!pending_best_.has_value() && transmit_queue.empty()) {
-    if (!log_has_capacity(log_queue, 1U)) {
-      result.log_backpressure = true;
-      result.pending_bids = pending_bids();
-      return result;
-    }
-    auto sent_log = reserve_sent_bid(make_bid_log(message, BidMessageLogStatus::sent, message.bid_price),
-                                     message,
-                                     accountant);
-    if (sent_log->status == BidMessageLogStatus::budget_exhausted) {
-      emit_log(std::move(*sent_log), log_queue, observer);
-      result.budget_rejected = true;
-      result.logged_records += 1U;
-      result.pending_bids = pending_bids();
-      return result;
-    }
-    if (!transmit_queue.try_push(DelimitedMessage{.bytes = message.payload})) {
-      result.transmit_backpressure = true;
-      result.pending_bids = pending_bids();
-      return result;
-    }
-    emit_log(std::move(*sent_log), log_queue, observer);
-    result.transmitted = true;
-    result.logged_records += 1U;
-    result.pending_bids = pending_bids();
-    return result;
-  }
-
-  if (!pending_best_.has_value()) {
-    pending_best_ = std::move(message);
-    result.queued_for_arbitration = true;
-    result.pending_bids = pending_bids();
-    return result;
-  }
-
-  if (bid_score_better(message, *pending_best_)) {
-    if (!log_has_capacity(log_queue, 1U)) {
-      result.log_backpressure = true;
-      result.pending_bids = pending_bids();
-      return result;
-    }
-    emit_log(make_bid_log(*pending_best_, BidMessageLogStatus::rejected, message.bid_price), log_queue, observer);
-    pending_best_ = std::move(message);
-    result.queued_for_arbitration = true;
-    result.logged_records += 1U;
-  } else {
-    if (!log_has_capacity(log_queue, 1U)) {
-      result.log_backpressure = true;
-      result.pending_bids = pending_bids();
-      return result;
-    }
-    emit_log(make_bid_log(message, BidMessageLogStatus::rejected, pending_best_->bid_price), log_queue, observer);
-    result.logged_records += 1U;
-  }
-  result.pending_bids = pending_bids();
-  return result;
-}
-
-BidMessageIntakeResult BidMessageTransmitIntake::pump(SpscRingBuffer<DelimitedMessage>& transmit_queue,
-                                                      SpscRingBuffer<BidMessageLogRecord>& log_queue,
-                                                      BidMessageLogObserver* observer,
-                                                      BidBudgetAccountant* accountant) {
+  std::scoped_lock lock(mutex_);
   BidMessageIntakeResult result;
-  if (!pending_best_.has_value()) {
-    return result;
+  const auto emit = [&](BidMessageLogRecord record, SpscRingBuffer<BidMessageLogRecord>& destination,
+                        BidMessageLogObserver* target) {
+    (void)destination.try_push(record);
+    if (target) target->on_bid_message_log(record);
+    ++result.logged_records;
+  };
+  if (!can_afford_bid(message, accountant)) {
+    if (logs.full()) result.log_backpressure = true;
+    else {
+      emit(make_budget_exhausted_log(message), logs, observer);
+      result.budget_rejected = true;
+    }
+  } else if (!best_) {
+    best_ = Candidate{std::move(message), &logs, observer, accountant};
+    result.queued_for_arbitration = true;
+  } else {
+    const auto& previous = best_->message;
+    const bool same_key = !message.has_client_id && !previous.has_client_id &&
+        message.payload.size() > 1 && previous.payload.size() > 1 &&
+        message.payload[0] == previous.payload[0] && message.payload[1] == previous.payload[1];
+    const bool tied = !bid_score_better(message, previous, sequence_numbers_) && !bid_score_better(previous, message, sequence_numbers_);
+    const bool replaces = same_key || tied || bid_score_better(message, previous, sequence_numbers_);
+    auto& destination = replaces ? *best_->logs : logs;
+    if (destination.full()) {
+      result.log_backpressure = true;
+      // A rejected/retried newer update still makes the old market value
+      // obsolete. Log backpressure must not turn it into a later transmission.
+      // Neither bid has been charged; the caller can retry the current value.
+      if (same_key) best_.reset();
+    } else if (replaces) {
+      auto rejected = make_bid_log(previous, BidMessageLogStatus::rejected, message.bid_price);
+      if (same_key) rejected.detail = "superseded_at_source";
+      emit(std::move(rejected), destination, best_->observer);
+      best_ = Candidate{std::move(message), &logs, observer, accountant};
+      result.queued_for_arbitration = true;
+    } else {
+      emit(make_bid_log(message, BidMessageLogStatus::rejected, previous.bid_price), logs, observer);
+    }
   }
-  if (!transmit_queue.empty()) {
-    result.transmit_backpressure = true;
-    result.pending_bids = pending_bids();
-    return result;
-  }
-  if (!log_has_capacity(log_queue, 1U)) {
-    result.log_backpressure = true;
-    result.pending_bids = pending_bids();
-    return result;
-  }
-
-  auto winner = std::move(*pending_best_);
-  if (!can_afford_bid(winner, accountant)) {
-    emit_log(make_budget_exhausted_log(winner), log_queue, observer);
-    pending_best_.reset();
-    result.budget_rejected = true;
-    result.logged_records = 1U;
-    result.pending_bids = 0U;
-    return result;
-  }
-  auto sent_log = reserve_sent_bid(make_bid_log(winner, BidMessageLogStatus::sent, winner.bid_price),
-                                   winner,
-                                   accountant);
-  if (sent_log->status == BidMessageLogStatus::budget_exhausted) {
-    emit_log(std::move(*sent_log), log_queue, observer);
-    pending_best_.reset();
-    result.budget_rejected = true;
-    result.logged_records = 1U;
-    result.pending_bids = 0U;
-    return result;
-  }
-  if (!transmit_queue.try_push(DelimitedMessage{.bytes = winner.payload})) {
-    pending_best_ = std::move(winner);
-    result.transmit_backpressure = true;
-    result.pending_bids = pending_bids();
-    return result;
-  }
-  emit_log(std::move(*sent_log), log_queue, observer);
-  pending_best_.reset();
-  result.transmitted = true;
-  result.logged_records = 1U;
-  result.pending_bids = 0U;
+  result.pending_bids = best_ ? 1U : 0U;
   return result;
 }
 
-bool BidMessageTransmitIntake::log_has_capacity(const SpscRingBuffer<BidMessageLogRecord>& log_queue,
-                                                std::size_t records) const noexcept {
-  return log_queue.capacity() - log_queue.size_approx() >= records;
+bool TransmitMessageQueue::try_pop(DelimitedMessage& message) {
+  // Match the producer's lock order: shared log mutex, then auction mutex.
+  std::unique_lock<std::mutex> log_lock;
+  if (decision_log_mutex_) log_lock = std::unique_lock<std::mutex>(*decision_log_mutex_);
+  std::scoped_lock lock(mutex_);
+  if (best_) {
+    if (best_->logs->full()) return false;
+    auto sent = reserve_sent_bid(make_bid_log(best_->message, BidMessageLogStatus::sent, best_->message.bid_price),
+                                 best_->message, best_->accountant);
+    (void)best_->logs->try_push(*sent);
+    if (best_->observer) best_->observer->on_bid_message_log(*sent);
+    if (sent->status != BidMessageLogStatus::budget_exhausted) {
+      message = DelimitedMessage{.bytes = std::move(best_->message.payload)};
+      best_.reset();
+      return true;
+    }
+    best_.reset();
+  }
+  if (fifo_.empty()) return false;
+  message = std::move(fifo_.front()); fifo_.pop_front();
+  return true;
 }
 
-void BidMessageTransmitIntake::emit_log(BidMessageLogRecord record,
-                                        SpscRingBuffer<BidMessageLogRecord>& log_queue,
-                                        BidMessageLogObserver* observer) {
-  (void)log_queue.try_push(record);
-  if (observer != nullptr) {
-    observer->on_bid_message_log(record);
-  }
+BidMessageIntakeResult BidMessageTransmitIntake::submit(BidMessage message,
+    TransmitMessageQueue& queue, SpscRingBuffer<BidMessageLogRecord>& logs,
+    BidMessageLogObserver* observer, BidBudgetAccountant* accountant) {
+  queue_ = &queue;
+  return queue.offer(std::move(message), logs, observer, accountant);
+}
+
+BidMessageIntakeResult BidMessageTransmitIntake::pump(TransmitMessageQueue& queue,
+    SpscRingBuffer<BidMessageLogRecord>&, BidMessageLogObserver*, BidBudgetAccountant*) {
+  queue_ = &queue;
+  return {.pending_bids = queue.pending_bids()};
 }
 
 void BidMessageTransmitIntake::reset() {
-  pending_best_.reset();
+  if (const auto queue = queue_.load(std::memory_order_acquire)) queue->clear_pending_bid();
 }
 
 bool MessageStreamDeframer::flush_pending(SpscRingBuffer<DelimitedMessage>& output) {
@@ -461,9 +444,35 @@ bool MessageStreamDeframer::push_completed(std::vector<std::uint8_t> message,
   }
   auto verified = verify_and_strip_message_crc(std::move(message));
   if (!verified.has_value()) {
+    report_gap({MessageGapReason::checksum});
     return true;
   }
   DelimitedMessage completed{.bytes = std::move(*verified)};
+  if (sequence_numbers_) {
+    if (completed.bytes.size() < 7U) {
+      report_gap({MessageGapReason::malformed});
+      return true;
+    }
+    std::uint64_t sequence = 0;
+    for (std::size_t i = 7; i > 2; --i) sequence = sequence * 254U + completed.bytes[i - 1] - 2U;
+    if (sequence > std::numeric_limits<std::uint32_t>::max()) {
+      report_gap({MessageGapReason::malformed});
+      return true;
+    }
+    const auto key = completed.bytes[0] * 254U + completed.bytes[1] - 2U;
+    auto& latest = latest_sequence_[key];
+    const auto serial = static_cast<std::uint32_t>(sequence);
+    const auto distance = serial - latest.value_or(serial);
+    // Serial arithmetic: duplicates, older frames, and the ambiguous half of
+    // the sequence space are rejected. Ordinary uint32 wrap advances normally.
+    if (latest && (distance == 0 || distance >= 0x80000000U)) {
+      ++suppressed_messages_;
+      return true;
+    }
+    latest = serial;
+    completed.sequence = serial;
+    completed.bytes.erase(completed.bytes.begin() + 2, completed.bytes.begin() + 7);
+  }
   if (output.try_push(completed)) {
     if (observer_ != nullptr) {
       observer_->on_delimited_message(completed);
@@ -492,15 +501,18 @@ MessageFrameDecodeResult MessageStreamDeframer::push_payload_tokens(std::span<co
   }
 
   MessageFrameDecodeResult result;
+  const bool had_pending = pending_.has_value();
   if (!flush_pending(output)) {
     result.output_backpressure = true;
     result.waiting_for_next_delimiter = current_.size() > 1U;
     return result;
   }
+  result.produced_messages += had_pending ? 1U : 0U;
 
   for (std::size_t i = 0; i < payload.size(); ++i) {
     const auto token = payload[i];
     if (!token.certain || token.confidence <= 0.0F) {
+      if (!require_delimiter_) report_gap({MessageGapReason::fec_uncertain});
       current_.clear();
       require_delimiter_ = true;
       ++result.consumed_bytes;
@@ -527,6 +539,11 @@ MessageFrameDecodeResult MessageStreamDeframer::push_payload_tokens(std::span<co
 
     if (!require_delimiter_ && !current_.empty()) {
       current_.push_back(byte);
+      if (current_.size() > maximum_message_bytes + message_crc_bytes + (sequence_numbers_ ? 5U : 0U)) {
+        report_gap({MessageGapReason::oversized});
+        current_.clear();
+        require_delimiter_ = true;
+      }
     }
     ++result.consumed_bytes;
   }
@@ -535,13 +552,18 @@ MessageFrameDecodeResult MessageStreamDeframer::push_payload_tokens(std::span<co
   return result;
 }
 
+void MessageStreamDeframer::report_gap(MessageGap gap) {
+  ++gap_count_;
+  if (observer_) observer_->on_message_gap(gap);
+}
+
 void MessageStreamDeframer::reset() {
   current_.clear();
   pending_.reset();
   require_delimiter_ = true;
 }
 
-RealtimeTransmitter::RealtimeTransmitter(RealtimePipelineConfig config, SpscRingBuffer<DelimitedMessage>& input)
+RealtimeTransmitter::RealtimeTransmitter(RealtimePipelineConfig config, QueueSource<DelimitedMessage>& input)
     : config_(std::move(config)),
       input_(input),
       convolutional_(config_.convolutional),
@@ -549,6 +571,8 @@ RealtimeTransmitter::RealtimeTransmitter(RealtimePipelineConfig config, SpscRing
       rf_(config_.rf),
       constellation_(config_.rf.modem.modulation, config_.rf.modem.constellation_profile) {
   validate_realtime_config(config_);
+  framer_.set_sequence_numbers(config_.sequence_numbers);
+  if (auto* auction = dynamic_cast<TransmitMessageQueue*>(&input_)) auction->set_sequence_numbers(config_.sequence_numbers);
   if (config_.sync_timestamp.enabled) {
     sync_timestamp_offset_ = 0;
   }
@@ -601,6 +625,14 @@ void RealtimeTransmitter::ensure_symbol_block(RealtimeTransmitResult& result) {
 RealtimeTransmitResult RealtimeTransmitter::push_samples(std::span<Complex> out) {
   RealtimeTransmitResult result;
   while (result.produced_samples < out.size()) {
+    if (symbol_offset_ == symbols_.size()) {
+      // Emit acquisition/training and ready pilot audio before claiming a new
+      // auction winner. Otherwise the first message becomes immutable for the
+      // entire epoch startup even though none of its data is on the wire.
+      const auto prefix = rf_.push_symbols({}, out.subspan(result.produced_samples));
+      result.produced_samples += prefix.produced_samples;
+      if (result.produced_samples == out.size()) break;
+    }
     ensure_symbol_block(result);
     const auto symbols = std::span<const std::uint32_t>(symbols_).subspan(symbol_offset_);
     const auto pushed = rf_.push_symbols(symbols, out.subspan(result.produced_samples));
@@ -641,6 +673,7 @@ RealtimeReceiver::RealtimeReceiver(RealtimePipelineConfig config, SpscRingBuffer
       rf_(config_.rf),
       constellation_(config_.rf.modem.modulation, config_.rf.modem.constellation_profile) {
   validate_realtime_config(config_);
+  deframer_.set_sequence_numbers(config_.sequence_numbers);
   reset_coded_stream();
 }
 
@@ -714,6 +747,7 @@ bool RealtimeReceiver::process_decoded_tokens(std::span<const Token> tokens, Rea
 
 RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> samples) {
   RealtimeReceiveResult result;
+  const auto gaps_before = deframer_.gap_count();
   std::array<RfStreamSymbol, 512> symbols{};
   std::size_t offset = 0;
   while (offset < samples.size()) {
@@ -726,6 +760,7 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
     result.lock_lost = result.lock_lost || decoded.lock_lost;
 
     if (decoded.header_valid || decoded.lock_lost) {
+      if (decoded.lock_lost) deframer_.report_gap({MessageGapReason::rf_lock_lost});
       reset_coded_stream();
     }
 
@@ -756,11 +791,38 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
       break;
     }
   }
+  result.gap_events = deframer_.gap_count() - gaps_before;
   return result;
+}
+
+RealtimeReceiveResult RealtimeReceiver::push_audio_block(std::span<const Complex> samples,
+                                                         std::uint64_t first_sample, bool valid) {
+  const bool discontinuity = !valid || (next_audio_sample_ && first_sample != *next_audio_sample_);
+  if (discontinuity) {
+    const auto missing = next_audio_sample_ && first_sample > *next_audio_sample_
+        ? first_sample - *next_audio_sample_ : samples.size();
+    deframer_.report_gap({MessageGapReason::audio_discontinuity, missing});
+    rf_.reset();
+    reset_coded_stream();
+  }
+  next_audio_sample_ = first_sample + samples.size();
+  auto result = valid ? push_samples(samples) : RealtimeReceiveResult{.consumed_samples = samples.size()};
+  result.gap_events += discontinuity ? 1U : 0U;
+  result.lock_lost = result.lock_lost || discontinuity;
+  return result;
+}
+
+RealtimeReceiveResult RealtimeReceiver::push_timed_audio_block(std::span<const Complex> samples,
+    std::uint64_t first_sample, std::uint64_t arrival_sample,
+    std::size_t maximum_lateness_samples, bool valid) {
+  const auto available_sample = first_sample + samples.size();
+  const bool late = arrival_sample > available_sample &&
+      arrival_sample - available_sample > maximum_lateness_samples;
+  return push_audio_block(samples, first_sample, valid && !late);
 }
 
 void RealtimeReceiver::set_decoded_message_observer(DelimitedMessageObserver* observer) noexcept {
   deframer_.set_observer(observer);
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

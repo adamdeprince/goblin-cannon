@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure local WBHF sender/receiver processes over gRPC."""
+"""Configure local Goblin Cannon sender/receiver processes over gRPC."""
 
 from __future__ import annotations
 
@@ -73,7 +73,15 @@ def make_restart_request(pb2: object, args: argparse.Namespace) -> object:
     request.pilot_interval_symbols = args.pilot_interval_symbols
     request.header_repetition = args.header_repetition
     request.acquisition_sequence.extend(default_qpsk_sequence(64, 0x12345678))
-    request.equalizer_training_sequence.extend(default_qpsk_sequence(64, 0x87654321))
+    request.equalizer_training_sequence.extend(default_qpsk_sequence(args.training_symbols, 0x87654321))
+    request.carrier_correction = args.carrier_correction
+    request.adaptive_equalization = args.adaptive_equalization
+    request.sample_clock_recovery = args.sample_clock_recovery
+    request.recursive_equalization = args.recursive_equalization
+    request.message_sequence_numbers = args.message_sequence_numbers
+    request.equalizer_delay_symbols = args.equalizer_delay_symbols
+    request.equalizer_feedforward_taps = args.equalizer_feedforward_taps
+    request.equalizer_feedback_taps = args.equalizer_feedback_taps
     request.pilot_sequence.extend([0, 1, 2, 3])
     request.fec.constraint_length = 7
     request.fec.generator0 = 0o171
@@ -217,6 +225,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--symbols-per-frame", type=int, default=64)
     parser.add_argument("--pilot-interval-symbols", type=int, default=32)
     parser.add_argument("--header-repetition", type=int, default=3)
+    parser.add_argument("--training-symbols", type=int, default=64)
+    parser.add_argument("--carrier-correction", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--adaptive-equalization", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--sample-clock-recovery", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--recursive-equalization", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--message-sequence-numbers", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--equalizer-delay-symbols", type=int, default=0)
+    parser.add_argument("--equalizer-feedforward-taps", type=int, default=3)
+    parser.add_argument("--equalizer-feedback-taps", type=int, default=4)
     parser.add_argument("--sync-timestamp", action="store_true")
     parser.add_argument("--sync-timestamp-max-skew-seconds", type=float, default=0.1)
     parser.add_argument("--active-bank", type=int, choices=(0, 1), default=0)

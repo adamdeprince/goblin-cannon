@@ -1,0 +1,4 @@
+simulated channel: 90 cases, tier=full, jobs=4
+simulated channel: 50/90 A2_polar_10000_16qam_high_lat_moderate_causal characterized
+simulated channel: 90/90 A2_polar_24000_64qam_high_lat_disturbed_delayed characterized
+simulated channel: 9.744s {'characterized': 90}; results-polar27/SUMMARY.md

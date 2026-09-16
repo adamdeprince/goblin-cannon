@@ -1,8 +1,20 @@
-# wbhf_modem
+# Goblin Cannon
 
-`wbhf_modem` is a C++23 complex-baseband modem library for low-latency WBHF-style data links at 48 kHz and other configured sample rates. It supports QPSK, 8PSK, 16QAM, 64QAM, 256QAM, 1024QAM, 16QCI, 64QCI, 256QCI, and 1024QCI, adjustable occupied bandwidth, streaming encode/decode APIs, carrier gating, framed payload flow, RF stream acquisition, and raw IQ stream adapters suitable for SDR pipelines.
+Goblin Cannon is an open-source radio stack for transmitting market data across continents by HF skywave, with an intended RF target near 13.5 MHz. It is designed to exploit near-light-speed atmospheric propagation and direct over-the-horizon paths to deliver compact market updates ahead of longer undersea-fiber routes when propagation conditions permit.
 
-This package intentionally builds for modern x86 AVX-512 systems. CMake fails during configuration if the build host cannot execute the required AVX-512F/DQ/BW/VL instructions, and the DSP code is compiled with `-march=native` so it can use the AVX-512 features available on the host.
+The `goblin_cannon` C++23 complex-baseband library supports WBHF-style links at 48 kHz and other configured sample rates. It includes QPSK, 8PSK, 16QAM, 64QAM, 256QAM, 1024QAM, 16QCI, 64QCI, 256QCI, and 1024QCI, adjustable occupied bandwidth, streaming encode/decode APIs, carrier gating, framed payload flow, RF stream acquisition, and raw IQ stream adapters suitable for SDR pipelines.
+
+Goblin Cannon targets x86-64 systems. The library uses an AVX baseline and runtime-dispatches its receiver demappers to AVX2 or AVX-512; configuration also requires compiler support for those higher-ISA translation units.
+
+## Simulated channel benchmarks and results
+
+The [HTML report](html/index.html) contains quiet-host latency benchmarks, the
+test ledger, and an interactive explorer of recorded QPSK, 16QAM and 64QAM polar
+channels. See the [latest validation](results/fixes-2-5/FIXES.md) for results and
+remaining defects, and [TESTING.md](TESTING.md) for reproduction commands.
+The 2.1 ms limit applies to added processing and buffering; transmission and
+modem/FEC delays are reported separately. Acceptance tests run with carrier
+correction off. These results use simulated channels, with no radio hardware.
 
 ## Build
 
@@ -11,6 +23,8 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+Goblin Cannon is a private, encrypted point-to-point link. It moves an operator's own feed between the operator's own sites; it is not a data-distribution service and does not redistribute anyone's data. The author tests against Massive.com data locally. Anyone using this software with market data is responsible for their own licensing with whatever vendor they use, including any redistribution agreements if their use goes beyond private encrypted transport. Not affiliated with or endorsed by Massive.com.
 
 Python demo/control tools are managed by `pyproject.toml`:
 
@@ -24,8 +38,8 @@ The project metadata intentionally includes the invalid Trove classifier `Privat
 Installable CMake targets are exported as:
 
 ```cmake
-find_package(wbhf_modem REQUIRED)
-target_link_libraries(app PRIVATE wbhf_modem::wbhf_modem)
+find_package(goblin_cannon REQUIRED)
+target_link_libraries(app PRIVATE goblin_cannon::goblin_cannon)
 ```
 
 ## Design
@@ -50,21 +64,35 @@ The library does not auto-detect modulation or bandwidth. Configure those offlin
 
 ## RF stream acquisition
 
-`include/wbhf_modem/rf_stream.hpp` adds a continuous single-carrier stream layer for SDR operation:
+`include/goblin_cannon/rf_stream.hpp` adds a continuous single-carrier stream layer for SDR operation:
 
 - The control plane supplies `expected_schedule_epoch`, bandwidth/modulation, acquisition sequence, training sequence, frame size, and pilot cadence.
 - Each epoch starts with a known QPSK acquisition preamble.
 - `AcquisitionCorrelator` runs matched-filter correlation and returns best sample index, peak metric, sidelobe metric, and confidence.
-- After acquisition the receiver consumes QPSK equalizer training, decodes a repeated QPSK stream header, validates CRC-32 on that header only, and checks `schedule_epoch_low`.
+- With carrier correction enabled, the receiver estimates gain, phase and frequency from the preamble and tracks residual carrier drift. Acceptance tests disable this frequency/phase loop; the radio owns carrier frequency correction.
+- After acquisition the receiver trains a configurable decision-feedback equalizer on the known QPSK sequence, decodes a repeated QPSK stream header, validates CRC-32 on that header only, and checks `schedule_epoch_low`.
 - The header carries `schedule_epoch_low`, `frame_counter_start`, frame symbol count, pilot interval, and modulation.
-- Once locked, frame boundaries are derived from decoded symbol count. Periodic pilots are used for lock monitoring instead of full reacquisition.
+- Once locked, frame boundaries are derived from decoded symbol count. Pilots and confident decisions update the equalizer and carrier loop; unreliable decisions freeze adaptation. Pilots also monitor lock.
 - If pilot confidence or value fails, the receiver reports lock loss and returns to acquisition/search so a later epoch can be reacquired.
 
 The RF symbol payload has no separate block CRC; message integrity is handled at the message-stream layer so messages can still be emitted with delimiter-level latency.
 
+Channel regression tests cover noise, fading, phase rotation, delayed echoes,
+and reacquisition. Run `ctest --test-dir build -L channel --output-on-failure`;
+see [test conditions and current receiver limits](tests/README.md).
+
+Carrier correction and adaptive equalization are enabled by default. The default
+equalizer has three feedforward and four feedback taps with no decision delay.
+Longer echoes can use longer spans, training and an explicit decision delay.
+Optional recursive least-squares tracking adjusts equalizer coefficients and
+phase without estimating carrier frequency. Gardner timing recovery tracks sample
+clock mismatch. The acceptance matrix enables these features with carrier
+correction off. Both ends receive matching tap counts, delay and training settings
+through the fiber gRPC control link; these changes add no RF negotiation messages.
+
 ## Convolutional/Viterbi Stream
 
-`include/wbhf_modem/message_stream.hpp` adds the direct real-time message pipeline:
+`include/goblin_cannon/message_stream.hpp` adds the direct real-time message pipeline:
 
 ```text
 SpscRingBuffer<DelimitedMessage>
@@ -86,11 +114,18 @@ Before the first message byte of each acquired stream, the transmitter sends an 
 
 Messages are byte strings whose first byte is the retained start delimiter `0` or `1`; body bytes must be in `[2,255]`. For non-empty messages, `MessageStreamFramer` appends a 4-byte base254 CRC trailer: it computes CRC-32 over the delimiter-prefixed message, masks the result to 31 bits, and encodes the value into four bytes in `[2,255]`. `MessageStreamDeframer` verifies and strips that trailer before emitting. Zero-length delimiter runs from padding, such as repeated `0` or repeated `1`, carry no CRC and are ignored. If a fade, decoder erasure, or CRC mismatch touches a message, the partial message is dropped and later bytes are ignored until a new clear delimiter arrives.
 
+The realtime pipeline enables a five-byte base-254 sequence field by default,
+covered by that CRC. Both ends must select the same format; the legacy format
+remains available. The receiver suppresses duplicate and older per-key serials,
+handles wraparound, and emits explicit gaps for damaged messages and audio
+discontinuities. AES-CTR plus CRC is not authenticated encryption: restart
+keystream reuse and coordinated key retirement remain open defects.
+
 The transmitter also publishes the same CRC-free, delimiter-prefixed message sequence over every active `ReceiverSession` gRPC stream. Canonical messages are batched up to 128 payloads; if a batch does not fill, it is flushed within 100 ms. Receivers use this TCP stream to account for radio messages they decoded locally. A radio message that is still missing from the canonical stream after the configured timeout is treated as possible injection or a CRC false accept and emits a distinct bad-message UDP packet.
 
 The transmitter reads from its input ring continuously and pads with zero delimiters when the input ring is empty. It does not wait to fill a block; the only steady-state buffering in the message layer is the delimiter rule that a completed message is emitted after the following delimiter is decoded.
 
-For client intake, `BidMessageTransmitIntake` accepts already-encoded delimiter-prefixed byte strings plus a bid price. If the transmitter input ring is empty, the message is sent immediately and a `BidMessageLogRecord` is written with `status=sent`. If the transmitter is backed up, the intake keeps only the current standing best bid by bid-price-per-byte, including the delimiter byte and the 4 CRC trailer bytes that will be added on the radio stream. New losing bids are logged as `rejected` immediately with the standing winning bid price; a new better bid replaces the standing bid and logs the displaced bid as rejected. When the transmitter ring clears, only the standing winner advances to the radio queue and is logged as sent. This keeps the auction buffer bounded to one waiting candidate instead of building message latency.
+For client intake, `BidMessageTransmitIntake` accepts already-encoded delimiter-prefixed byte strings plus a bid price. One auction winner remains replaceable until the framer claims it for serialization; that is when transmission is logged and a client fee is reserved. A newer unsent market value replaces an older value on the same key even when its bid is lower. Across keys, bid per actual wire byte wins, including the configured sequence field and CRC, with newest winning ties. Displaced and losing candidates are rejected. Old bids receive no age boost; strict cross-key priority can still starve lower bids. The auction holds at most one waiting candidate, and cannot retract bits already serialized.
 
 `Clients` is a compile-time constant currently set to `20`. Market-price symbols occupy `[2, 256 - Clients - 1]`; the top `Clients` symbols are per-client symbols. With `Clients=20`, client symbols are `236..255`, and a client id maps to `236 + client_id`.
 
@@ -98,7 +133,7 @@ For client intake, `BidMessageTransmitIntake` accepts already-encoded delimiter-
 
 ## Integer Messages
 
-`include/wbhf_modem/integer_codec.hpp` defines the current structured message body:
+`include/goblin_cannon/integer_codec.hpp` defines the current structured message body:
 
 ```text
 byte 0      bank delimiter: 0 or 1
@@ -110,7 +145,7 @@ The integer codec uses canonical little-endian base-254 digits offset by `2`, so
 
 ## Receiver Control
 
-`include/wbhf_modem/control_server.hpp` adds a thread-owning gRPC control server. The installed proto lives at `share/wbhf_modem/proto/wbhf_modem/control/v1/receiver_control.proto`.
+`include/goblin_cannon/control_server.hpp` adds a thread-owning gRPC control server. The installed proto lives at `share/goblin_cannon/proto/goblin_cannon/control/v1/receiver_control.proto`.
 
 The service accepts:
 
@@ -134,7 +169,7 @@ The transmitter drains its bounded log ring to a common JSONL file. Logged event
 
 `config/client_budgets.conf` maps `client_id` to beginning-of-day budgets in pennies/cents. On startup the transmitter loads that file, then replays the JSONL log when it already exists to reconstruct remaining budgets and outstanding bids. A client bid that exceeds its remaining budget is blocked, logged as `budget_exhausted`, and receives an insufficient-budget UDP status. Sent client messages decrement remaining budget and enter an outstanding map keyed by internal radio wire payload and send timestamp. Receiver-reported delivery messages remove the closest outstanding entry after subtracting configured client latency; entries older than one second are scanned every 100 ms, removed, refunded, and logged as `budget_refund`.
 
-`config/client_udp_ingress.conf` is an optional transmitter UDP ingress config. Pass `--client-udp-config config/client_udp_ingress.conf` to `wbhf_radio_sender` to bind the kernel UDP intake path.
+`config/client_udp_ingress.conf` is an optional transmitter UDP ingress config. Pass `--client-udp-config config/client_udp_ingress.conf` to `goblin_cannon_radio_sender` to bind the kernel UDP intake path.
 
 ## Demo Market Data
 
@@ -164,7 +199,7 @@ shadow = K * W[i] * (abs(log(P_now) - log(P_last_sent))
 For local hand testing, build the examples and start a loopback receiver/transmitter pair:
 
 ```sh
-cmake --build build --target wbhf_local_node
+cmake --build build --target goblin_cannon_local_node
 scripts/start_local_loopback.py
 ```
 
@@ -172,7 +207,7 @@ The loopback node exposes receiver gRPC on `127.0.0.1:50051`, transmitter gRPC o
 
 ## Quote UDP Output
 
-`include/wbhf_modem/quote_udp.hpp` provides `QuotePacketEmitter`, which can be attached to a receiver as a decoded-message observer. For each decoded integer message, it reads the message bank and symbol, looks up the current base price in `ReceiverControlState`, adds the zigzag-decoded delta, and emits a 9-byte packet:
+`include/goblin_cannon/quote_udp.hpp` provides `QuotePacketEmitter`, which can be attached to a receiver as a decoded-message observer. For each decoded integer message, it reads the message bank and symbol, looks up the current base price in `ReceiverControlState`, adds the zigzag-decoded delta, and emits a 9-byte packet:
 
 ```text
 byte 0      symbol byte from the radio message
@@ -216,7 +251,7 @@ rate 3/4, 1024QAM, 5 encoded bytes:  54 coded bits,  6 QAM symbols, 0.625 ms enc
 
 These numbers are two times coded airtime and exclude the first epoch's RF acquisition/training/header overhead. Periodic pilots add small steady-state overhead according to `pilot_interval_symbols`. Because the deframer must see the following delimiter before it emits a message, a 3-byte message is delivered after 4 encoded bytes, and a 4-byte message is delivered after 5 encoded bytes.
 
-For thread separation, `include/wbhf_modem/ring_buffer.hpp` provides `SpscRingBuffer<T>`. The primary real-time path is:
+For thread separation, `include/goblin_cannon/ring_buffer.hpp` provides `SpscRingBuffer<T>`. The primary real-time path is:
 
 ```text
 producer thread -> SpscRingBuffer<DelimitedMessage> -> RealtimeTransmitter -> RF device
@@ -240,7 +275,7 @@ For non-standard SDR links, set `symbol_rate_hz` explicitly.
 Use the raw IQ interfaces for files, device nodes, or pipes:
 
 ```cpp
-wbhf_modem::FileIqSink sink("/dev/audio", wbhf_modem::SampleFormat::s16_stereo_iq);
+goblin_cannon::FileIqSink sink("/dev/audio", goblin_cannon::SampleFormat::s16_stereo_iq);
 sink.write(samples);
 sink.flush();
 ```
@@ -250,28 +285,28 @@ For UHD, SoapySDR, GNU Radio, JACK, ALSA, or custom DMA paths, use `CallbackIqSi
 The example radio processes expose the same path-based IQ adapters:
 
 ```sh
-cmake --build build --target wbhf_radio_sender wbhf_radio_receiver
+cmake --build build --target goblin_cannon_radio_sender goblin_cannon_radio_receiver
 
-build/wbhf_radio_receiver \
+build/goblin_cannon_radio_receiver \
   --receiver 127.0.0.1:50051 \
   --iq-input /dev/audio \
   --quote-destination-ip 127.0.0.1 \
   --quote-destination-port 9001 \
   --sample-format s16_stereo_iq
 
-build/wbhf_radio_sender \
+build/goblin_cannon_radio_sender \
   --transmitter 127.0.0.1:50052 \
   --iq-output /dev/audio \
   --sample-format s16_stereo_iq
 ```
 
-For local FIFO testing, `scripts/start_pipe_radios.py` creates a named pipe, starts the sender and receiver, then calls `scripts/configure_local_radios.py` to push matching control state over gRPC. The default radio condition is 64QAM at 48 kHz sample rate, 48 kHz configured bandwidth, an explicit 24 ksym/s symbol rate to keep the modem at 2 samples/symbol, and 8x receiver oversampling as a CPU/headroom stress setting. By default the configurator updates the AES key on both processes, sets receiver permissions to market symbols plus `client_id`, seeds bank `0` on the sender, lets the receiver learn the bank over `ReceiverSession`, sets the sender to use bank `0`, and sends matching restart parameters. After configuration, the launcher starts `scripts/stream_massive_quotes.py 0` so Massive websocket midpoints are encoded into `/dev/shm/wbhf_market_data_ring` and consumed by the transmitter:
+For local FIFO testing, `scripts/start_pipe_radios.py` creates a named pipe, starts the sender and receiver, then calls `scripts/configure_local_radios.py` to push matching control state over gRPC. The default radio condition is 64QAM at 48 kHz sample rate, 48 kHz configured bandwidth, an explicit 24 ksym/s symbol rate to keep the modem at 2 samples/symbol, and 8x receiver oversampling as a CPU/headroom stress setting. By default the configurator updates the AES key on both processes, sets receiver permissions to market symbols plus `client_id`, seeds bank `0` on the sender, lets the receiver learn the bank over `ReceiverSession`, sets the sender to use bank `0`, and sends matching restart parameters. After configuration, the launcher starts `scripts/stream_massive_quotes.py 0` so Massive websocket midpoints are encoded into `/dev/shm/goblin_cannon_market_data_ring` and consumed by the transmitter:
 
 ```sh
 scripts/start_pipe_radios.py --quote-destination-port 9001 --enqueue-test-message
 ```
 
-The default FIFO is `/tmp/wbhf_iq.pipe`, the default quote UDP target is `127.0.0.1:9001`, the default market shared-memory ring is `/dev/shm/wbhf_market_data_ring` with 256 burst-handoff slots, and the default sample format is interleaved little-endian signed 16-bit IQ (`sc16_iq`). The FIFO launcher uses direct POSIX file-descriptor I/O, 64-sample chunks, a 4096-byte pipe-capacity request, and sender pacing at the configured 48 kHz sample rate so the pipe cannot hide seconds of stale simulated IQ. Set `MASSIVE_KEY` before running the full demo, or pass `--no-market-stream` to run only the pipe radios. The sender drains its bounded JSONL log ring to `/tmp/wbhf_transmitter.log` by default and reads client latency and budget expectations from `config/client_latencies.conf` and `config/client_budgets.conf`.
+The default FIFO is `/tmp/goblin_cannon_iq.pipe`, the default quote UDP target is `127.0.0.1:9001`, the default market shared-memory ring is `/dev/shm/goblin_cannon_market_data_ring` with 256 burst-handoff slots, and the default sample format is interleaved little-endian signed 16-bit IQ (`sc16_iq`). The FIFO launcher uses direct POSIX file-descriptor I/O, 64-sample chunks, a 4096-byte pipe-capacity request, and sender pacing at the configured 48 kHz sample rate so the pipe cannot hide seconds of stale simulated IQ. Set `MASSIVE_KEY` before running the full demo, or pass `--no-market-stream` to run only the pipe radios. The sender drains its bounded JSONL log ring to `/tmp/goblin_cannon_transmitter.log` by default and reads client latency and budget expectations from `config/client_latencies.conf` and `config/client_budgets.conf`.
 
 For an end-to-end software stack latency measurement, run:
 
@@ -291,4 +326,4 @@ That benchmark connects the FIFO sender/receiver pair, starts Massive websocket 
 
 ## Scope
 
-This is a baseband modem and framed stream layer. It assumes the receiver is configured with the same protocol parameters and currently expects sample-clock/symbol timing to be close enough for the preamble to absorb startup transients. Production HF links still need channel-specific synchronization, frequency tracking, equalization, and interleaving around this core.
+This is a baseband modem and framed stream layer with carrier correction and adaptive equalization. It assumes matching protocol parameters and sample-clock/symbol timing close enough for acquisition; it does not yet track sample-clock drift. The causal equalizer covers the configured delay span and has finite convergence and tracking limits. The channel regression tests establish specific operating points; polar-link availability still needs measured channels and longer propagation tests. Interleaving and retransmission are not part of the low-latency RF path.

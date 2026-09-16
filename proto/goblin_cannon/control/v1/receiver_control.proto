@@ -1,0 +1,187 @@
+syntax = "proto3";
+
+package goblin_cannon.control.v1;
+
+service ReceiverControl {
+  rpc UpdateEncryptionKey(EncryptionKeyUpdate) returns (ControlAck);
+  rpc Restart(RestartRequest) returns (ControlAck);
+  rpc UpdateBank(BankUpdate) returns (ControlAck);
+  rpc GetBank(BankSelect) returns (BankSnapshot);
+  rpc Permissions(PermissionsUpdate) returns (ControlAck);
+}
+
+service TransmitterControl {
+  rpc UpdateEncryptionKey(EncryptionKeyUpdate) returns (ControlAck);
+  rpc Restart(RestartRequest) returns (ControlAck);
+  rpc UpdateBank(BankUpdate) returns (ControlAck);
+  rpc GetBank(BankSelect) returns (BankSnapshot);
+  rpc UseBank(UseBankRequest) returns (ControlAck);
+  rpc EnqueueMessage(TransmitMessage) returns (ControlAck);
+  rpc BankSwitch(BankSwitchRequest) returns (ControlAck);
+  rpc ReceiverSession(stream ReceiverSessionClientMessage) returns (stream ReceiverSessionServerMessage);
+}
+
+message ControlAck {
+  bool ok = 1;
+  string message = 2;
+  uint64 generation = 3;
+}
+
+message EncryptionKeyUpdate {
+  bytes aes128_key = 1;
+}
+
+enum Modulation {
+  MODULATION_UNSPECIFIED = 0;
+  MODULATION_QPSK = 1;
+  MODULATION_8PSK = 2;
+  MODULATION_16QAM = 3;
+  MODULATION_64QAM = 4;
+  MODULATION_256QAM = 5;
+  MODULATION_1024QAM = 6;
+  MODULATION_16QCI = 7;
+  MODULATION_64QCI = 8;
+  MODULATION_256QCI = 9;
+  MODULATION_1024QCI = 10;
+}
+
+message ConvolutionalFecConfig {
+  uint32 constraint_length = 1;
+  uint32 generator0 = 2;
+  uint32 generator1 = 3;
+  repeated uint32 puncture_pattern = 4;
+  float decoded_bit_confidence_threshold = 5;
+}
+
+message RestartRequest {
+  uint64 expected_schedule_epoch = 1;
+  Modulation modulation = 2;
+  double bandwidth_hz = 3;
+  double center_frequency_hz = 4;
+  double sample_rate_hz = 5;
+  uint32 receiver_oversampling = 6;
+  uint32 symbols_per_frame = 7;
+  uint32 pilot_interval_symbols = 8;
+  uint32 header_repetition = 9;
+  repeated uint32 acquisition_sequence = 10;
+  repeated uint32 equalizer_training_sequence = 11;
+  repeated uint32 pilot_sequence = 12;
+  ConvolutionalFecConfig fec = 13;
+  bool sync_timestamp_enabled = 14;
+  double sync_timestamp_max_skew_seconds = 15;
+  float acquisition_confidence_threshold = 16;
+  float pilot_confidence_threshold = 17;
+  float symbol_confidence_threshold = 18;
+  uint64 frame_counter_start = 19;
+  double rrc_rolloff = 20;
+  uint32 filter_span_symbols = 21;
+  double symbol_rate_hz = 22;
+  // Presence preserves receiver defaults for existing control clients.
+  // Tap counts must match at both ends: they determine startup pilot length.
+  optional bool carrier_correction = 23;
+  optional bool adaptive_equalization = 24;
+  optional uint32 equalizer_feedforward_taps = 25;
+  optional uint32 equalizer_feedback_taps = 26;
+  // Receiver audio-clock recovery; independent of carrier correction.
+  optional bool sample_clock_recovery = 27;
+  // Must match both ends; five base-254 sequence bytes per message, CRC covered.
+  optional bool message_sequence_numbers = 28;
+  optional bool recursive_equalization = 29;
+  optional uint32 equalizer_delay_symbols = 30;
+}
+
+message BankUpdate {
+  uint32 bank = 1;
+  // Exactly 254 - Clients entries. With Clients=20 this is 234 market symbols;
+  // the top Clients symbols are reserved for per-client messages. Each entry is
+  // an integer number of the configured instrument minimum price increment.
+  repeated uint64 prices_units = 2;
+  // Optional on unary UpdateBank requests. ReceiverSession bank-cache messages
+  // set this to the transmitter bank generation so repeated cache delivery does
+  // not masquerade as a fresh bank switch.
+  uint64 generation = 3;
+}
+
+message BankSelect {
+  uint32 bank = 1;
+}
+
+message BankSnapshot {
+  uint32 bank = 1;
+  repeated uint64 prices_units = 2;
+  uint64 generation = 3;
+}
+
+message PermissionsUpdate {
+  // Exactly 32 bytes carrying 254 permission bits. Bit index 0 maps to symbol
+  // byte 2, bit index 253 maps to symbol byte 255. Bits 254 and 255 in the
+  // final byte are ignored.
+  bytes allowed_symbol_mask = 1;
+}
+
+message UseBankRequest {
+  uint32 bank = 1;
+}
+
+message BankSwitchRequest {}
+
+message TransmitMessage {
+  // Delimiter-prefixed radio message. Byte 0 is bank delimiter 0 or 1;
+  // remaining bytes must be in [2,255].
+  bytes payload = 1;
+  // Bid/shadow-bid in cents. Market-data producers may leave this unset; the
+  // transmitter logs those as the default market-data shadow bid.
+  uint64 bid_cents = 2;
+}
+
+message Heartbeat {
+  uint64 unix_micros = 1;
+}
+
+message ReceiverHello {
+  // Valid range is [0, Clients). With Clients=20 this is [0,19].
+  uint32 client_id = 1;
+}
+
+message ReceiverSessionClientMessage {
+  oneof payload {
+    ReceiverHello hello = 1;
+    Heartbeat heartbeat = 2;
+    ReceivedClientMessage client_message = 3;
+    ReceiverSignalEvent signal_event = 4;
+  }
+}
+
+message ReceiverSessionServerMessage {
+  oneof payload {
+    Heartbeat heartbeat = 1;
+    BankUpdate bank_update = 2;
+    UseBankRequest active_bank = 3;
+    CanonicalMessageBatch canonical_messages = 4;
+  }
+}
+
+message CanonicalMessageBatch {
+  // Monotonic transmitter-side sequence number for payload[0]. The payloads
+  // are the delimiter-prefixed message bytes before the radio CRC trailer is
+  // added by MessageStreamFramer.
+  uint64 first_sequence = 1;
+  uint64 transmitter_unix_nanos = 2;
+  repeated bytes payload = 3;
+}
+
+message ReceivedClientMessage {
+  uint64 receiver_unix_nanos = 1;
+  uint32 client_id = 2;
+  // Full radio wireframe message: delimiter, client symbol byte, then the
+  // client-supplied body bytes.
+  bytes wire_payload = 3;
+}
+
+message ReceiverSignalEvent {
+  uint64 receiver_unix_nanos = 1;
+  string event_type = 2;
+  string detail = 3;
+  double metric = 4;
+  uint64 count = 5;
+}

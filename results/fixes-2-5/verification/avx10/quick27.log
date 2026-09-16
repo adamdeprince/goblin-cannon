@@ -1,0 +1,6 @@
+simulated channel: 117 cases, tier=quick, jobs=4
+simulated channel: 50/117 B3_24000_64qam_0.5ms characterized
+simulated channel: 66/117 C2_24000_acquire_3dB fail
+simulated channel: 100/117 C4_24000_16qam_random THRESHOLD_TBD
+simulated channel: 117/117 C2_noise_10min pass
+simulated channel: 9.977s {'characterized': 54, 'THRESHOLD_TBD': 45, 'xfail': 2, 'pass': 12, 'fail': 1, 'unavailable': 3}; results-quick27/SUMMARY.md

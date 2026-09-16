@@ -3,7 +3,7 @@
 #include <atomic>
 #include <limits>
 
-namespace wbhf_modem::detail {
+namespace goblin_cannon::detail {
 
 namespace {
 
@@ -104,4 +104,4 @@ NearestSymbolDecision nearest_symbol_decision_scalar(float sample_i,
   return {.symbol = best_symbol, .nearest_distance = best, .next_distance = second};
 }
 
-} // namespace wbhf_modem::detail
+} // namespace goblin_cannon::detail

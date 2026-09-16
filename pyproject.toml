@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wbhf-radio-tools-private"
+name = "goblin_cannon"
 version = "0.0.0"
-description = "Private Python tooling for local WBHF radio control and market-data demos."
+description = "Private Python tooling for Goblin Cannon radio control and market-data demos."
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [
@@ -22,7 +22,7 @@ dependencies = [
 [tool.setuptools]
 py-modules = []
 
-[tool.wbhf-radio-tools]
+[tool.goblin_cannon]
 private = true
 publish = false
 pypi_upload_guard = "The invalid Trove classifier 'Private :: Do Not Upload' is intentional."

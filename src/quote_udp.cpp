@@ -1,7 +1,7 @@
-#include "wbhf_modem/quote_udp.hpp"
+#include "goblin_cannon/quote_udp.hpp"
 
-#include "wbhf_modem/integer_codec.hpp"
-#include "wbhf_modem/symbols.hpp"
+#include "goblin_cannon/integer_codec.hpp"
+#include "goblin_cannon/symbols.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -17,7 +17,7 @@
 #include <stdexcept>
 #include <string_view>
 
-namespace wbhf_modem {
+namespace goblin_cannon {
 
 namespace {
 
@@ -186,14 +186,14 @@ void KernelUdpQuotePacketSink::send_packet(std::span<const std::uint8_t> payload
 DpdkQuotePacketSink::DpdkQuotePacketSink(const QuoteUdpSinkConfig& config)
     : config_(config) {
   validate_quote_config(config_);
-#ifndef WBHF_MODEM_HAS_DPDK
-  throw std::runtime_error("DPDK quote UDP backend requested, but wbhf_modem was built without DPDK support");
+#ifndef GOBLIN_CANNON_HAS_DPDK
+  throw std::runtime_error("DPDK quote UDP backend requested, but goblin_cannon was built without DPDK support");
 #endif
 }
 
 void DpdkQuotePacketSink::send_packet(std::span<const std::uint8_t>) {
-#ifndef WBHF_MODEM_HAS_DPDK
-  throw std::runtime_error("DPDK quote UDP backend requested, but wbhf_modem was built without DPDK support");
+#ifndef GOBLIN_CANNON_HAS_DPDK
+  throw std::runtime_error("DPDK quote UDP backend requested, but goblin_cannon was built without DPDK support");
 #endif
 }
 
@@ -325,4 +325,4 @@ BadMessageUdpPayload make_bad_message_udp_payload(std::uint8_t bank,
   return payload;
 }
 
-} // namespace wbhf_modem
+} // namespace goblin_cannon

@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace wbhf_modem::detail {
+namespace goblin_cannon::detail {
 
 std::size_t nearest_symbol_avx512(float sample_i,
                                   float sample_q,
@@ -146,4 +146,4 @@ float dot_product_avx512(std::span<const Complex> samples,
   return out_i + out_q;
 }
 
-} // namespace wbhf_modem::detail
+} // namespace goblin_cannon::detail

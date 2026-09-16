@@ -1,0 +1,38 @@
+{
+  "budget_seconds": 1800,
+  "complete_tier": false,
+  "elapsed_seconds": 7.697257869876921,
+  "executed_cases": 8,
+  "git_commit": "adb3e6d72fac540712255792a1836df655ca4f4f",
+  "host": "Linux-7.0.0-1008-aws-x86_64-with-glibc2.43",
+  "jobs": 4,
+  "parameter_records": [
+    "A8_cochannel_10dB/7446529.json",
+    "A8_cochannel_0dB/7446529.json",
+    "A8_cochannel_-10dB/7446529.json",
+    "A9_dropout_2s/7446529.json",
+    "A9_dropout_30s/7446529.json",
+    "A9_dropout_300s/7446529.json",
+    "D6_crypto_errors_replay_restart/7446529.json",
+    "D6_key_rotation/7446529.json"
+  ],
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "report_header": "simulated channel non-canonical execution observations",
+  "selected_cases": 8,
+  "selection": {
+    "cases": [],
+    "groups": [
+      "A8",
+      "A9",
+      "D6"
+    ],
+    "resume": false,
+    "seed": null
+  },
+  "source_tree_sha256": "689cffeeb591c847be935c9f97ca257257f6d9ea4da708a24650a17d2a80277a",
+  "statuses": {
+    "fail": 1,
+    "xfail": 7
+  },
+  "tier": "full"
+}

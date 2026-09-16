@@ -1,0 +1,94 @@
+{
+  "baseline_note": "New strict regressions compiled against the receiver before the production fix; both failed.",
+  "baseline_source_tree_sha256": "0b0a24ed5f0b311b6d2093c39490488a379c6b06b4152d1657b7ab6fa5fbf4b8",
+  "checks": {
+    "affected_full_cases": 8,
+    "avx10_ctest": "13/13 passed",
+    "baseline_regressions": "2/2 failed before fix",
+    "naamah_b5_cases": 6,
+    "naamah_ctest": "13/13 passed",
+    "quick_cases": 243
+  },
+  "expectations": {
+    "new_failures_recorded": 1,
+    "reasons_updated": 32,
+    "removed": 33,
+    "review": "EXPECTED_FAILURE_REVIEW.json"
+  },
+  "git_commit": "adb3e6d72fac540712255792a1836df655ca4f4f",
+  "limitations": [
+    "Quick tier still exceeds 120 seconds (206.333 seconds).",
+    "Full characterization curves and soak were not rerun; original results retain their original source hashes.",
+    "One quiet-host B5 follow-up, with startup included; latency threshold remains unmet."
+  ],
+  "production_change": "Decoder::can_decode_next_symbol uses floor for the inclusive matched-filter support boundary instead of ceil.",
+  "regression_parameters": {
+    "channel_model": "null",
+    "clean_profiles": {
+      "acquisition_seed": 2779054081,
+      "acquisition_symbols": 64,
+      "adaptive_equalization": true,
+      "bandwidth_hz": [
+        24000,
+        10000
+      ],
+      "carrier_correction": false,
+      "chunk_samples": [
+        1,
+        48,
+        157,
+        512
+      ],
+      "expected_schedule_epoch": 1161981756646125696,
+      "feedback_taps": 4,
+      "feedforward_taps": 3,
+      "frame_counter_start": 7000,
+      "frame_symbols": 64,
+      "header_repetition": 3,
+      "leading_silence_samples": 17,
+      "modulation": [
+        "qpsk",
+        "16qam",
+        "64qam"
+      ],
+      "payload_symbols": 1024,
+      "pilot_interval_symbols": 32,
+      "symbol_rate_hz": [
+        19200,
+        8000
+      ],
+      "training_seed": 1515847682,
+      "training_symbols": 64
+    },
+    "delay_spread_ms": 0,
+    "doppler_spread_hz": 0,
+    "fec": "none",
+    "filter_span_symbols": 8,
+    "interferers": "disabled",
+    "interleaver": "none",
+    "kind": "assert",
+    "rrc_rolloff": 0.25,
+    "sample_rate_hz": 48000,
+    "sample_support": {
+      "final_sample_withheld_then_supplied": true,
+      "modulation": "qpsk",
+      "samples_per_symbol": [
+        2,
+        2.5,
+        3.125,
+        5,
+        6
+      ],
+      "symbol_counts": [
+        32,
+        33
+      ]
+    },
+    "seed": 3222383390,
+    "snr_db": null,
+    "tier": "quick",
+    "tx_gain": 0.65
+  },
+  "report_header": "simulated channel 24 kHz header fix validation",
+  "source_tree_sha256": "689cffeeb591c847be935c9f97ca257257f6d9ea4da708a24650a17d2a80277a"
+}

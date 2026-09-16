@@ -1,0 +1,3 @@
+simulated channel: 44 cases, tier=full, jobs=4
+simulated channel: 44/44 D2_survival_0.3 characterized
+simulated channel: 90.533s {'THRESHOLD_TBD': 3, 'xfail': 8, 'characterized': 30, 'pending_analysis': 3}; results-full27/SUMMARY.md

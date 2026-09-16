@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <span>
 
-namespace wbhf_modem::detail {
+namespace goblin_cannon::detail {
 
 using Complex = std::complex<float>;
 
@@ -73,4 +73,4 @@ float dot_product_avx512(std::span<const Complex> samples,
                          std::span<const float> taps,
                          std::size_t sample_offset) noexcept;
 
-} // namespace wbhf_modem::detail
+} // namespace goblin_cannon::detail

@@ -138,9 +138,9 @@ def read_market_shm_stats(path: Path) -> dict[str, int]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Measure market-data shadow-bid rejection rate with Massive flow.")
     parser.add_argument("--build-dir", type=Path, default=REPO_ROOT / "build")
-    parser.add_argument("--fifo", type=Path, default=Path("/tmp/wbhf_market_bid_bench_iq.pipe"))
-    parser.add_argument("--log-file", type=Path, default=Path("/tmp/wbhf_market_bid_bench.jsonl"))
-    parser.add_argument("--market-shm-path", type=Path, default=Path(f"/dev/shm/wbhf_market_bid_bench_{os.getpid()}.ring"))
+    parser.add_argument("--fifo", type=Path, default=Path("/tmp/goblin_cannon_market_bid_bench_iq.pipe"))
+    parser.add_argument("--log-file", type=Path, default=Path("/tmp/goblin_cannon_market_bid_bench.jsonl"))
+    parser.add_argument("--market-shm-path", type=Path, default=Path(f"/dev/shm/goblin_cannon_market_bid_bench_{os.getpid()}.ring"))
     parser.add_argument("--receiver", default="127.0.0.1:54051")
     parser.add_argument("--transmitter", default="127.0.0.1:54052")
     parser.add_argument("--quote-destination-port", type=int, default=9401)

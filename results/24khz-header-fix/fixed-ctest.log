@@ -1,0 +1,39 @@
+Test project /tmp/goblin-cannon-header-fix.LMJ2ay/build
+      Start 11: goblin_cannon_channel_sample_support
+      Start 12: goblin_cannon_channel_profiles
+      Start  1: goblin_cannon_tests
+      Start  2: goblin_cannon_channel_acquisition
+ 1/13 Test #11: goblin_cannon_channel_sample_support ......   Passed    0.01 sec
+      Start  3: goblin_cannon_channel_noise
+ 2/13 Test  #2: goblin_cannon_channel_acquisition .........   Passed    0.01 sec
+      Start  4: goblin_cannon_channel_phase
+ 3/13 Test #12: goblin_cannon_channel_profiles ............   Passed    0.04 sec
+      Start  5: goblin_cannon_channel_fading
+ 4/13 Test  #5: goblin_cannon_channel_fading ..............   Passed    0.05 sec
+      Start  6: goblin_cannon_channel_combined
+ 5/13 Test  #3: goblin_cannon_channel_noise ...............   Passed    0.11 sec
+      Start  7: goblin_cannon_channel_recovery
+ 6/13 Test  #6: goblin_cannon_channel_combined ............   Passed    0.06 sec
+      Start  8: goblin_cannon_channel_equalization
+ 7/13 Test  #7: goblin_cannon_channel_recovery ............   Passed    0.09 sec
+      Start  9: goblin_cannon_channel_streaming
+ 8/13 Test  #9: goblin_cannon_channel_streaming ...........   Passed    0.04 sec
+      Start 10: goblin_cannon_channel_config
+ 9/13 Test #10: goblin_cannon_channel_config ..............   Passed    0.01 sec
+      Start 13: goblin_cannon_simulated_channel_harness
+10/13 Test  #4: goblin_cannon_channel_phase ...............   Passed    0.31 sec
+11/13 Test  #8: goblin_cannon_channel_equalization ........   Passed    0.38 sec
+12/13 Test #13: goblin_cannon_simulated_channel_harness ...   Passed    0.63 sec
+13/13 Test  #1: goblin_cannon_tests .......................   Passed    6.41 sec
+
+100% tests passed, 0 tests failed out of 13
+
+Label Time Summary:
+E1                   =   0.63 sec*proc (1 test)
+assert               =   8.15 sec*proc (13 tests)
+channel              =   1.11 sec*proc (11 tests)
+legacy               =   7.47 sec*proc (10 tests)
+quick                =   8.15 sec*proc (13 tests)
+simulated_channel    =   0.68 sec*proc (3 tests)
+
+Total Test time (real) =   6.41 sec
