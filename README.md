@@ -15,6 +15,8 @@ remaining defects, and [TESTING.md](TESTING.md) for reproduction commands.
 The 2.1 ms limit applies to added processing and buffering; transmission and
 modem/FEC delays are reported separately. Acceptance tests run with carrier
 correction off. These results use simulated channels, with no radio hardware.
+See the [HTML deployment guide](html/README.md#production-deployment) for the
+production URL and rsync target.
 
 ## Build
 

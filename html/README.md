@@ -30,3 +30,26 @@ Edit presentation in `evidence.css` and `rf-explorer.js`; edit generated copy in
 frame goodput distinct from application goodput, and added processing latency
 distinct from total latency. Do not describe these measurements as a radio
 deployment or a validated route latency.
+
+## Production deployment
+
+Production URL: <https://cannon.goblinreactor.com/>.
+The rsync destination is `hail::distribution/cannon.goblinreactor.com/`.
+
+From the repository root, check the generated report, commit and push the
+changes, then upload the assets before the page that references them:
+
+```sh
+python3 scripts/update_html_results.py --check
+
+rsync --archive --checksum --itemize-changes \
+  html/evidence.css html/rf-explorer.js html/simulated-channel.js html/goblin.png \
+  hail::distribution/cannon.goblinreactor.com/
+
+rsync --archive --checksum --itemize-changes \
+  html/index.html hail::distribution/cannon.goblinreactor.com/
+```
+
+Add `--dry-run` to preview either transfer. Passing explicit files preserves the
+destination directory's permissions. After publishing, verify the public page
+and its assets and exercise the RF explorer.
