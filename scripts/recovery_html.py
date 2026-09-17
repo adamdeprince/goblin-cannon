@@ -14,6 +14,11 @@ def build(root, start, end, *, allow_incomplete=False):
     url=lambda path:base+str(path.relative_to(root))
     link=lambda path,label:f'<a href="{escape(url(path))}">{escape(label)}</a>'
     number=lambda value:"Unobserved" if value is None else f"{value:,.3f}"
+    def spread(values,scale=1,suffix=""):
+        finite=[v*scale for v in values if v is not None]
+        if not finite:return "Unobserved"
+        observed=f" ({len(finite)}/{len(values)} runs observed)" if len(finite)!=len(values) else ""
+        return f"{min(finite):,.2f}–{max(finite):,.2f}{suffix}{observed}"
     modes={"qpsk":"QPSK / 4-QAM","16qam":"16-QAM","64qam":"64-QAM"}
     variants={"legacy":"Legacy startup","compact":"Protected compact header","recovery":"Recurring markers",
               "reselect":"Markers + tap reselection","fractional":"Markers + reselection + T/2"}
@@ -31,7 +36,7 @@ def build(root, start, end, *, allow_incomplete=False):
     if count!=manifest["main_cases"] or dict(statuses)!=manifest["main_statuses"]:
         raise ValueError("Recorded case counts differ from validation manifest")
     seed=manifest["seeds"][0]
-    polar=[];messages=[];long_rows=[];screen_rows=[]
+    polar=[];messages=[];long_rows=[];screen_rows=[];comparison_rows=[];comparisons={}
     for bw in (10000,24000):
         for mode,label in modes.items():
             screen_cells=[]
@@ -45,6 +50,23 @@ def build(root, start, end, *, allow_incomplete=False):
                             observations=observations,metrics=record["metrics"],source=url(path)))
                         if group=="E2" and variant=="fractional":
                             screen_cells.append(f'<td>{link(path,number(record["metrics"]["goodput_bps"]))}</td>')
+                before=[kept[f"E2_recovery_{bw}_{mode}_high_lat_{preset}_legacy",s] for s in manifest["seeds"]]
+                after=[kept[f"E2_recovery_{bw}_{mode}_high_lat_{preset}_fractional",s] for s in manifest["seeds"]]
+                matched_fields=("bandwidth_hz","modulation","fec","duration_s","seed","delay_spread_ms",
+                    "doppler_spread_hz","path_gains_db","snr_db","equalizer_feedforward_taps",
+                    "equalizer_feedback_taps","equalizer_delay_symbols","training_symbols",
+                    "source_load_factor","message_interval_s","chunk_samples")
+                for (_,old),(_,new) in zip(before,after):
+                    if any(old["parameters"][k]!=new["parameters"][k] for k in matched_fields):
+                        raise ValueError("Polar before/after channel or stream parameters differ")
+                old_rates=[r["metrics"]["goodput_bps"] for _,r in before]
+                new_rates=[r["metrics"]["goodput_bps"] for _,r in after]
+                comparisons[bw,mode,preset]=(old_rates,new_rates)
+                improved=sum(new>old for old,new in zip(old_rates,new_rates))
+                sources="<br>".join(title+": "+" / ".join(link(p,str(r["seed"])) for p,r in records)
+                                      for title,records in (("Before",before),("Updated",after)))
+                comparison_rows.append(f'<tr><th scope="row">{bw//1000} kHz · {label}<br>{preset}</th>'
+                    f'<td>{spread(old_rates)}</td><td>{spread(new_rates)}</td><td>{improved} / {len(after)}</td><td>{sources}</td></tr>')
                 repetitions=[kept.get((f"E2_polar_long_{bw}_{mode}_high_lat_{preset}",s)) for s in manifest["seeds"]]
                 if any(r is None for r in repetitions):
                     if not allow_incomplete:raise ValueError("Missing long-run replicate")
@@ -56,11 +78,6 @@ def build(root, start, end, *, allow_incomplete=False):
                 freshness=[r["metrics"]["freshness_ms"]["p99_9"] for _,r in repetitions]
                 durations={r["parameters"]["duration_s"] for _,r in repetitions}
                 if len(durations)!=1:raise ValueError("Long-run durations differ across seeds")
-                def spread(values,scale=1,suffix=""):
-                    finite=[v*scale for v in values if v is not None]
-                    if not finite:return "Unobserved"
-                    observed=f" ({len(finite)}/{len(values)} runs observed)" if len(finite)!=len(values) else ""
-                    return f"{min(finite):,.2f}–{max(finite):,.2f}{suffix}{observed}"
                 sources=" / ".join(link(p,str(r["seed"])) for p,r in repetitions)
                 long_rows.append(f'<tr><th scope="row">{bw//1000} kHz · {label}<br>{preset}</th><td>{next(iter(durations)):,} s</td>'
                     f'<td>{spread(values)}</td><td>{spread(survival,100,"%")}</td><td>{spread(freshness,1," ms")}</td><td>{spread(silences,.001," s")}</td><td>{sources}</td></tr>')
@@ -120,6 +137,13 @@ def build(root, start, end, *, allow_incomplete=False):
     quiet_note="Quiet-host validation is pending." if manifest.get("quiet_latency_status")!="complete" else "Quiet-host validation completed."
     if latency_directory!=directory:
         quiet_note+=f' {escape(latency_manifest["runtime_isa"])}; 12 configurations run serially from commit <code>{latency_manifest["git_commit"][:12]}</code>. '+link(latency_directory/"COMPARISON.md","Quiet-host results and AVX-512 comparison")+"."
+    moderate_before,moderate_after=comparisons[24000,"qpsk","moderate"]
+    long_moderate=[kept.get(("E2_polar_long_24000_qpsk_high_lat_moderate",s)) for s in manifest["seeds"]]
+    long_disturbed=[kept.get(("E2_polar_long_24000_qpsk_high_lat_disturbed",s)) for s in manifest["seeds"]]
+    moderate_rates=spread([r["metrics"]["goodput_bps"] for _,r in long_moderate]) if all(long_moderate) else "Pending"
+    moderate_delivery=spread([r["metrics"]["message_delivery_fraction_of_framed"] for _,r in long_moderate],100,"%") if all(long_moderate) else "Pending"
+    disturbed_rates=spread([r["metrics"]["goodput_bps"] for _,r in long_disturbed]) if all(long_disturbed) else "Pending"
+    disturbed_silence=number(max(r["metrics"]["delivery_silence_ms"]["max"] for _,r in long_disturbed)/1000) if all(long_disturbed) else "Pending"
     section=f'''{start}
     <section class="evidence-section" id="benchmarks"><div class="section-inner">
       <header class="evidence-head"><p class="section-label">Recovery campaign · recorded evidence</p>
@@ -135,8 +159,20 @@ def build(root, start, end, *, allow_incomplete=False):
       <tbody>{''.join(latency_rows)}</tbody></table></div><p class="evidence-provenance">{provenance}</p>
     </div></section>
     <section class="evidence-section polar-section" id="rf-simulation"><div class="section-inner">
-      <header class="evidence-head"><p class="section-label">A2 / E2 · characterize / full</p><h2 class="section-title">Simulated channel.<br>Messages through the fade.</h2>
-        <p class="section-intro">Compare each receiver change on the same seeded channel. The short screens expose the trade between recovery and airtime; the longer runs below show variability across three independent fading realizations. These measurements do not establish availability for the route near 71°N.</p></header>
+      <header class="evidence-head"><p class="section-label">A2 / E2 · characterize / full</p><h2 class="section-title">Simulated channel.<br>Progress on the polar plan.</h2>
+        <p class="section-intro">The high-latitude campaign for the route peaking near 71°N is complete: {manifest['campaign_counts']['polar_screen']} comparison cases and {manifest['campaign_counts']['polar_long']} longer runs on <code>avx10</code>, across three independent seeds. Quiet/moderate/disturbed runs last 6000/300/100 simulated seconds per seed. The later <code>naamah</code> rerun measures software latency.</p></header>
+      <div class="evidence-columns" id="polar-findings"><div class="evidence-method">
+        <h3>Simulated channel · recovery improves delivery</h3>
+        <p>At 24 kHz with QPSK under moderate fading, useful delivery rises from <strong>{spread(moderate_before)} to {spread(moderate_after)} bit/s</strong> in the matched ten-second screens. All three seeds improve. The longer updated runs deliver <strong>{moderate_rates} bit/s</strong>, with <strong>{moderate_delivery}</strong> of framed messages surviving.</p>
+        <p>Recovery markers cost airtime. Some quiet-channel QPSK seeds deliver less useful data with the updated profile. The before/after table retains every configuration, including unchanged zero-delivery cases.</p>
+      </div><div class="evidence-method evidence-findings">
+        <h3>Simulated channel · disturbed conditions remain poor</h3>
+        <p>The longer disturbed traces deliver only <strong>{disturbed_rates} bit/s</strong> with 24 kHz QPSK, and silence reaches <strong>{disturbed_silence} seconds</strong>. All tested 10 kHz constellations deliver zero useful messages in those disturbed traces.</p>
+        <p>The route latitude selects high-latitude fading presets at a fixed nominal SNR. These runs do not predict which preset or SNR the actual route will experience, or establish route availability. The separate geometric propagation estimate remains unchanged.</p>
+      </div></div>
+      <h3>Simulated channel · before and after, every polar configuration</h3>
+      <p class="evidence-provenance">Useful application bits/s after FEC and framing. Each range spans the same three seeds, ten seconds per run, at 30 dB nominal SNR. Both profiles use the same delay-spanning equalizer geometry. Updated includes the compact protected header, recurring markers, tap reselection and T/2 input. Improved seeds count paired increases in useful bits/s; these characterizations have no acceptance threshold.</p>
+      <div class="table-scroll" role="region" aria-label="Simulated channel polar before and after" tabindex="0"><table class="evidence-table"><caption>Simulated channel · legacy startup versus complete recovery profile</caption><thead><tr><th>Configuration / preset</th><th>Before bit/s</th><th>Updated bit/s</th><th>Improved seeds</th><th>Seed records</th></tr></thead><tbody>{''.join(comparison_rows)}</tbody></table></div>
       <div class="model-assumptions"><span>Two Rayleigh paths</span><span>Gaussian Doppler spectrum</span><span>30 dB nominal SNR</span><span>Carrier correction off</span></div>
       <div id="rf-explorer" class="rf-explorer" hidden><div class="rf-controls">
         <label for="rf-bandwidth">Bandwidth<select id="rf-bandwidth"><option value="24000">24 kHz</option><option value="10000">10 kHz</option></select></label>

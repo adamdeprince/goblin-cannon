@@ -34,6 +34,12 @@ links all three seeds for each of 18 configurations. Result links point to the o
 the tested source snapshot's hash. Host timing is separate from deterministic
 sample-clock metrics.
 
+The polar before/after table compares all 18 configurations across the same
+three seeds, links all 108 baseline/updated records, and counts paired goodput
+increases. Its ten-second screens remain separate from the longer updated-profile
+runs. The route geometry, fixed-SNR fading simulation and measured software
+latency each state their scope; none establishes actual route availability.
+
 Edit presentation in `evidence.css` and `rf-explorer.js`; edit generated copy in
 `scripts/recovery_html.py` (called by `scripts/update_html_results.py`). The
 exporter requires a completed campaign manifest; incomplete runs cannot replace
