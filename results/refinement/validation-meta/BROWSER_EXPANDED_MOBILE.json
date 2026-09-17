@@ -1,0 +1,9 @@
+{
+  "report_header": "simulated channel expanded mobile HTML verification",
+  "status": "pass",
+  "url": "file:///Users/adam/dev/goblin-cannon/html/index.html",
+  "viewport": 390,
+  "document_width": 390,
+  "expanded_details": 2,
+  "source_tree_sha256": "1279f74e940aad991bf328e3b7cd796ea496b24bd9e05c78e3a6c6a8cec322e8"
+}

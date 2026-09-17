@@ -33,6 +33,7 @@
 .evidence-details summary { cursor: pointer; font: 750 .82rem/1.5 var(--mono); }
 .evidence-details p { max-width: 900px; color: var(--muted); font: .82rem/1.6 var(--mono); }
 .evidence-details .table-scroll { margin: 22px 0; }
+#refinement-results .evidence-details ul { overflow-wrap: anywhere; }
 .defect-table { min-width: 700px; }
 .defect-table td { white-space: normal; overflow-wrap: anywhere; }
 .defect-table th { max-width: 270px; overflow-wrap: anywhere; }
