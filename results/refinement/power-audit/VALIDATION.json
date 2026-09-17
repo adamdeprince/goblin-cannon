@@ -1,0 +1,47 @@
+{
+  "cases": 60,
+  "defects": [
+    {
+      "reason": "The noise reference assumes sample-energy-normalized RRC taps; the transmitter uses symbol-time RRC amplitudes.",
+      "record": "results/refinement/power-audit/E_power_nominal_10000_bpsk_bch/7446529.json",
+      "seed": 7446529,
+      "test_name": "E_power_nominal_10000_bpsk_bch"
+    },
+    {
+      "reason": "The noise reference assumes sample-energy-normalized RRC taps; the transmitter uses symbol-time RRC amplitudes.",
+      "record": "results/refinement/power-audit/E_power_nominal_10000_diversity_commensurate_both/7446529.json",
+      "seed": 7446529,
+      "test_name": "E_power_nominal_10000_diversity_commensurate_both"
+    },
+    {
+      "reason": "The diversity branch gain increases measured power by about B/branch_width relative to full-band BPSK.",
+      "record": "results/refinement/power-audit/E_power_fullband_10000/7446529.json",
+      "seed": 7446529,
+      "test_name": "E_power_fullband_10000"
+    },
+    {
+      "reason": "The noise reference assumes sample-energy-normalized RRC taps; the transmitter uses symbol-time RRC amplitudes.",
+      "record": "results/refinement/power-audit/E_power_nominal_24000_bpsk_bch/7446529.json",
+      "seed": 7446529,
+      "test_name": "E_power_nominal_24000_bpsk_bch"
+    },
+    {
+      "reason": "The noise reference assumes sample-energy-normalized RRC taps; the transmitter uses symbol-time RRC amplitudes.",
+      "record": "results/refinement/power-audit/E_power_nominal_24000_diversity_commensurate_both/7446529.json",
+      "seed": 7446529,
+      "test_name": "E_power_nominal_24000_diversity_commensurate_both"
+    },
+    {
+      "reason": "The diversity branch gain increases measured power by about B/branch_width relative to full-band BPSK.",
+      "record": "results/refinement/power-audit/E_power_fullband_24000/7446529.json",
+      "seed": 7446529,
+      "test_name": "E_power_fullband_24000"
+    }
+  ],
+  "report_header": "simulated channel power audit",
+  "seed_policy": "Same explicit seeds and parameter records as the input RF screens",
+  "statuses": {
+    "pass": 54,
+    "xfail": 6
+  }
+}

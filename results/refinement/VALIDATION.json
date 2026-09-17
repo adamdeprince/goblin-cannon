@@ -1,0 +1,124 @@
+{
+  "cases": 1328,
+  "counts": {
+    "refinement_delay": 216,
+    "refinement_followup": 414,
+    "refinement_quick": 92,
+    "refinement_screen": 414,
+    "refinement_snr": 192
+  },
+  "ctest": {
+    "avx10": "20/20",
+    "naamah": "20/20"
+  },
+  "deterministic_repeats": 3,
+  "git_commit": "f5d7e6986cee21651a22b4e2f8cb1019b889b343",
+  "host_build_evidence_sha256": "1b6b617f09d309cc3c697a42546a2180f0e70c1ad5885d10c2ef22ded3ab1834",
+  "host_latency_statuses": {
+    "pass": 46
+  },
+  "host_measurements_sha256": "7aa63da3e914579f2aef124b54501c35138da0347e853c65239119b11592dbdc",
+  "interruptions": [
+    {
+      "campaign": "refinement_followup",
+      "elapsed_seconds": 2202.0,
+      "persisted_cases": 150,
+      "reason": "SSH session disappeared; runner orphaned, saving stopped at 150 while queued workers continued. All missing cases will resume at identical parameters.",
+      "report_header": "simulated channel interrupted execution",
+      "selected_cases": 414,
+      "sha256": "8b1c09040fa12b498a6cda356cdbfa3f73b78dd0e6bf2c633b7c500f75cdc104",
+      "source": "https://github.com/adamdeprince/goblin-cannon/blob/main/results/refinement/validation-meta/INTERRUPTED.json",
+      "stopped_runner_pid": 267383,
+      "stopped_workers": [
+        268554,
+        268558,
+        268559,
+        268562,
+        268617,
+        268619,
+        268621,
+        268622
+      ]
+    }
+  ],
+  "latency_cases": 46,
+  "measurements_sha256": "26f84bcaea3e84c0d0c7caa9ad8b578c7f5ddc370aaf674db9551198d424c884",
+  "power_audit": {
+    "cases": 60,
+    "defects": [
+      {
+        "reason": "The noise reference assumes sample-energy-normalized RRC taps; the transmitter uses symbol-time RRC amplitudes.",
+        "record": "results/refinement/power-audit/E_power_nominal_10000_bpsk_bch/7446529.json",
+        "seed": 7446529,
+        "test_name": "E_power_nominal_10000_bpsk_bch"
+      },
+      {
+        "reason": "The noise reference assumes sample-energy-normalized RRC taps; the transmitter uses symbol-time RRC amplitudes.",
+        "record": "results/refinement/power-audit/E_power_nominal_10000_diversity_commensurate_both/7446529.json",
+        "seed": 7446529,
+        "test_name": "E_power_nominal_10000_diversity_commensurate_both"
+      },
+      {
+        "reason": "The diversity branch gain increases measured power by about B/branch_width relative to full-band BPSK.",
+        "record": "results/refinement/power-audit/E_power_fullband_10000/7446529.json",
+        "seed": 7446529,
+        "test_name": "E_power_fullband_10000"
+      },
+      {
+        "reason": "The noise reference assumes sample-energy-normalized RRC taps; the transmitter uses symbol-time RRC amplitudes.",
+        "record": "results/refinement/power-audit/E_power_nominal_24000_bpsk_bch/7446529.json",
+        "seed": 7446529,
+        "test_name": "E_power_nominal_24000_bpsk_bch"
+      },
+      {
+        "reason": "The noise reference assumes sample-energy-normalized RRC taps; the transmitter uses symbol-time RRC amplitudes.",
+        "record": "results/refinement/power-audit/E_power_nominal_24000_diversity_commensurate_both/7446529.json",
+        "seed": 7446529,
+        "test_name": "E_power_nominal_24000_diversity_commensurate_both"
+      },
+      {
+        "reason": "The diversity branch gain increases measured power by about B/branch_width relative to full-band BPSK.",
+        "record": "results/refinement/power-audit/E_power_fullband_24000/7446529.json",
+        "seed": 7446529,
+        "test_name": "E_power_fullband_24000"
+      }
+    ],
+    "report_header": "simulated channel power audit",
+    "seed_policy": "Same explicit seeds and parameter records as the input RF screens",
+    "statuses": {
+      "pass": 54,
+      "xfail": 6
+    }
+  },
+  "power_measurements_sha256": "5be825cdf35eada7d9a75a453c2825298e711467ba90949ddd3551bd6eecca77",
+  "python_cli_serialization_cases": 19,
+  "python_harness_tests": 14,
+  "report_header": "simulated channel refinement validation",
+  "runtime": {
+    "avx10": {
+      "full_allowance_seconds": 1800,
+      "full_seconds": 4131.828091758303,
+      "within_full_allowance": false
+    },
+    "naamah": {
+      "full_allowance_seconds": 1800,
+      "full_seconds": 601.9581989347935,
+      "within_full_allowance": true
+    }
+  },
+  "scope": "Legacy noise calibration; matched diversity power controls, no equal-power claim across waveform families, route forecast or worldwide patent clearance",
+  "seeds": [
+    7446529,
+    7446530,
+    7446531
+  ],
+  "simulated_followup_hours": 26.833333333333332,
+  "source_archive_sha256": "d7455c1e44a4de2fc752081111dd2d6ca85c92342c5653d74cf4f1e945ecc610",
+  "source_tree_sha256": "1279f74e940aad991bf328e3b7cd796ea496b24bd9e05c78e3a6c6a8cec322e8",
+  "status": "complete",
+  "statuses": {
+    "characterized": 1236,
+    "pass": 92
+  },
+  "unchanged_baseline_comparisons": 54
+}

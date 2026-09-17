@@ -355,7 +355,8 @@ double rf_symbol_rate_hz(const RfStreamConfig& config) {
   if (config.waveform == AudioWaveform::fsk4 || config.waveform == AudioWaveform::fsk8)
     return 1000.0 / (config.fsk_useful_ms + config.fsk_guard_ms);
   if (config.waveform == AudioWaveform::bpsk_frequency_diversity)
-    return config.modem.bandwidth_hz / 2.0 / 1.25;
+    return (config.diversity_branch_bandwidth_hz == 0 ? config.modem.bandwidth_hz / 2.0
+                                                   : config.diversity_branch_bandwidth_hz) / 1.25;
   return derived_symbol_rate_hz(config.modem);
 }
 

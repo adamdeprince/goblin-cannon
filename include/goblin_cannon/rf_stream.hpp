@@ -113,6 +113,13 @@ struct RfStreamConfig {
   double fsk_useful_ms = 4.0;
   double fsk_guard_ms = 8.0;
   double diversity_wait_ms = 1.0; // Receiver combining wait; charged as buffering.
+  // Fiber-configured occupied RRC bandwidth per copy and center separation.
+  // Zero retains the original half-band width / half-band separation.
+  double diversity_branch_bandwidth_hz = 0.0;
+  double diversity_separation_hz = 0.0;
+  // 1 = lower copy, 2 = upper copy, 3 = both. Single-copy controls retain
+  // the same symbol rate and use the entire configured transmit power.
+  std::uint32_t diversity_branch_mask = 3;
 };
 
 struct RfStreamEncodeResult {

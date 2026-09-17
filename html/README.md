@@ -10,7 +10,22 @@ The benchmark tables, test ledger and RF explorer publish the saved
 `results/recovery-improvements` campaign. The browser selects recorded cases; it does not
 simulate RF. The static tables remain readable without JavaScript.
 
-The latest encoding section publishes `results/encoding-improvements`: 21
+The latest refinement section publishes `results/refinement`: 23 configurations
+per bandwidth, BCH combinations, three diversity spacings with matched
+single-copy controls, and five pilot/retraining schedules. It includes 1,328
+AVX-512 cases and 46 quiet-host latency cases. `refinement-explorer.js` filters
+the saved comparisons; its static table defaults to 24 kHz moderate fading.
+Run `python3 scripts/validate_refinement_power.py` and
+`python3 scripts/refinement_results.py` before updating the HTML. The report
+includes the interrupted run's elapsed time without reducing case durations.
+
+The power audit retains six xfails: the noise reference disagrees with measured
+RRC power, and diversity gain compensation changes actual power relative to
+full-band BPSK. All 54 matched lower/upper/both controls pass. The configured
+30 dB is not actual pre-fade 30 dB, and cross-family results are not equal-power
+comparisons. This calibration caveat also applies to the earlier sections.
+
+The earlier encoding section publishes `results/encoding-improvements`: 21
 configurations, both bandwidths, three polar presets and three sustained seeds.
 It includes all 672 noise points and 42 quiet-host latency measurements, with
 interleaver and diversity wait charged as added buffering. The patent-screen
@@ -83,7 +98,7 @@ changes, then upload the assets before the page that references them:
 python3 scripts/update_html_results.py --check
 
 rsync --archive --checksum --itemize-changes \
-  html/evidence.css html/rf-explorer.js html/psk-explorer.js html/encoding-explorer.js html/simulated-channel.js html/goblin.png \
+  html/evidence.css html/rf-explorer.js html/psk-explorer.js html/encoding-explorer.js html/refinement-explorer.js html/simulated-channel.js html/goblin.png \
   hail::distribution/cannon.goblinreactor.com/
 
 rsync --archive --checksum --itemize-changes \

@@ -337,15 +337,27 @@ private:
   RfStreamState state_ = RfStreamState::search;
 };
 
+double diversity_separation(const RfStreamConfig& c) {
+  return c.diversity_separation_hz == 0 ? c.modem.bandwidth_hz / 2 : c.diversity_separation_hz;
+}
 RfStreamConfig diversity_branch(const RfStreamConfig& c) {
   if (c.modem.modulation != Modulation::bpsk || c.differential_mapping != DifferentialMapping::none ||
       !c.recovery_interval_frames)
     throw std::invalid_argument("frequency diversity requires coherent BPSK and absolute recovery markers");
   auto b = c;
   b.waveform = AudioWaveform::single_carrier;
-  b.modem.bandwidth_hz = c.modem.bandwidth_hz / 2;
-  b.modem.symbol_rate_hz = c.modem.bandwidth_hz / 2 / 1.25;
-  b.modem.tx_gain = c.modem.tx_gain * std::sqrt(2.0F);
+  b.modem.bandwidth_hz = c.diversity_branch_bandwidth_hz == 0 ? c.modem.bandwidth_hz / 2
+                                                           : c.diversity_branch_bandwidth_hz;
+  const auto separation = diversity_separation(c);
+  if (!std::isfinite(b.modem.bandwidth_hz) || b.modem.bandwidth_hz <= 0 ||
+      !std::isfinite(separation) || separation < b.modem.bandwidth_hz ||
+      separation + b.modem.bandwidth_hz > c.modem.bandwidth_hz ||
+      c.diversity_branch_mask < 1 || c.diversity_branch_mask > 3)
+    throw std::invalid_argument("diversity copies must be nonoverlapping, fit the audio bandwidth, and select mask 1, 2 or 3");
+  b.modem.symbol_rate_hz = b.modem.bandwidth_hz / 1.25;
+  // Preserve total nominal power as branch width changes. The mixer splits
+  // this power equally when both copies are selected.
+  b.modem.tx_gain = c.modem.tx_gain * std::sqrt(static_cast<float>(c.modem.bandwidth_hz / b.modem.bandwidth_hz));
   b.soft_demapping = true;
   return b;
 }
@@ -378,8 +390,11 @@ public:
 private:
   void mix(std::span<Complex> out) {
     for (auto& s : out) {
-      const auto phase = tau * (c_.modem.bandwidth_hz / 4) / c_.modem.sample_rate_hz * (sample_++);
-      s *= static_cast<float>(std::sqrt(2.0) * std::cos(phase));
+      const auto phase = tau * (diversity_separation(c_) / 2) / c_.modem.sample_rate_hz * (sample_++);
+      if (c_.diversity_branch_mask == 3)
+        s *= static_cast<float>(std::sqrt(2.0) * std::cos(phase));
+      else
+        s *= Complex(std::polar(1.0, c_.diversity_branch_mask == 1 ? -phase : phase));
     }
   }
   RfStreamConfig c_;
@@ -393,14 +408,17 @@ public:
         rx_{RfStreamReceiver(diversity_branch(c_)), RfStreamReceiver(diversity_branch(c_))} {}
   const RfStreamConfig& config() const noexcept override { return c_; }
   RfStreamState state() const noexcept override {
-    return rx_[0].state() == RfStreamState::locked || rx_[1].state() == RfStreamState::locked
+    return ((c_.diversity_branch_mask & 1) && rx_[0].state() == RfStreamState::locked) ||
+                   ((c_.diversity_branch_mask & 2) && rx_[1].state() == RfStreamState::locked)
                ? RfStreamState::locked
                : RfStreamState::search;
   }
   std::optional<RfStreamHeader> header() const noexcept override {
-    return rx_[0].header() ? rx_[0].header() : rx_[1].header();
+    return (c_.diversity_branch_mask & 1) && rx_[0].header() ? rx_[0].header() : rx_[1].header();
   }
-  RfSyncEstimate sync_estimate() const noexcept override { return rx_[0].sync_estimate(); }
+  RfSyncEstimate sync_estimate() const noexcept override {
+    return rx_[c_.diversity_branch_mask == 2 ? 1 : 0].sync_estimate();
+  }
   void reset() override {
     for (auto& r : rx_)
       r.reset();
@@ -421,9 +439,10 @@ public:
       std::array<RfStreamSymbol, 128> decoded{};
       bool actual_loss = false;
       for (unsigned branch = 0; branch < 2; ++branch) {
+        if (!(c_.diversity_branch_mask & (1U << branch))) continue;
         for (unsigned i = 0; i < count; ++i) {
           const auto phase =
-              (branch ? 1 : -1) * tau * (c_.modem.bandwidth_hz / 4) / c_.modem.sample_rate_hz * (sample_ + i);
+              (branch ? 1 : -1) * tau * (diversity_separation(c_) / 2) / c_.modem.sample_rate_hz * (sample_ + i);
           base[i] = samples[result.consumed_samples + i] * Complex(std::polar(1.0, -phase));
         }
         const auto r = rx_[branch].push_samples(std::span(base).first(count), decoded);
@@ -448,7 +467,7 @@ public:
       while (!pending_.empty() && result.produced_symbols < out.size()) {
         auto it = pending_.begin();
         auto& p = it->second;
-        if ((!p.symbol[0] || !p.symbol[1]) &&
+        if (c_.diversity_branch_mask == 3 && (!p.symbol[0] || !p.symbol[1]) &&
             sample_ - p.arrival <
                 static_cast<std::uint64_t>(std::ceil(c_.diversity_wait_ms * c_.modem.sample_rate_hz / 1000)))
           break;

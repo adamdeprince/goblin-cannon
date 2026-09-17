@@ -87,6 +87,9 @@ RfStreamConfig rf_config(const Arguments& a) {
       {"fsk4",AudioWaveform::fsk4},{"fsk8",AudioWaveform::fsk8},
       {"bpsk_frequency_diversity",AudioWaveform::bpsk_frequency_diversity}}.at(word(a,"audio_waveform","single_carrier"));
   c.diversity_wait_ms=number(a,"diversity_wait_ms",1);
+  c.diversity_branch_bandwidth_hz=number(a,"diversity_branch_bandwidth_hz");
+  c.diversity_separation_hz=number(a,"diversity_separation_hz");
+  c.diversity_branch_mask=number(a,"diversity_branch_mask",3);
   c.fsk_useful_ms=number(a,"fsk_useful_ms",4);c.fsk_guard_ms=number(a,"fsk_guard_ms",8);
   c.soft_demapping=number(a,"soft_demapping",0)!=0;
   c.carrier_correction=number(a,"carrier_correction",0)!=0;
@@ -686,12 +689,13 @@ Json run_messages(const Arguments& a) {
     modem_delay.set("tx_rrc_group_delay_ms",fsk ? 0 : describe(config.rf.modem).nominal_filter_latency_symbols/symbol_rate*1000);
     modem_delay.set("rx_rrc_group_delay_ms",fsk ? 0 : describe(config.rf.modem).nominal_filter_latency_symbols/symbol_rate*1000);
     modem_delay.set("equalizer_decision_delay_ms",config.rf.equalizer_delay_symbols/symbol_rate*1000);
-    modem_delay.set("viterbi_lookahead_nominal_ms",std::max(5U*config.convolutional.constraint_length,24U)/capacity_bps*1000);
+    modem_delay.set("viterbi_lookahead_nominal_ms",config.coding.bch?0:std::max(5U*config.convolutional.constraint_length,24U)/capacity_bps*1000);
+    modem_delay.set("bch_word_airtime_ms",config.coding.bch?58/(symbol_rate*bits_per_symbol(config.rf.modem.modulation)*pilot_duty)*1000:0);
     modem_delay.set("payload_capacity_bps",capacity_bps);
     modem_delay.set("interleaver_wire_block_ms",config.coding.interleaver_rows*config.coding.interleaver_columns/(symbol_rate*bits_per_symbol(config.rf.modem.modulation))*1000);
     modem_delay.set("fsk_integration_ms",fsk?config.rf.fsk_useful_ms:0);
     modem_delay.set("fsk_guard_per_symbol_ms",fsk?config.rf.fsk_guard_ms:0);
-    modem_delay.set("diversity_combining_wait_max_ms",config.rf.waveform==AudioWaveform::bpsk_frequency_diversity?config.rf.diversity_wait_ms+std::min<std::size_t>(block,48)/fs*1000:0);
+    modem_delay.set("diversity_combining_wait_max_ms",config.rf.waveform==AudioWaveform::bpsk_frequency_diversity && config.rf.diversity_branch_mask==3?config.rf.diversity_wait_ms+std::min<std::size_t>(block,48)/fs*1000:0);
     modem_delay.text("scope","Analytical residence estimates, not CPU times: serialization includes coding and mean pilot duty; Viterbi emits bytes after its lookahead. Startup, byte/symbol alignment and actual pilot positions remain in the measured one-sample reference. These estimates are not subtracted from the latency assertion.");
     out.fields["modem_delay_estimates"]=modem_delay.str();
     out.text("source_to_framer_scope","Message creation to first-byte framer consumption; sample-clock observations have audio-block resolution; host observer timestamps are exact steady-clock call times.");

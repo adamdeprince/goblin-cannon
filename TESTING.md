@@ -95,6 +95,84 @@ source events that slip across their aligned audio tick.
 
 ## Read simulated channel results
 
+### BCH, diversity and cadence simulated channel comparison
+
+The [refinement report](results/refinement/REPORT.md) compares coherent
+QPSK/8-PSK+BCH, configurable BPSK frequency diversity, and independent changes
+to pilot spacing and full retraining. The new controls are opt-in; all
+configuration travels over fiber/gRPC.
+
+```sh
+python3 tests/simulated_channel/run.py --tier quick --campaign refinement_quick --jobs 4 --results results/refinement
+python3 tests/simulated_channel/run.py --tier full --campaign refinement_snr --jobs 8 --results results/refinement
+python3 tests/simulated_channel/run.py --tier full --campaign refinement_screen --seeds 7446529 7446530 7446531 --jobs 8 --results results/refinement
+python3 tests/simulated_channel/run.py --tier full --campaign refinement_delay --seeds 7446529 7446530 7446531 --jobs 8 --results results/refinement
+python3 tests/simulated_channel/run.py --tier full --campaign refinement_followup --seeds 7446529 7446530 7446531 --jobs 8 --results results/refinement
+# On naamah, after the regression suite completes, run without concurrent tests:
+python3 tests/simulated_channel/run.py --tier full --campaign refinement_latency --jobs 1 --allow-non-avx512 --results results/refinement/naamah-latency
+```
+
+This separate matrix declares 23 configurations per bandwidth: six PSK/FEC
+combinations, nine diversity controls, and eight additional cadence settings.
+It has 92 quick assertions, 192 ten-second AWGN points, 414 ten-second RF
+screens, 216 ten-second off-preset message screens, 414 sustained message
+cases, and 46 twelve-second serial latency cases. Sustained quiet/moderate/
+disturbed durations are 300/300/100 seconds for every configuration and seed.
+The original matrices and their recorded runtime limits are retained.
+
+QPSK/8-PSK+BCH use `--modulation qpsk|8psk --bch-payload --soft-demapping`
+with `--no-carrier-correction`. The payload BCH decoder is still a hard
+decoder; soft metrics also protect the RF header. Exact complete tested
+configurations, including the equalizer span, are in each result JSON.
+
+For diversity, select `--audio-waveform bpsk_frequency_diversity --modulation
+bpsk --symbol-rate-hz 0`, then set `--diversity-branch-bandwidth-hz` and
+`--diversity-separation-hz`. Zero retains the original half-band geometry.
+The copies must not overlap or extend outside the configured audio bandwidth.
+`--diversity-branch both|lower|upper` selects two equal-power copies or a
+single full-power control at exactly the same symbol rate and framing.
+Total nominal power is held constant as width or copy count changes.
+The power audit found that this nominal convention disagrees with measured
+RRC power: at width 0.4B, diversity emits about 2.5× full-band BPSK power.
+Lower/upper/both controls match each other. The noise reference also misstates
+actual pre-fade SNR. `python3 scripts/validate_refinement_power.py` retains six
+exact-source xfails and 54 matched-control assertions using the existing RF
+measurements. Do not interpret these or earlier cross-family runs as equal
+actual power; see [the calibration audit](results/refinement/power-audit/SUMMARY.md).
+The width/rate convention uses the current 0.25 RRC rolloff profile. Other
+rolloffs are outside this campaign's spectral-spacing validation.
+
+The new diversity grid uses branch width 0.4B and center separations B/2,
+B/2+137 Hz, and 0.55B+137 Hz. The same Watterson channel acts on both copies.
+Per-result metadata records actual center frequencies, occupied span, power
+split, rounded channel delay and analytical center-response correlation.
+Extra 2.75/3.25 ms and 6.75/7.25 ms delays test sensitivity around the moderate
+and disturbed presets; they are not new ITU channel presets.
+
+`--pilot-interval-symbols` varies the existing known-symbol pair cadence.
+`--recovery-interval-frames` varies the existing full preamble/training/header
+interval without restarting FEC or encryption. The five schedules are
+(pilot symbols, recovery frames) = (16,16), (32,16), (64,16), (32,4), (32,64).
+Each result records the complete segment airtime and payload airtime fraction.
+No frequency tracker is added. B5 uses the longer 3 ms equalizer setup;
+transmission, retraining and modem residence remain in the paired intrinsic
+reference, while diversity combining wait counts against the 2.1 ms allowance.
+
+`python3 scripts/refinement_results.py --snapshot` saves a reproducible source
+archive before measurements. After collecting all results, host regression
+evidence and three repeated cases, run the power audit above, then
+`python3 scripts/refinement_results.py`
+validates coverage and provenance and generates the comparison report.
+The report includes the interrupted runner's elapsed time and any runtime
+overrun. A resumed run must keep the original source digest, base revision,
+seeds and parameters; `--resume` reuses only matching saved records.
+
+After `python3 scripts/update_html_results.py`, the optional Playwright check
+`node scripts/validate_refinement_html.cjs [URL] [output.json]` verifies every
+comparison filter against its linked raw records, all 46 host latency rows,
+mobile layout and the static table without JavaScript. Set `CHROME_PATH` to
+use an installed browser; omit URL to check the local page.
+
 ### Conventional encoding simulated channel comparison
 
 The [encoding report](results/encoding-improvements/REPORT.md) compares 21

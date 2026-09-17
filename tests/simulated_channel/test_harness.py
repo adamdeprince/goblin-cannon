@@ -150,6 +150,30 @@ class SimulatedChannelHarness(unittest.TestCase):
                 self.assertEqual(p["convolutional_generators_octal"],["557","663","711"])
             evaluate(c,{},summarize({}),{})
 
+    def test_refinement_comparisons_hold_power_rate_and_delays(self):
+        from collections import Counter
+        cases=[c for c in matrix() if c.parameters.get("rf_profile")=="refinement"]
+        self.assertEqual(Counter(c.parameters["campaign"] for c in cases),dict(
+            refinement_quick=92,refinement_latency=46,refinement_screen=138,
+            refinement_followup=138,refinement_delay=72,refinement_snr=192))
+        for c in cases:
+            p=full_parameters(c,"commit","digest")
+            self.assertFalse(p["carrier_correction"])
+            self.assertTrue(p["adaptive_equalization"] and p["sample_clock_recovery"])
+            self.assertAlmostEqual(p["nominal_sample_power"],.65**2*p["bandwidth_hz"]/1.25/48000)
+            self.assertLess(p["cadence_plan"]["payload_airtime_fraction"],1)
+            if p["experiment"]=="diversity":
+                d=p["diversity"]
+                self.assertEqual(p["symbol_rate_hz"],p["bandwidth_hz"]*.4/1.25)
+                self.assertLessEqual(d["occupied_span_hz"],p["bandwidth_hz"])
+                self.assertEqual(d["branches"]*d["per_branch_power_fraction"],1)
+                if p["channel_model"]=="watterson":
+                    self.assertGreaterEqual(d["center_response_correlation_magnitude"],0)
+                    self.assertLessEqual(d["center_response_correlation_magnitude"],1+1e-15)
+            if p["campaign"]=="refinement_followup":
+                self.assertEqual(p["duration_s"],100 if "disturbed" in c.name else 300)
+            evaluate(c,{},summarize({}),{})
+
 
 if __name__=="__main__":
     unittest.main()

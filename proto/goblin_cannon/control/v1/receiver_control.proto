@@ -119,6 +119,9 @@ message RestartRequest {
   optional double fsk_useful_ms = 43;
   optional double fsk_guard_ms = 44;
   optional double diversity_wait_ms = 45;
+  optional double diversity_branch_bandwidth_hz = 46; // Zero: half total bandwidth.
+  optional double diversity_separation_hz = 47; // Zero: half total bandwidth.
+  optional uint32 diversity_branch_mask = 48; // 1 lower, 2 upper, 3 both; fixed total power.
 }
 
 message BankUpdate {

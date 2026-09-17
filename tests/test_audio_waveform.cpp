@@ -50,9 +50,9 @@ std::vector<Complex> encode(const RfStreamConfig& c, const std::vector<std::uint
   require(at == payload.size(), "alternative TX truncated payload");
   return out;
 }
-void waveform_test(const RfStreamConfig& c) {
+void waveform_test(const RfStreamConfig& c, unsigned symbols = 128) {
   std::mt19937 random(seed);
-  std::vector<std::uint32_t> payload(128);
+  std::vector<std::uint32_t> payload(symbols);
   for (auto& s : payload)
     s = random() & ((1U << bits_per_symbol(c.modem.modulation)) - 1);
   auto audio = encode(c, payload, 257);
@@ -106,9 +106,13 @@ void waveform_test(const RfStreamConfig& c) {
     require(seen == payload.size(), "alternative RX failed a complete null simulated channel stream");
   }
 }
-void pipeline_test(AudioWaveform wave, PayloadCodingConfig coding) {
+void pipeline_test(AudioWaveform wave, PayloadCodingConfig coding, Modulation mode = Modulation::bpsk) {
   RealtimePipelineConfig c;
   c.rf = config(wave, 24000);
+  if (wave == AudioWaveform::single_carrier) {
+    c.rf.modem.modulation = mode;
+    c.rf.pilot_sequence = {0, (1U << bits_per_symbol(mode)) - 1};
+  }
   c.coding = coding;
   c.sync_timestamp.enabled = false;
   c.convolutional.decoded_bit_confidence_threshold = 0;
@@ -152,6 +156,52 @@ void pipeline_test(AudioWaveform wave, PayloadCodingConfig coding) {
               << " delivered=" << delivered << " recovered=" << after_gap << '\n';
   require(delivered > 0 && after_gap > 0, "coding/audio pipeline failed to recover after dropout");
 }
+void diversity_controls_test() {
+  for (int band : {10000, 24000}) {
+    auto c = config(AudioWaveform::bpsk_frequency_diversity, band);
+    c.diversity_branch_bandwidth_hz = band * .4;
+    for (auto separation : {band * .5, band * .5 + 137, band * .55 + 137}) {
+      c.diversity_separation_hz = separation;
+      for (unsigned mask : {1U, 2U, 3U}) {
+        c.diversity_branch_mask = mask;
+        waveform_test(c);
+      }
+    }
+    // Generated long streams check finite-waveform power against the same
+    // full-power single-copy controls. The 2% tolerance covers RRC truncation
+    // and finite-record cross terms; it is not an RF acceptance threshold.
+    std::mt19937 random(seed);
+    std::vector<std::uint32_t> payload(8192);
+    for (auto& symbol : payload) symbol = random() & 1;
+    std::array<double, 3> power{};
+    std::array<std::vector<Complex>, 3> samples;
+    for (unsigned mask : {1U, 2U, 3U}) {
+      c.diversity_branch_mask = mask;
+      samples[mask - 1] = encode(c, payload, 257);
+      power[mask - 1] = test::mean_power(samples[mask - 1]);
+    }
+    require(std::abs(power[0] / power[1] - 1) < 1e-6, "single-copy controls have unequal power");
+    require(std::abs(power[2] / power[0] - 1) < .02, "diversity changes total finite-waveform power");
+    require(samples[0] != samples[1], "diversity controls did not select different frequencies");
+    auto legacy = config(AudioWaveform::bpsk_frequency_diversity, band);
+    auto explicit_defaults = legacy;
+    explicit_defaults.diversity_branch_bandwidth_hz = band / 2;
+    explicit_defaults.diversity_separation_hz = band / 2;
+    require(encode(legacy, payload, 257) == encode(explicit_defaults, payload, 257),
+            "explicit legacy diversity geometry changes samples");
+    for (unsigned invalid = 0; invalid < 5; ++invalid) {
+      auto bad = c;
+      if (invalid == 0) bad.diversity_branch_bandwidth_hz = -1;
+      if (invalid == 1) bad.diversity_separation_hz = band * .3;
+      if (invalid == 2) bad.diversity_separation_hz = band * .7;
+      if (invalid == 3) bad.diversity_branch_mask = 0;
+      if (invalid == 4) bad.diversity_separation_hz = std::numeric_limits<double>::quiet_NaN();
+      bool rejected = false;
+      try { validate(bad); } catch (const std::invalid_argument&) { rejected = true; }
+      require(rejected, "invalid diversity geometry was accepted");
+    }
+  }
+}
 } // namespace
 int main() {
   try {
@@ -165,6 +215,15 @@ int main() {
          {PayloadCodingConfig{true}, PayloadCodingConfig{false, 3}, PayloadCodingConfig{false, 0, 4, 8},
           PayloadCodingConfig{false, 0, 16, 128}, PayloadCodingConfig{true, 3, 4, 16}})
       pipeline_test(AudioWaveform::single_carrier, coding);
+    for (auto mode : {Modulation::qpsk, Modulation::psk8})
+      pipeline_test(AudioWaveform::single_carrier, PayloadCodingConfig{true}, mode);
+    diversity_controls_test();
+    for (auto cadence : {std::pair{16U,16U}, {32U,16U}, {64U,16U}, {32U,4U}, {32U,64U}}) {
+      auto c = config(AudioWaveform::single_carrier, 24000);
+      c.pilot_interval_symbols = cadence.first;
+      c.recovery_interval_frames = cadence.second;
+      waveform_test(c, 2 * cadence.second * c.symbols_per_frame);
+    }
     std::cout << "RF chunking, fixed FSK power, message correctness and dropout recovery passed\n";
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';

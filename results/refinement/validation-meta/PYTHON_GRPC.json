@@ -1,0 +1,114 @@
+{
+  "report_header": "simulated channel CLI/protobuf serialization checks",
+  "kind": "assert",
+  "tier": "quick",
+  "seed": 7446529,
+  "scope": "Deterministic parameter enumeration; no RPC. CTest covers actual gRPC round trips.",
+  "cases": [
+    {
+      "mode": "qpsk",
+      "pilot": 16,
+      "recovery": 16,
+      "status": "pass"
+    },
+    {
+      "mode": "qpsk",
+      "pilot": 32,
+      "recovery": 16,
+      "status": "pass"
+    },
+    {
+      "mode": "qpsk",
+      "pilot": 64,
+      "recovery": 16,
+      "status": "pass"
+    },
+    {
+      "mode": "qpsk",
+      "pilot": 32,
+      "recovery": 4,
+      "status": "pass"
+    },
+    {
+      "mode": "qpsk",
+      "pilot": 32,
+      "recovery": 64,
+      "status": "pass"
+    },
+    {
+      "mode": "8psk",
+      "pilot": 16,
+      "recovery": 16,
+      "status": "pass"
+    },
+    {
+      "mode": "8psk",
+      "pilot": 32,
+      "recovery": 16,
+      "status": "pass"
+    },
+    {
+      "mode": "8psk",
+      "pilot": 64,
+      "recovery": 16,
+      "status": "pass"
+    },
+    {
+      "mode": "8psk",
+      "pilot": 32,
+      "recovery": 4,
+      "status": "pass"
+    },
+    {
+      "mode": "8psk",
+      "pilot": 32,
+      "recovery": 64,
+      "status": "pass"
+    },
+    {
+      "separation": 12000,
+      "branch": "both",
+      "status": "pass"
+    },
+    {
+      "separation": 12000,
+      "branch": "lower",
+      "status": "pass"
+    },
+    {
+      "separation": 12000,
+      "branch": "upper",
+      "status": "pass"
+    },
+    {
+      "separation": 12137,
+      "branch": "both",
+      "status": "pass"
+    },
+    {
+      "separation": 12137,
+      "branch": "lower",
+      "status": "pass"
+    },
+    {
+      "separation": 12137,
+      "branch": "upper",
+      "status": "pass"
+    },
+    {
+      "separation": 13337,
+      "branch": "both",
+      "status": "pass"
+    },
+    {
+      "separation": 13337,
+      "branch": "lower",
+      "status": "pass"
+    },
+    {
+      "separation": 13337,
+      "branch": "upper",
+      "status": "pass"
+    }
+  ]
+}

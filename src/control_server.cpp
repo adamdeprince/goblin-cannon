@@ -212,6 +212,9 @@ ReceiverRestartConfig parse_restart_request(const pb::RestartRequest& request) {
   if (request.has_fsk_useful_ms()) config.pipeline.rf.fsk_useful_ms = request.fsk_useful_ms();
   if (request.has_fsk_guard_ms()) config.pipeline.rf.fsk_guard_ms = request.fsk_guard_ms();
   if (request.has_diversity_wait_ms()) config.pipeline.rf.diversity_wait_ms = request.diversity_wait_ms();
+  if (request.has_diversity_branch_bandwidth_hz()) config.pipeline.rf.diversity_branch_bandwidth_hz = request.diversity_branch_bandwidth_hz();
+  if (request.has_diversity_separation_hz()) config.pipeline.rf.diversity_separation_hz = request.diversity_separation_hz();
+  if (request.has_diversity_branch_mask()) config.pipeline.rf.diversity_branch_mask = request.diversity_branch_mask();
   if (request.has_soft_demapping()) config.pipeline.rf.soft_demapping = request.soft_demapping();
   if (request.has_bch_payload()) config.pipeline.coding.bch = request.bch_payload();
   if (request.has_walsh_bits()) {

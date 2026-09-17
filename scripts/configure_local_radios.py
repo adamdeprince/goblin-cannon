@@ -105,6 +105,9 @@ def make_restart_request(pb2: object, args: argparse.Namespace) -> object:
     request.fsk_useful_ms = args.fsk_useful_ms
     request.fsk_guard_ms = args.fsk_guard_ms
     request.diversity_wait_ms = args.diversity_wait_ms
+    request.diversity_branch_bandwidth_hz = args.diversity_branch_bandwidth_hz
+    request.diversity_separation_hz = args.diversity_separation_hz
+    request.diversity_branch_mask = {"lower": 1, "upper": 2, "both": 3}[args.diversity_branch]
     request.fec.constraint_length = 7
     request.fec.generator0 = 0o171
     request.fec.generator1 = 0o133
@@ -273,6 +276,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--audio-waveform", choices=("single_carrier", "fsk4", "fsk8", "bpsk_frequency_diversity"), default="single_carrier")
     parser.add_argument("--fsk-useful-ms", type=float, default=4)
     parser.add_argument("--diversity-wait-ms", type=float, default=1)
+    parser.add_argument("--diversity-branch-bandwidth-hz", type=float, default=0,
+                        help="Occupied bandwidth per copy; zero uses half the audio bandwidth")
+    parser.add_argument("--diversity-separation-hz", type=float, default=0,
+                        help="Center separation; zero uses half the audio bandwidth")
+    parser.add_argument("--diversity-branch", choices=("both", "lower", "upper"), default="both",
+                        help="Select both copies or a full-power single-copy control")
     parser.add_argument("--fsk-guard-ms", type=float, default=8)
     parser.add_argument("--header-modulation", choices=("qpsk", "bpsk"), default="qpsk")
     parser.add_argument("--differential-mapping", choices=("none", "dbpsk", "dqpsk", "pi4_dqpsk"), default="none")

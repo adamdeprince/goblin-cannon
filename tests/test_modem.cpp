@@ -1645,6 +1645,10 @@ pb::RestartRequest make_restart_request(const ReceiverRestartConfig& restart) {
   request.set_soft_demapping(rf.soft_demapping);
   request.set_audio_waveform(static_cast<pb::AudioWaveform>(rf.waveform));
   request.set_fsk_useful_ms(rf.fsk_useful_ms);request.set_fsk_guard_ms(rf.fsk_guard_ms);
+  request.set_diversity_wait_ms(rf.diversity_wait_ms);
+  request.set_diversity_branch_bandwidth_hz(rf.diversity_branch_bandwidth_hz);
+  request.set_diversity_separation_hz(rf.diversity_separation_hz);
+  request.set_diversity_branch_mask(rf.diversity_branch_mask);
   request.set_bch_payload(pipeline.coding.bch);request.set_walsh_bits(pipeline.coding.walsh_bits);
   request.set_interleaver_rows(pipeline.coding.interleaver_rows);request.set_interleaver_columns(pipeline.coding.interleaver_columns);
   request.set_recovery_interval_frames(rf.recovery_interval_frames);
@@ -1940,6 +1944,9 @@ void test_receiver_control_grpc_server() {
     configured.pipeline.rf.modem.modulation = waveform==AudioWaveform::fsk4 ? Modulation::qpsk : waveform==AudioWaveform::fsk8 ? Modulation::psk8 : Modulation::bpsk;
     configured.pipeline.rf.pilot_sequence = {0,1};
     configured.pipeline.rf.soft_demapping = true;
+    configured.pipeline.rf.diversity_branch_bandwidth_hz = 9600;
+    configured.pipeline.rf.diversity_separation_hz = 12137;
+    configured.pipeline.rf.diversity_branch_mask = 2;
     configured.pipeline.coding = {true,3,4,8};
     configured.pipeline.convolutional = PuncturedConvolutionalCodeConfig::k9_rate_1_3();
     auto request = make_restart_request(configured);
@@ -1951,6 +1958,10 @@ void test_receiver_control_grpc_server() {
           pending_coding->pipeline.convolutional.generator2==0711 && pending_coding->pipeline.coding.bch &&
           pending_coding->pipeline.coding.walsh_bits==3 && pending_coding->pipeline.coding.interleaver_rows==4 &&
           pending_coding->pipeline.coding.interleaver_columns==8, "gRPC lost coding/audio parameters");
+    check(pending_coding->pipeline.rf.diversity_branch_bandwidth_hz == 9600 &&
+          pending_coding->pipeline.rf.diversity_separation_hz == 12137 &&
+          pending_coding->pipeline.rf.diversity_branch_mask == 2,
+          "gRPC lost diversity bandwidth, separation or single-copy control");
   }
   auto invalid_coding = restart_request;
   invalid_coding.set_interleaver_rows(4);invalid_coding.set_interleaver_columns(0);

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from itertools import product
-from math import ceil, floor
+from math import ceil, floor, cos, pi, sqrt
 from pathlib import Path
 
 SEED = 0x71A001
@@ -31,6 +31,7 @@ DEFAULTS = dict(
     duration_s=2.0, chunk_samples=256, frame_symbols=64, training_symbols=64,
     soft_demapping=0,bch_payload=0,walsh_bits=0,interleaver_rows=0,interleaver_columns=0,
     audio_waveform="single_carrier",fsk_useful_ms=4.0,fsk_guard_ms=8.0,diversity_wait_ms=1.0,
+    diversity_branch_bandwidth_hz=0.0,diversity_separation_hz=0.0,diversity_branch_mask=3,
     symbol_rate_fraction=1.0,tx_gain_multiplier=1.0,
     fec="none", carrier_correction=0, seed=SEED, require_avx512=1,
     sample_clock_recovery=1, adaptive_equalization=1, recursive_equalization=1, equalizer_feedforward_taps=3, equalizer_feedback_taps=4, pilot_interval_symbols=32,
@@ -252,6 +253,7 @@ def matrix():
     cases.extend(polar_campaign())
     cases.extend(psk_campaign())
     cases.extend(encoding_campaign())
+    cases.extend(refinement_campaign())
     return cases
 
 
@@ -422,13 +424,97 @@ def encoding_campaign():
     return cases
 
 
+REFINEMENT_CODING = {
+    "bpsk_soft": dict(modulation="bpsk"),
+    "qpsk_soft": dict(modulation="qpsk"),
+    "8psk_soft": dict(modulation="8psk"),
+    "bpsk_bch": dict(modulation="bpsk",bch_payload=1),
+    "qpsk_bch": dict(modulation="qpsk",bch_payload=1),
+    "8psk_bch": dict(modulation="8psk",bch_payload=1),
+}
+REFINEMENT_CADENCES = ((16,16),(32,16),(64,16),(32,4),(32,64))
+
+
+def refinement_variants(bandwidth):
+    variants={name: dict(experiment="coding",**settings) for name,settings in REFINEMENT_CODING.items()}
+    # Declared before running. The same width/rate/power applies to every
+    # spacing and both full-power single-copy controls. No channel feedback.
+    for spacing,separation in (("commensurate",bandwidth*.5),
+                               ("offset137",bandwidth*.5+137),
+                               ("wide137",bandwidth*.55+137)):
+        for branch,mask in (("both",3),("lower",1),("upper",2)):
+            variants[f"diversity_{spacing}_{branch}"]=dict(experiment="diversity",modulation="bpsk",bch_payload=1,
+                audio_waveform="bpsk_frequency_diversity",diversity_branch_bandwidth_hz=bandwidth*.4,
+                diversity_separation_hz=separation,diversity_branch_mask=mask)
+    for modulation in ("bpsk","qpsk"):
+        for pilot,recovery in REFINEMENT_CADENCES:
+            if (pilot,recovery)==(32,16): continue # shared coding baseline
+            variants[f"{modulation}_bch_p{pilot}_r{recovery}"]=dict(experiment="cadence",modulation=modulation,
+                bch_payload=1,pilot_interval_symbols=pilot,recovery_interval_frames=recovery)
+    return variants
+
+
+def refinement_span(bandwidth, settings, delay_ms):
+    rate=(settings.get("diversity_branch_bandwidth_hz") or bandwidth)/1.25
+    echo=ceil(delay_ms*rate/1000)
+    return dict(equalizer_feedforward_taps=2*echo+3,equalizer_feedback_taps=echo+4,
+                equalizer_delay_symbols=echo,training_symbols=max(256,2*(2*echo+3)))
+
+
+def refinement_campaign():
+    """Separate declared follow-up; previous campaign grids remain intact."""
+    cases=[]
+    for bw in PROFILES:
+        for variant,settings in refinement_variants(bw).items():
+            common=dict(bandwidth_hz=bw,fec="1/2",soft_demapping=1,rf_profile="refinement",
+                        refinement_variant=variant,**RECOVERY_PROFILE)
+            common.update(settings)
+            for group,mode in (("C4","rf"),("D4","messages")):
+                checks=("sync_held","no_frame_boundary_loss","zero_bit_errors") if mode=="rf" else (
+                    "messages_observed","no_corrupt_messages","no_duplicates")
+                cases.append(case(group,f"refinement_{bw}_{variant}_null","assert","quick",**common,
+                    mode=mode,duration_s=3,chunk_samples=48 if mode=="messages" else 256,
+                    auction_intake=int(mode=="messages"),campaign="refinement_quick",checks=checks))
+            cases.append(case("B5",f"refinement_{bw}_{variant}_latency","assert","full",**common,
+                **refinement_span(bw,common,3),mode="messages",duration_s=12,chunk_samples=48,
+                host_timing=1,auction_intake=1,campaign="refinement_latency",
+                checks=("latency_2_1ms","source_events_on_tick"),
+                notes=["Serial quiet-host null channel with the 3 ms moderate-channel equalizer span.",
+                       "Paired one-sample reference keeps modem/training airtime; combining wait is charged as added buffering."]))
+            for channel in ("high_lat_quiet","high_lat_moderate","high_lat_disturbed"):
+                geometry=refinement_span(bw,common,PRESETS[channel][0])
+                cases.append(case("A2",f"refinement_screen_{bw}_{variant}_{channel}","characterize","full",
+                    **common,**geometry,**preset(channel),snr_db=30,mode="rf",duration_s=10,
+                    campaign="refinement_screen"))
+                cases.append(case("E2",f"refinement_followup_{bw}_{variant}_{channel}","characterize","full",
+                    **common,**geometry,**preset(channel),snr_db=30,mode="messages",chunk_samples=48,
+                    duration_s=100 if channel=="high_lat_disturbed" else 300,aggregate_metrics=1,auction_intake=1,
+                    campaign="refinement_followup",
+                    notes=["Same-seed fixed-power comparison; quiet/moderate/disturbed 300/300/100 seconds.",
+                           "Carrier correction off; no route availability or patent-clearance claim."]))
+            if settings["experiment"]=="diversity":
+                for delay,doppler in ((2.75,10),(3.25,10),(6.75,30),(7.25,30)):
+                    cases.append(case("A2",f"refinement_delay_{bw}_{variant}_{delay}ms","characterize","full",
+                        **common,**refinement_span(bw,common,delay),channel_model="watterson",
+                        delay_spread_ms=delay,doppler_spread_hz=doppler,snr_db=30,mode="messages",
+                        duration_s=10,chunk_samples=48,auction_intake=1,campaign="refinement_delay",
+                        notes=["Off-preset delay sensitivity screen, not a new ITU preset; no independently fading copies."]))
+            if settings["experiment"]=="coding":
+                for snr in SNR_GRID:
+                    cases.append(case("C1",f"refinement_snr_{bw}_{variant}_{snr}dB","characterize","full",
+                        **common,mode="rf",snr_db=snr,duration_s=10,campaign="refinement_snr"))
+    return cases
+
+
 def full_parameters(c, revision, source_digest):
     p=c.parameters.copy()
     bits=BITS[p["modulation"]]
     fsk=p["audio_waveform"].startswith("fsk")
     diversity=p["audio_waveform"]=="bpsk_frequency_diversity"
+    branch_width=p["diversity_branch_bandwidth_hz"] or p["bandwidth_hz"]/2
+    separation=p["diversity_separation_hz"] or p["bandwidth_hz"]/2
     symbol_rate=(1000/(p["fsk_useful_ms"]+p["fsk_guard_ms"]) if fsk else
-                 p["bandwidth_hz"]/1.25*(.5 if diversity else p["symbol_rate_fraction"]))
+                 branch_width/1.25 if diversity else p["bandwidth_hz"]/1.25*p["symbol_rate_fraction"])
     p |= dict(stage_order=list(STAGE_ORDER), interleaver=(dict(kind="rectangular",rows=p["interleaver_rows"],columns=p["interleaver_columns"],order="row-write column-read") if p["interleaver_rows"] else "none"),
               measurement_layer={"rf":"RF symbols and optional post-Viterbi source bits", "messages":"production message pipeline",
                                  "scheduler":"auction submit to simulated transmitter service; downstream unmeasured",
@@ -505,8 +591,31 @@ def full_parameters(c, revision, source_digest):
              bit_metric="noncoherent tone energy max-log" if fsk else "fixed-constellation Euclidean max-log" if p["soft_demapping"] or diversity else "legacy symbol confidence",
              soft_metric_parameters=dict(complex_variance_floor=1e-4,pilot_residual_ema=1/32,llr_limit=64,decoder_output="Viterbi hard decisions checked by existing message CRC"),
              nominal_sample_power=(.65*p["tx_gain_multiplier"])**2*p["bandwidth_hz"]/1.25/p["sample_rate_hz"]*(p["symbol_rate_fraction"] if not (fsk or diversity) else 1),
-             diversity=dict(branches=2,centers_hz=[-p["bandwidth_hz"]/4,p["bandwidth_hz"]/4],branch_bandwidth_hz=p["bandwidth_hz"]/2,
-                            per_branch_power_fraction=.5,combining="sum independently estimated bit LLRs by absolute frame/symbol",combining_wait_ms=p["diversity_wait_ms"],wait_quantization_max_samples=min(48,p["chunk_samples"])) if diversity else None)
+             diversity=dict(branches=2 if p["diversity_branch_mask"]==3 else 1,
+                            centers_hz=[f for i,f in enumerate([-separation/2,separation/2]) if p["diversity_branch_mask"] & (1<<i)],
+                            branch_bandwidth_hz=branch_width,center_separation_hz=separation,
+                            occupied_span_hz=separation+branch_width if p["diversity_branch_mask"]==3 else branch_width,
+                            allowed_bandwidth_hz=p["bandwidth_hz"],per_branch_power_fraction=.5 if p["diversity_branch_mask"]==3 else 1,
+                            combining="sum independently estimated bit LLRs by absolute frame/symbol" if p["diversity_branch_mask"]==3 else "single full-power copy",
+                            combining_wait_ms=p["diversity_wait_ms"] if p["diversity_branch_mask"]==3 else 0,
+                            wait_quantization_max_samples=min(48,p["chunk_samples"])) if diversity else None)
+    if diversity:
+        delay_samples=floor(p["delay_spread_ms"]*p["sample_rate_hz"]/1000+.5)
+        powers=[10**(gain/10) for gain in p["path_gains_db"]]
+        rho=sqrt(max(0,powers[0]**2+powers[1]**2+2*powers[0]*powers[1]*cos(2*pi*separation*delay_samples/p["sample_rate_hz"])))/sum(powers)
+        p["diversity"].update(channel_delay_samples=delay_samples,
+            center_response_correlation_magnitude=rho if p["channel_model"]=="watterson" else None,
+            correlation_scope="Analytical ensemble complex-gain correlation at the two centers, using the simulator's rounded delay; not independent branches or a measured diversity gain")
+    if p.get("rf_profile")=="refinement":
+        n=p["recovery_interval_frames"]*p["frame_symbols"]
+        startup=max(8,p["equalizer_feedforward_taps"]+p["equalizer_feedback_taps"])
+        pilots=n//p["pilot_interval_symbols"]*2
+        pulse_samples=lambda symbols: floor((symbols-1+4)*p["sample_rate_hz"]/symbol_rate)+1
+        samples=pulse_samples(64)+pulse_samples(p["training_symbols"]+p["header_air_symbols"])+pulse_samples(n+startup+pilots+p["equalizer_delay_symbols"])
+        p["cadence_plan"]=dict(payload_symbols=n,periodic_pilot_symbols=pilots,startup_pilot_symbols=startup,
+            segment_samples=samples,segment_ms=samples/p["sample_rate_hz"]*1000,
+            payload_airtime_fraction=n/symbol_rate/(samples/p["sample_rate_hz"]),
+            scope="Nominal complete segment including RRC tails, acquisition, training, header, pilots and equalizer flush; no CPU or propagation time")
     if fsk:
         tones=4 if p["audio_waveform"]=="fsk4" else 8
         spacing=floor(p["bandwidth_hz"]/(tones+2)/(1000/p["fsk_useful_ms"]))*(1000/p["fsk_useful_ms"])

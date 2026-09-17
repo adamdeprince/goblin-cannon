@@ -56,6 +56,11 @@ def build():
             encoding_section, encoding_js = build_encoding()
             sections = sections.replace(START, START + encoding_section, 1)
             js += encoding_js
+        if (ROOT / "results/refinement/VALIDATION.json").exists():
+            from refinement_html import build as build_refinement
+            refinement_section, refinement_js = build_refinement()
+            sections = sections.replace(START, START + refinement_section, 1)
+            js += refinement_js
         return sections, js
     manifest = read(RESULTS / "VALIDATION.json")
     main = records(RESULTS)
@@ -328,6 +333,7 @@ def main():
                           ("rf-explorer.js", (WEB/"rf-explorer.js").read_bytes()),
                           ("psk-explorer.js", (WEB/"psk-explorer.js").read_bytes()),
                           ("encoding-explorer.js", (WEB/"encoding-explorer.js").read_bytes()),
+                          ("refinement-explorer.js", (WEB/"refinement-explorer.js").read_bytes()),
                           ("evidence.css", (WEB/"evidence.css").read_bytes())):
         version = hashlib.sha256(content).hexdigest()[:16]
         document = re.sub(r'((?:src|href)=")'+re.escape(name)+r'(?:\?[^" ]*)?"',

@@ -1,0 +1,36 @@
+{
+  "budget_seconds": 1800,
+  "complete_tier": false,
+  "elapsed_seconds": 4.820619933307171,
+  "executed_cases": 3,
+  "git_commit": "f5d7e6986cee21651a22b4e2f8cb1019b889b343",
+  "host": "Linux-7.0.0-1008-aws-x86_64-with-glibc2.43",
+  "jobs": 3,
+  "parameter_records": [
+    "A2_refinement_screen_24000_qpsk_bch_high_lat_moderate/7446529.json",
+    "A2_refinement_delay_24000_diversity_wide137_both_3.25ms/7446529.json",
+    "A2_refinement_screen_24000_bpsk_bch_p32_r4_high_lat_disturbed/7446529.json"
+  ],
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "report_header": "simulated channel non-canonical execution observations",
+  "selected_cases": 3,
+  "selection": {
+    "campaign": null,
+    "cases": [
+      "A2_refinement_screen_24000_qpsk_bch_high_lat_moderate",
+      "A2_refinement_delay_24000_diversity_wide137_both_3.25ms",
+      "A2_refinement_screen_24000_bpsk_bch_p32_r4_high_lat_disturbed"
+    ],
+    "excluded_groups": [],
+    "groups": [],
+    "profile": "legacy",
+    "resume": false,
+    "seed": 7446529,
+    "seeds": null
+  },
+  "source_tree_sha256": "1279f74e940aad991bf328e3b7cd796ea496b24bd9e05c78e3a6c6a8cec322e8",
+  "statuses": {
+    "characterized": 3
+  },
+  "tier": "full"
+}

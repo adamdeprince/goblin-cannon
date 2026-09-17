@@ -1,0 +1,25 @@
+{
+  "report_header": "simulated channel host and build evidence",
+  "source_tree_sha256": "1279f74e940aad991bf328e3b7cd796ea496b24bd9e05c78e3a6c6a8cec322e8",
+  "avx10": {
+    "hostname": "ip-172-31-38-190",
+    "directory": "/tmp/goblin-cannon-refinement.RFJavX",
+    "compiler": "GNU C++ 16.1.0",
+    "build": "CMake / Ninja / Release / AVX-512 tests required",
+    "ctest_passed": 20,
+    "ctest_total": 20,
+    "ctest_seconds": 19.65,
+    "ctest_log": "validation-meta/avx10-ctest.log"
+  },
+  "naamah": {
+    "hostname": "naamah",
+    "directory": "/tmp/goblin-cannon-refinement.AZmSt3",
+    "compiler": "GNU C++ 16.1.0",
+    "build": "CMake / Ninja / Release / AVX2 baseline, runtime dispatch",
+    "ctest_passed": 20,
+    "ctest_total": 20,
+    "ctest_seconds": 20.79,
+    "ctest_log": "validation-meta/naamah-ctest.log",
+    "latency": "Serial, after CTest completed; no concurrent validation workload on this host"
+  }
+}

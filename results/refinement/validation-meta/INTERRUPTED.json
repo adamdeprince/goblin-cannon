@@ -1,0 +1,19 @@
+{
+  "report_header": "simulated channel interrupted execution",
+  "campaign": "refinement_followup",
+  "elapsed_seconds": 2202.0,
+  "persisted_cases": 150,
+  "selected_cases": 414,
+  "stopped_runner_pid": 267383,
+  "stopped_workers": [
+    268554,
+    268558,
+    268559,
+    268562,
+    268617,
+    268619,
+    268621,
+    268622
+  ],
+  "reason": "SSH session disappeared; runner orphaned, saving stopped at 150 while queued workers continued. All missing cases will resume at identical parameters."
+}
