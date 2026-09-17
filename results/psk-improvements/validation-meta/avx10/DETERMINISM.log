@@ -1,0 +1,3 @@
+simulated channel: 3 cases, tier=full, jobs=3
+simulated channel: 3/3 E2_psk_screen_24000_pi4_dqpsk_high_lat_moderate characterized
+simulated channel: 3.733s {'characterized': 3}; results/psk-improvements/determinism/SUMMARY.md

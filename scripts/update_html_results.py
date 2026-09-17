@@ -45,7 +45,13 @@ def number(value):
 def build():
     if (ROOT / "results/recovery-improvements/VALIDATION.json").exists():
         from recovery_html import build as build_recovery
-        return build_recovery(ROOT, START, END)
+        sections, js = build_recovery(ROOT, START, END)
+        if (ROOT / "results/psk-improvements/VALIDATION.json").exists():
+            from psk_html import build as build_psk
+            psk_section, psk_js = build_psk()
+            sections = sections.replace(START, START + psk_section, 1)
+            js += psk_js
+        return sections, js
     manifest = read(RESULTS / "VALIDATION.json")
     main = records(RESULTS)
     extra = records(RESULTS / "additional-seed")
@@ -315,6 +321,7 @@ def main():
     document = before + sections + after
     for name, content in (("simulated-channel.js", js.encode()),
                           ("rf-explorer.js", (WEB/"rf-explorer.js").read_bytes()),
+                          ("psk-explorer.js", (WEB/"psk-explorer.js").read_bytes()),
                           ("evidence.css", (WEB/"evidence.css").read_bytes())):
         version = hashlib.sha256(content).hexdigest()[:16]
         document = re.sub(r'((?:src|href)=")'+re.escape(name)+r'(?:\?[^" ]*)?"',

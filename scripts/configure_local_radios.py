@@ -35,6 +35,7 @@ def default_qpsk_sequence(symbols: int, seed: int) -> list[int]:
 
 def modulation_value(pb2: object, value: str) -> int:
     mapping = {
+        "bpsk": "MODULATION_BPSK",
         "qpsk": "MODULATION_QPSK",
         "8psk": "MODULATION_8PSK",
         "16qam": "MODULATION_16QAM",
@@ -83,10 +84,15 @@ def make_restart_request(pb2: object, args: argparse.Namespace) -> object:
     request.equalizer_feedforward_taps = args.equalizer_feedforward_taps
     request.equalizer_feedback_taps = args.equalizer_feedback_taps
     request.compact_header = args.compact_header
+    request.header_modulation = modulation_value(pb2, args.header_modulation)
+    request.differential_mapping = getattr(pb2, {
+        "none": "DIFFERENTIAL_NONE", "dbpsk": "DIFFERENTIAL_DBPSK",
+        "dqpsk": "DIFFERENTIAL_DQPSK", "pi4_dqpsk": "DIFFERENTIAL_PI4_DQPSK",
+    }[args.differential_mapping])
     request.recovery_interval_frames = args.recovery_interval_frames
     request.fractionally_spaced_equalization = args.fractionally_spaced_equalization
     request.equalizer_reselect_interval = args.equalizer_reselect_interval
-    request.pilot_sequence.extend([0, 1, 2, 3])
+    request.pilot_sequence.extend([0, 1] if args.modulation.lower()=="bpsk" else [0, 1, 2, 3])
     request.fec.constraint_length = 7
     request.fec.generator0 = 0o171
     request.fec.generator1 = 0o133
@@ -239,6 +245,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--equalizer-feedforward-taps", type=int, default=3)
     parser.add_argument("--equalizer-feedback-taps", type=int, default=4)
     parser.add_argument("--compact-header", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--header-modulation", choices=("qpsk", "bpsk"), default="qpsk")
+    parser.add_argument("--differential-mapping", choices=("none", "dbpsk", "dqpsk", "pi4_dqpsk"), default="none")
     parser.add_argument("--recovery-interval-frames", type=int, default=0)
     parser.add_argument("--fractionally-spaced-equalization", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--equalizer-reselect-interval", type=int, default=0)

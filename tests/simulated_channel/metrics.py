@@ -99,6 +99,7 @@ def summarize(raw):
 def check(name, raw, metrics):
     """Return the violated requirement, or None. No implicit BER tolerance."""
     conditions={
+        "zero_bit_errors":(raw.get("bits_compared",0)>0 and raw.get("bit_errors",1)==0,"Null simulated channel did not produce bit-exact payload decisions."),
         "sync_held":(raw.get("valid_headers",0)>0 and raw.get("lock_losses",0)==0 and raw.get("symbols_received",0)>=raw.get("symbols_sent",1),"Receiver did not hold sync for the complete payload."),
         "no_frame_boundary_loss":(raw.get("valid_headers",0)>0 and raw.get("frame_boundary_errors",0)==0 and raw.get("frames_complete",0)==raw.get("frames_sent",1),"Missing or misaligned frame boundaries after clock/sample impairment."),
         "acquired":(raw.get("valid_headers",0)>0,"No validated stream header at the requested acquisition condition."),

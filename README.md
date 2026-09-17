@@ -64,6 +64,18 @@ The core modem is device-agnostic. `Encoder` and `Decoder` work with spans of co
 
 The library does not auto-detect modulation or bandwidth. Configure those offline through `FrameConfig::modem`.
 
+The coherent constellations also include BPSK and 8-PSK. `RfStreamConfig`
+adds optional `header_modulation = Modulation::bpsk` and payload
+`differential_mapping` (`none`, `dbpsk`, `dqpsk`, `pi4_dqpsk`). DBPSK uses
+`modem.modulation = bpsk`; both differential QPSK formats use `qpsk` (two
+payload bits per symbol). Acquisition, equalizer training and header probes
+remain QPSK. Differential detection uses adjacent equalized observations;
+pilots supply absolute references. It adds no frequency tracker or CMA.
+Configure matching settings at both ends over gRPC. The Python control client
+accepts `--header-modulation bpsk --differential-mapping pi4_dqpsk
+--modulation qpsk --no-carrier-correction`. Existing defaults preserve the coherent wire format.
+See [PSK simulated channel results](results/psk-improvements/REPORT.md).
+
 ## RF stream acquisition
 
 `include/goblin_cannon/rf_stream.hpp` adds a continuous single-carrier stream layer for SDR operation:

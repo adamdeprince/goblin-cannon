@@ -10,6 +10,16 @@ The benchmark tables, test ledger and RF explorer publish the saved
 `results/recovery-improvements` campaign. The browser selects recorded cases; it does not
 simulate RF. The static tables remain readable without JavaScript.
 
+The newer PSK section publishes `results/psk-improvements` separately, preserving
+the earlier source provenance. Its two bandwidths and three polar presets each
+compare eleven configurations over three seeds. Noise curves retain all sixteen
+SNR points; the 44 latency records come from naamah. Regenerate the completed
+PSK report with `python3 scripts/psk_results.py` before updating the HTML.
+That exporter rejects missing cases, mixed source hashes, changed durations,
+nonidentical determinism reruns and mismatched host sidecars. `psk_html.py`
+renders a static 24 kHz moderate table; `psk-explorer.js` exposes every saved
+comparison and noise curve. No browser calculation synthesizes new RF results.
+
 After updating the recorded campaign, regenerate and check the publication:
 
 ```sh
@@ -62,7 +72,7 @@ changes, then upload the assets before the page that references them:
 python3 scripts/update_html_results.py --check
 
 rsync --archive --checksum --itemize-changes \
-  html/evidence.css html/rf-explorer.js html/simulated-channel.js html/goblin.png \
+  html/evidence.css html/rf-explorer.js html/psk-explorer.js html/simulated-channel.js html/goblin.png \
   hail::distribution/cannon.goblinreactor.com/
 
 rsync --archive --checksum --itemize-changes \

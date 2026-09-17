@@ -1,0 +1,42 @@
+{
+  "campaign_counts": {
+    "psk_followup": 198,
+    "psk_quick": 22,
+    "psk_screen": 396,
+    "psk_snr": 352
+  },
+  "campaign_status": "complete",
+  "ctest": {
+    "avx10": "18/18",
+    "naamah": "18/18"
+  },
+  "deterministic_repeats": 3,
+  "git_commit": "ad0a00e2289b576990ceccd628828307736c66c0",
+  "host_latency_statuses": {
+    "pass": 44
+  },
+  "latency_cases": 44,
+  "latency_host": "naamah",
+  "latency_statuses": {
+    "pass": 44
+  },
+  "main_cases": 968,
+  "main_host": "avx10",
+  "main_statuses": {
+    "characterized": 946,
+    "pass": 22
+  },
+  "measurements_sha256": "a65f60c7dac2637c9ce0640bd7232c728fa8c2bdfdc7d76e27c5690d04f9f59a",
+  "python_harness_tests": 12,
+  "report_header": "simulated channel PSK validation",
+  "scope": "Custom waveform, simulated channel; no CMA, PA headroom gain or route availability forecast.",
+  "seeds": [
+    7446529,
+    7446530,
+    7446531
+  ],
+  "simulated_followup_hours": 12.833333333333334,
+  "source_archive_sha256": "ea31b76d28c5fe166214b8f9011085821cab164fecb5d420f8b5ee6dcf2765bd",
+  "source_revision_note": "Base revision; source digest and archive identify the tested working tree.",
+  "source_tree_sha256": "fba0aaa45f0ca59ff434e08ecb6bc0e38d8346afed5a2347847cc0ac77baa8ec"
+}

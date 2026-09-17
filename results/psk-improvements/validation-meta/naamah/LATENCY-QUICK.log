@@ -1,0 +1,3 @@
+simulated channel: 22 cases, tier=quick, jobs=1
+simulated channel: 22/22 B5_psk_24000_pi4_dqpsk_short_null pass
+simulated channel: 281.828s {'pass': 22}; results/psk-improvements/naamah-latency/SUMMARY.md

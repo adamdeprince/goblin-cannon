@@ -23,6 +23,7 @@ enum class Modulation {
   qci64,
   qci256,
   qci1024,
+  bpsk,
 };
 
 inline constexpr std::size_t max_bits_per_symbol = 10;

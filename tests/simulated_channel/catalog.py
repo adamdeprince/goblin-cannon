@@ -11,6 +11,7 @@ SNR_GRID = tuple(range(0, 31, 2))
 MODULATIONS = ("qpsk", "8psk", "16qam", "64qam", "256qam", "1024qam",
                "16qci", "64qci", "256qci", "1024qci")
 BITS = dict(zip(MODULATIONS, (2, 3, 4, 6, 8, 10, 4, 6, 8, 10)))
+BITS["bpsk"] = 1
 RATES = ("1/2", "2/3", "3/4")
 PROFILES = (10000, 24000)
 # Verified against F.520-2 Annex 1 and F.1487 Annex 3. Spread is 2*sigma.
@@ -47,7 +48,8 @@ DEFAULTS = dict(
     selected_messages="",
     receive_tail_samples=2,
     equalizer_delay_symbols=0,
-    compact_header=0, recovery_interval_frames=0, fractionally_spaced_equalization=0,
+    compact_header=0, header_modulation="qpsk", differential_mapping="none",
+    recovery_interval_frames=0, fractionally_spaced_equalization=0,
     equalizer_reselect_interval=0, aggregate_metrics=0,
     direct_survival=1.0, soak=0, noise_file="",host_timing=0,auction_intake=0,source_load_factor=0,
 )
@@ -245,6 +247,7 @@ def matrix():
     add(case("E4", "recorded_noise", "characterize", "full", mode="recording",
              unavailable="Awaiting receive-only recordings and provenance manifest; no synthetic substitute is labeled a recording."))
     cases.extend(polar_campaign())
+    cases.extend(psk_campaign())
     return cases
 
 
@@ -292,6 +295,61 @@ def polar_campaign():
     return cases
 
 
+PSK_VARIANTS = {
+    "qpsk_reference": dict(modulation="qpsk"),
+    "qpsk_bpsk_header": dict(modulation="qpsk", header_modulation="bpsk"),
+    "bpsk_qpsk_header": dict(modulation="bpsk"),
+    "bpsk": dict(modulation="bpsk", header_modulation="bpsk"),
+    "8psk_qpsk_header": dict(modulation="8psk"),
+    "8psk_bpsk_header": dict(modulation="8psk", header_modulation="bpsk"),
+    "16qam_reference": dict(modulation="16qam"),
+    "64qam_reference": dict(modulation="64qam"),
+    "dbpsk": dict(modulation="bpsk", header_modulation="bpsk", differential_mapping="dbpsk"),
+    "dqpsk": dict(modulation="qpsk", header_modulation="bpsk", differential_mapping="dqpsk"),
+    "pi4_dqpsk": dict(modulation="qpsk", header_modulation="bpsk", differential_mapping="pi4_dqpsk"),
+}
+
+
+def psk_campaign():
+    """New matched PSK experiments; the original matrix/durations stay intact."""
+    cases=[]
+    for bw,variant in product(PROFILES,PSK_VARIANTS):
+        settings=RECOVERY_PROFILE | PSK_VARIANTS[variant]
+        common=dict(bandwidth_hz=bw,fec="1/2",rf_profile="psk",psk_variant=variant,**settings)
+        cases.append(case("C4",f"psk_{bw}_{variant}_null","assert","quick",**common,
+            mode="rf",duration_s=1,campaign="psk_quick",checks=("sync_held","no_frame_boundary_loss","zero_bit_errors")))
+        for span in ("short","long"):
+            geometry={} if span=="short" else dict(equalizer_feedforward_taps=2*ceil(bw*.8/1000)+3,
+                equalizer_feedback_taps=ceil(bw*.8/1000)+4,equalizer_delay_symbols=ceil(bw*.8/1000),training_symbols=256)
+            cases.append(case("B5",f"psk_{bw}_{variant}_{span}_null","assert","quick" if span=="short" else "full",
+                **common,**geometry,mode="messages",chunk_samples=48,duration_s=12,host_timing=1,auction_intake=1,
+                campaign="psk_latency",checks=("latency_2_1ms","source_events_on_tick")))
+        for channel in ("high_lat_quiet","high_lat_moderate","high_lat_disturbed"):
+            echo=ceil(PRESETS[channel][0]*bw*.8/1000)
+            geometry=dict(equalizer_feedforward_taps=2*echo+3,equalizer_feedback_taps=echo+4,
+                          equalizer_delay_symbols=echo,training_symbols=max(256,2*(2*echo+3)))
+            for group,mode in (("A2","rf"),("E2","messages")):
+                cases.append(case(group,f"psk_screen_{bw}_{variant}_{channel}","characterize","full",
+                    **common,**geometry,**preset(channel),snr_db=30,mode=mode,chunk_samples=48 if mode=="messages" else 256,
+                    duration_s=10,auction_intake=int(mode=="messages"),campaign="psk_screen",
+                    notes=["Matched PSK screen; header-only variants retain identical payload modulation and equalizer geometry."]))
+            # A separate, explicitly bounded follow-up, not a replacement for
+            # the earlier 6000-second quiet campaign or an F.1487 duration claim.
+            duration=100 if channel=="high_lat_disturbed" else 300
+            cases.append(case("E2",f"psk_followup_{bw}_{variant}_{channel}","characterize","full",
+                **common,**geometry,**preset(channel),snr_db=30,mode="messages",chunk_samples=48,
+                duration_s=duration,aggregate_metrics=1,auction_intake=1,campaign="psk_followup",
+                notes=["Matched new PSK follow-up: quiet/moderate/disturbed 300/300/100 s per seed; not F.1487 statistical-duration qualification.",
+                       "The original 6000/300/100 s recovery campaign remains a separate result set; do not use unequal-duration runs as the before/after comparison."]))
+    for bw,variant,snr in product(PROFILES,PSK_VARIANTS,SNR_GRID):
+        settings=RECOVERY_PROFILE | PSK_VARIANTS[variant]
+        cases.append(case("C1",f"psk_snr_{bw}_{variant}_{snr}dB","characterize","full",
+            bandwidth_hz=bw,fec="1/2",rf_profile="psk",psk_variant=variant,**settings,
+            mode="rf",duration_s=10,snr_db=snr,campaign="psk_snr",
+            notes=["Null multipath plus AWGN; equal nominal symbol energy, all 0–30 dB points retained; no operating-limit assertion."]))
+    return cases
+
+
 def full_parameters(c, revision, source_digest):
     p=c.parameters.copy()
     bits=BITS[p["modulation"]]
@@ -314,7 +372,11 @@ def full_parameters(c, revision, source_digest):
               pilot_sequence=[0, (1<<bits)-1],
               header_repetition=3, acquisition_symbols=64, acquisition_seed=0xA5A50001,
               header_format="epoch32_counter64_crc32_conv_k7_rate_half" if p["compact_header"] else "legacy_32_byte_repeated",
-              header_air_symbols=166 if p["compact_header"] else 384,
+              header_air_symbols=(332 if p["header_modulation"]=="bpsk" else 166) if p["compact_header"] else (768 if p["header_modulation"]=="bpsk" else 384),
+              differential_detection=("coherent" if p["differential_mapping"]=="none" else "adjacent equalized complex sample product; absolute pilots restart reference; no frequency estimate"),
+              differential_phase_degrees={"none":None,"dbpsk":[0,180],"dqpsk":[0,90,-90,180],"pi4_dqpsk":[45,135,-45,-135]}[p["differential_mapping"]],
+              header_training_modulation="qpsk",
+              papr_scope="finite clean pulse-shaped RF waveform, including acquisition, training, headers, pilots and tails; no PA model or power increase assumed",
               rf_payload_budget="requested audio seconds times complete-waveform payload duty; finite payload completed including partial-segment startup/tail",
               header_embedded_training=dict(interval_data_symbols=16,length_symbols=4,source="equalizer training sequence") if p["compact_header"] else None,
               training_seed=0x5A5A0002,

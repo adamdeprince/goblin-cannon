@@ -513,7 +513,7 @@ def main():
     parser.add_argument("--seed",type=int,default=None)
     parser.add_argument("--seeds",type=int,nargs="+",help="independent seeds; full declared duration for each")
     parser.add_argument("--profile",choices=("legacy","recovery"),default="legacy")
-    parser.add_argument("--campaign",choices=("matrix","polar_screen","polar_long"))
+    parser.add_argument("--campaign",choices=("matrix","polar_screen","polar_long","psk_quick","psk_screen","psk_followup","psk_snr","psk_latency"))
     parser.add_argument("--git-commit")
     parser.add_argument("--source-digest")
     parser.add_argument("--resume",action="store_true",help="reuse only parameter-identical records")

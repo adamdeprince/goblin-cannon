@@ -1,0 +1,25 @@
+{
+  "report_header": "simulated channel canonical determinism verification",
+  "kind": "assert",
+  "tier": "quick",
+  "comparisons": [
+    {
+      "original": "A2_psk_screen_24000_dbpsk_high_lat_moderate/7446529.json",
+      "repeat": "determinism/A2_psk_screen_24000_dbpsk_high_lat_moderate/7446529.json",
+      "sha256": "9e85d0c2d92a9b1746f29c91b1b9c0e4a97aeb659d5461efabe0e80f5e4721b0",
+      "byte_identical": true
+    },
+    {
+      "original": "C1_psk_snr_24000_qpsk_bpsk_header_10dB/7446529.json",
+      "repeat": "determinism/C1_psk_snr_24000_qpsk_bpsk_header_10dB/7446529.json",
+      "sha256": "25404c4ae71083ff81c844b4f92bf222d893940bc3592153ab5c58b1631cdec0",
+      "byte_identical": true
+    },
+    {
+      "original": "E2_psk_screen_24000_pi4_dqpsk_high_lat_moderate/7446529.json",
+      "repeat": "determinism/E2_psk_screen_24000_pi4_dqpsk_high_lat_moderate/7446529.json",
+      "sha256": "3ec61bd65b7f90532a08573b83757f427d20921d2488887c5b07528a9606d242",
+      "byte_identical": true
+    }
+  ]
+}

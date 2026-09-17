@@ -1566,6 +1566,8 @@ RealtimePipelineConfig make_realtime_pipeline_config(bool timestamp_enabled,
 
 pb::Modulation to_proto_modulation(Modulation modulation) {
   switch (modulation) {
+  case Modulation::bpsk:
+    return pb::MODULATION_BPSK;
   case Modulation::qpsk:
     return pb::MODULATION_QPSK;
   case Modulation::psk8:
@@ -1637,6 +1639,8 @@ pb::RestartRequest make_restart_request(const ReceiverRestartConfig& restart) {
   request.set_recursive_equalization(rf.recursive_equalization);
   request.set_equalizer_delay_symbols(rf.equalizer_delay_symbols);
   request.set_compact_header(rf.compact_header);
+  request.set_header_modulation(to_proto_modulation(rf.header_modulation));
+  request.set_differential_mapping(static_cast<pb::DifferentialMapping>(rf.differential_mapping));
   request.set_recovery_interval_frames(rf.recovery_interval_frames);
   request.set_fractionally_spaced_equalization(rf.fractionally_spaced_equalization);
   request.set_equalizer_reselect_interval(rf.equalizer_reselect_interval);
@@ -1820,6 +1824,7 @@ void test_receiver_control_grpc_server() {
   restart.pipeline.rf.recursive_equalization = false;
   restart.pipeline.rf.equalizer_delay_symbols = 2;
   restart.pipeline.rf.compact_header = true;
+  restart.pipeline.rf.header_modulation = Modulation::bpsk;
   restart.pipeline.rf.recovery_interval_frames = 16;
   restart.pipeline.rf.fractionally_spaced_equalization = true;
   restart.pipeline.rf.equalizer_reselect_interval = 256;
@@ -1835,6 +1840,7 @@ void test_receiver_control_grpc_server() {
   const auto pending = control->take_pending_restart();
   check(pending.has_value(), "gRPC restart did not schedule pending receiver");
   check(pending->pipeline.rf.compact_header && pending->pipeline.rf.recovery_interval_frames == 16 &&
+        pending->pipeline.rf.header_modulation == Modulation::bpsk &&
         pending->pipeline.rf.fractionally_spaced_equalization && pending->pipeline.rf.equalizer_reselect_interval == 256,
         "gRPC restart lost the recovery/equalizer configuration");
   check(pending->center_frequency_hz == restart.center_frequency_hz, "gRPC restart frequency mismatch");
@@ -1877,6 +1883,8 @@ void test_receiver_control_grpc_server() {
   legacy_restart.clear_recursive_equalization();
   legacy_restart.clear_equalizer_delay_symbols();
   legacy_restart.clear_compact_header();
+  legacy_restart.clear_header_modulation();
+  legacy_restart.clear_differential_mapping();
   legacy_restart.clear_recovery_interval_frames();
   legacy_restart.clear_fractionally_spaced_equalization();
   legacy_restart.clear_equalizer_reselect_interval();
@@ -1889,6 +1897,8 @@ void test_receiver_control_grpc_server() {
   check(status.ok(), "gRPC restart rejected a client without tracking fields");
   const auto legacy_pending = control->take_pending_restart();
   check(legacy_pending.has_value() && !legacy_pending->pipeline.rf.compact_header &&
+        legacy_pending->pipeline.rf.header_modulation == Modulation::qpsk &&
+        legacy_pending->pipeline.rf.differential_mapping == DifferentialMapping::none &&
         legacy_pending->pipeline.rf.recovery_interval_frames == 0 &&
         !legacy_pending->pipeline.rf.fractionally_spaced_equalization && legacy_pending->pipeline.rf.equalizer_reselect_interval == 0,
         "omitted recovery fields changed the legacy wire configuration");
@@ -1900,6 +1910,28 @@ void test_receiver_control_grpc_server() {
             legacy_pending->pipeline.rf.equalizer_feedforward_taps == 3U &&
             legacy_pending->pipeline.rf.equalizer_feedback_taps == 4U,
         "omitted gRPC tracking fields did not preserve modem defaults");
+
+  for (const auto mapping : {DifferentialMapping::dbpsk, DifferentialMapping::dqpsk, DifferentialMapping::pi4_dqpsk}) {
+    auto psk_restart = restart_request;
+    psk_restart.set_modulation(mapping == DifferentialMapping::dbpsk ? pb::MODULATION_BPSK : pb::MODULATION_QPSK);
+    psk_restart.set_differential_mapping(static_cast<pb::DifferentialMapping>(mapping));
+    psk_restart.clear_pilot_sequence();
+    psk_restart.add_pilot_sequence(0);
+    psk_restart.add_pilot_sequence(1);
+    grpc::ClientContext context;
+    status = stub->Restart(&context, psk_restart, &ack);
+    check(status.ok(), "gRPC rejected a valid differential PSK configuration");
+    const auto psk_pending = control->take_pending_restart();
+    check(psk_pending && psk_pending->pipeline.rf.differential_mapping == mapping &&
+          psk_pending->pipeline.rf.header_modulation == Modulation::bpsk,
+          "gRPC differential PSK configuration did not round-trip");
+  }
+  auto invalid_psk = restart_request;
+  invalid_psk.set_differential_mapping(pb::DIFFERENTIAL_DBPSK);
+  grpc::ClientContext invalid_psk_context;
+  status = stub->Restart(&invalid_psk_context, invalid_psk, &ack);
+  check(!status.ok() && status.error_code() == grpc::StatusCode::INVALID_ARGUMENT,
+        "gRPC accepted DBPSK over a QAM payload");
 
   pb::BankUpdate bad_bank_request;
   bad_bank_request.set_bank(2);

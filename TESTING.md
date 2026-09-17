@@ -48,7 +48,7 @@ AVX-512 dispatch is required unless `--allow-non-avx512` is supplied and recorde
 Tier budgets are 120 seconds, 1,800 seconds, and 4–12 hours. Long quick cases
 still process every sample in their specified ten-minute simulated duration.
 The runner reports budget overruns; it never reduces a duration or grid.
-A1 uses **10 simulated seconds per point**, all ten supported constellations,
+A1 uses **10 simulated seconds per point**, the original ten constellations,
 three implemented FEC rates, both bandwidths, all nine presets, and 0–30 dB SNR
 in 2 dB steps. These are screening curves. They do not establish F.1487's much
 longer statistical-duration operating limits; C1 marks such limits unestablished.
@@ -94,6 +94,47 @@ deadlines are calculated from the event index; a separate assertion rejects
 source events that slip across their aligned audio tick.
 
 ## Read simulated channel results
+
+### PSK simulated channel comparison
+
+The PSK campaign compares eleven configurations at both bandwidths: QPSK
+with either header, BPSK with either header, 8-PSK with either header, coherent
+16-QAM/64-QAM controls, and DBPSK/DQPSK/π/4-DQPSK with BPSK headers. Compare
+differential formats with their matching coherent BPSK-header control.
+All keep carrier correction off and recovery-profile equalization on.
+
+```sh
+ctest --test-dir build --output-on-failure
+python3 tests/simulated_channel/run.py --tier quick --campaign psk_quick --results results/psk-improvements
+python3 tests/simulated_channel/run.py --tier full --campaign psk_screen --seeds 7446529 7446530 7446531 --jobs 8 --results results/psk-improvements
+python3 tests/simulated_channel/run.py --tier full --campaign psk_snr --jobs 8 --results results/psk-improvements
+python3 tests/simulated_channel/run.py --tier full --campaign psk_followup --seeds 7446529 7446530 7446531 --jobs 8 --results results/psk-improvements
+# On naamah, after building without the AVX-512 requirement; run serially:
+python3 tests/simulated_channel/run.py --tier quick --campaign psk_latency --jobs 1 --allow-non-avx512 --results results/psk-improvements/naamah-latency
+python3 tests/simulated_channel/run.py --tier full --campaign psk_latency --jobs 1 --allow-non-avx512 --results results/psk-improvements/naamah-latency
+```
+
+Screens last ten seconds per seed. The independent follow-up uses
+300/300/100 seconds on quiet/moderate/disturbed, respectively, retaining every
+delivery in aggregate metrics. It does not replace the previous 6,000-second
+quiet campaign or establish an F.1487 BER operating limit. Noise curves retain
+all sixteen 0–30 dB points at equal nominal symbol energy; SNR is not Eb/N0.
+PAPR is measured over clean pulse-shaped RF samples including controls and
+tails; no PA backoff gain is assumed. The 22 serial twelve-second short-span
+latency measurements necessarily exceed the quick-tier runtime allowance;
+the execution report records that overrun without shortening the runs.
+
+`goblin_cannon_psk` uses seed 7446532 for known phase vectors, generated
+payloads, arbitrary common phase/drift, absolute pilots, chunk invariance,
+configuration mismatch rejection and production-message dropout recovery.
+The π/4 mapping uses 00/01/10/11 → +45/+135/−45/−135 degrees, as documented by
+[Keysight](https://helpfiles.keysight.com/csg/89600B/Webhelp/Subsystems/digdemod/content/dlg_digdemod_fmt_pi4dqpsk.htm).
+Differential mapping does not replace acquisition, equalization or header
+decoding. Both endpoints are configured through the existing fiber control
+interface; compact headers bind settings into the CRC without adding a
+parameter-negotiation channel.
+
+### Simulated channel result files
 
 - `results/<test_name>/<seed>.json`: full configuration, revision/source hash,
   observations, metric definitions, assertions, and open thresholds.

@@ -1,6 +1,7 @@
 #include "goblin_cannon/rf_stream.hpp"
 
 #include "rf_equalizer.hpp"
+#include "differential_psk.hpp"
 #include "goblin_cannon/convolutional.hpp"
 
 #include <algorithm>
@@ -46,6 +47,8 @@ std::uint32_t modulation_id(Modulation modulation) {
     return 8;
   case Modulation::qci1024:
     return 9;
+  case Modulation::bpsk:
+    return 10;
   }
   return 0;
 }
@@ -72,6 +75,8 @@ Modulation modulation_from_id(std::uint32_t id) {
     return Modulation::qci256;
   case 9:
     return Modulation::qci1024;
+  case 10:
+    return Modulation::bpsk;
   default:
     throw std::invalid_argument("unknown modulation id in RF stream header");
   }
@@ -126,8 +131,8 @@ std::array<std::uint8_t, serialized_header_bytes> serialize_header_without_crc(R
   append_u32_be(bytes, offset, header.symbols_per_frame);
   append_u32_be(bytes, offset, header.pilot_interval_symbols);
   bytes[offset++] = static_cast<std::uint8_t>(modulation_id(header.modulation));
-  bytes[offset++] = 0;
-  bytes[offset++] = 0;
+  bytes[offset++] = static_cast<std::uint8_t>(modulation_id(header.header_modulation));
+  bytes[offset++] = static_cast<std::uint8_t>(header.differential_mapping);
   bytes[offset++] = 0;
   return bytes;
 }
@@ -156,6 +161,11 @@ std::optional<RfStreamHeader> parse_header(std::span<const std::uint8_t> bytes) 
   header.symbols_per_frame = read_u32_be(bytes, 16);
   header.pilot_interval_symbols = read_u32_be(bytes, 20);
   header.modulation = modulation_from_id(bytes[24]);
+  // The two formerly reserved zero bytes retain legacy QPSK/coherent defaults.
+  if (bytes[25] != 0 && bytes[25] != 10) return std::nullopt;
+  if (bytes[26] > static_cast<std::uint8_t>(DifferentialMapping::pi4_dqpsk)) return std::nullopt;
+  header.header_modulation = modulation_from_id(bytes[25]);
+  header.differential_mapping = static_cast<DifferentialMapping>(bytes[26]);
   header.crc32 = observed_crc;
   return header;
 }
@@ -217,12 +227,14 @@ std::vector<Complex> build_reference_preamble(const RfStreamConfig& config) {
 }
 
 constexpr std::size_t compact_header_bytes = 16;
-constexpr std::size_t compact_coded_symbols = compact_header_bytes * 8U + 6U;
+constexpr std::size_t compact_input_bits = compact_header_bytes * 8U + 6U;
 constexpr std::size_t header_probe_interval = 16;
 constexpr std::size_t header_probe_length = 4;
 
 std::vector<std::uint8_t> header_wire_bits(const RfStreamConfig& config, const RfStreamHeader& header) {
-  if (!config.compact_header) return bytes_to_repeated_bits(serialize_header(header), config.header_repetition);
+  const auto width = bits_per_symbol(config.header_modulation);
+  std::vector<std::uint8_t> coded;
+  if (!config.compact_header) coded = bytes_to_repeated_bits(serialize_header(header), config.header_repetition);
   // Mode, pilot cadence and frame size already come from the control link.
   // The CRC binds them too, so mismatched configuration cannot validate.
   std::array<std::uint8_t, serialized_header_bytes> storage{};
@@ -230,20 +242,27 @@ std::vector<std::uint8_t> header_wire_bits(const RfStreamConfig& config, const R
   append_u32_be(storage, offset, header.schedule_epoch_low);
   append_u64_be(storage, offset, header.frame_counter_start);
   append_u32_be(storage, offset, stream_header_crc32(header));
-  PuncturedConvolutionalEncoder encoder;
-  auto coded = encoder.push_bytes(std::span(storage).first(compact_header_bytes));
-  for (std::size_t i = 0; i < 6; ++i) encoder.push_bit_append(0, coded);
+  if (config.compact_header) {
+    PuncturedConvolutionalEncoder encoder;
+    coded = encoder.push_bytes(std::span(storage).first(compact_header_bytes));
+    for (std::size_t i = 0; i < 6; ++i) encoder.push_bit_append(0, coded);
+  }
   std::vector<std::uint8_t> bits;
   Constellation qpsk(Modulation::qpsk);
   std::array<std::uint8_t, 2> probe{};
-  for (std::size_t i = 0; i < compact_coded_symbols; ++i) {
-    if (i != 0 && i % header_probe_interval == 0) {
+  for (std::size_t i = 0; i < coded.size()/width; ++i) {
+    if (config.compact_header && i != 0 && i % header_probe_interval == 0) {
       for (std::size_t j = 0; j < header_probe_length; ++j) {
         qpsk.symbol_to_bits(config.equalizer_training_sequence[(i+j) % config.equalizer_training_sequence.size()], probe);
         bits.insert(bits.end(), probe.begin(), probe.end());
       }
     }
-    bits.insert(bits.end(), coded.begin()+static_cast<std::ptrdiff_t>(2*i), coded.begin()+static_cast<std::ptrdiff_t>(2*i+2));
+    if (width == 1) {
+      // Use QPSK's +1/-1 points in the same pulse-shaping stream as training.
+      bits.push_back(0); bits.push_back(coded[i]);
+    } else {
+      bits.insert(bits.end(), coded.begin()+static_cast<std::ptrdiff_t>(2*i), coded.begin()+static_cast<std::ptrdiff_t>(2*i+2));
+    }
   }
   return bits;
 }
@@ -256,10 +275,10 @@ std::vector<Complex> build_training_header_samples(const RfStreamConfig& config,
 }
 
 std::size_t expected_training_header_bits(const RfStreamConfig& config) {
-  return config.equalizer_training_sequence.size() * 2U +
-         (config.compact_header ? 2U * (compact_coded_symbols +
-              (compact_coded_symbols-1U)/header_probe_interval*header_probe_length)
-                               : serialized_header_bytes * 8U * config.header_repetition);
+  const auto data_symbols = (config.compact_header ? 2U*compact_input_bits
+      : serialized_header_bytes*8U*config.header_repetition) / bits_per_symbol(config.header_modulation);
+  const auto probes = config.compact_header ? (data_symbols-1U)/header_probe_interval*header_probe_length : 0U;
+  return 2U * (config.equalizer_training_sequence.size() + data_symbols + probes);
 }
 
 std::vector<std::uint8_t> majority_header_bytes(std::span<const std::uint8_t> repeated_bits,
@@ -333,6 +352,9 @@ std::vector<std::uint32_t> make_default_qpsk_sequence(std::size_t symbols, std::
 
 void validate(const RfStreamConfig& config) {
   validate(config.modem);
+  if (config.header_modulation != Modulation::bpsk && config.header_modulation != Modulation::qpsk)
+    throw std::invalid_argument("header modulation must be BPSK or QPSK");
+  (void)detail::DifferentialPsk(config);
   if (config.acquisition_sequence.empty()) {
     throw std::invalid_argument("acquisition_sequence must not be empty");
   }
@@ -469,8 +491,10 @@ class RfStreamEncoder::Impl {
 public:
   explicit Impl(RfStreamConfig config)
       : config_(std::move(config)),
-        data_encoder_(config_.modem),
-        data_constellation_(config_.modem.modulation, config_.modem.constellation_profile) {
+        data_encoder_(detail::differential_wire_config(config_)),
+        data_constellation_(config_.modem.modulation, config_.modem.constellation_profile),
+        wire_constellation_(data_encoder_.config().modulation, config_.modem.constellation_profile),
+        differential_(config_) {
     validate(config_);
   }
 
@@ -486,6 +510,8 @@ public:
     header_.symbols_per_frame = config_.symbols_per_frame;
     header_.pilot_interval_symbols = config_.pilot_interval_symbols;
     header_.modulation = config_.modem.modulation;
+    header_.header_modulation = config_.header_modulation;
+    header_.differential_mapping = config_.differential_mapping;
     header_.crc32 = stream_header_crc32(header_);
 
     auto preamble = build_reference_preamble(config_);
@@ -575,7 +601,7 @@ public:
       if (symbol >= data_constellation_.size()) {
         throw std::invalid_argument("payload symbol outside configured constellation");
       }
-      push_modulation_symbol(symbol, out.subspan(result.produced_samples), result);
+      push_modulation_symbol(symbol, out.subspan(result.produced_samples), result, true);
       --symbols_until_pilot_;
       ++result.consumed_symbols;
       ++segment_payload_symbols_;
@@ -611,6 +637,7 @@ public:
 
   void reset() {
     data_encoder_.reset();
+    differential_.reset();
     state_ = RfStreamState::search;
     control_samples_.clear();
     control_offset_ = 0;
@@ -627,10 +654,12 @@ public:
   }
 
 private:
-  void push_modulation_symbol(std::uint32_t symbol, std::span<Complex> out, RfStreamEncodeResult& result) {
+  void push_modulation_symbol(std::uint32_t symbol, std::span<Complex> out, RfStreamEncodeResult& result, bool payload = false) {
     std::array<std::uint8_t, max_bits_per_symbol> bits{};
-    data_constellation_.symbol_to_bits(symbol, std::span<std::uint8_t>(bits).first(data_constellation_.bits_per_symbol()));
-    const auto pushed = data_encoder_.push_bits(std::span<const std::uint8_t>(bits).first(data_constellation_.bits_per_symbol()), out);
+    symbol = payload ? differential_.encode(symbol) : differential_.encode_pilot(symbol);
+    const auto width = wire_constellation_.bits_per_symbol();
+    wire_constellation_.symbol_to_bits(symbol, std::span<std::uint8_t>(bits).first(width));
+    const auto pushed = data_encoder_.push_bits(std::span<const std::uint8_t>(bits).first(width), out);
     result.produced_samples += pushed.produced;
     state_ = RfStreamState::locked;
   }
@@ -638,6 +667,8 @@ private:
   RfStreamConfig config_;
   Encoder data_encoder_;
   Constellation data_constellation_;
+  Constellation wire_constellation_;
+  detail::DifferentialPsk differential_;
   RfStreamState state_ = RfStreamState::search;
   RfStreamHeader header_ = {};
   std::vector<Complex> control_samples_;
@@ -676,6 +707,7 @@ public:
         qpsk_decoder_(qpsk_config()),
         data_decoder_(config_.modem),
         data_constellation_(config_.modem.modulation, config_.modem.constellation_profile),
+        differential_(config_),
         equalizer_(config_),
         reference_(build_reference_preamble(config_)),
         training_header_samples_(build_training_header_samples(config_, placeholder_header())) {
@@ -724,6 +756,7 @@ public:
     first_sample_index_ = 0;
     qpsk_decoder_.reset();
     data_decoder_.reset();
+    differential_.reset();
     bad_pilots_ = 0;
     pilot_group_bad_ = false;
     equalizer_.reset();
@@ -760,6 +793,8 @@ private:
     header.symbols_per_frame = config_.symbols_per_frame;
     header.pilot_interval_symbols = config_.pilot_interval_symbols;
     header.modulation = config_.modem.modulation;
+    header.header_modulation = config_.header_modulation;
+    header.differential_mapping = config_.differential_mapping;
     header.crc32 = stream_header_crc32(header);
     return header;
   }
@@ -864,6 +899,7 @@ private:
       return false;
     }
     Constellation qpsk(Modulation::qpsk);
+    Constellation header_constellation(config_.header_modulation);
     const auto training_count = config_.equalizer_training_sequence.size();
     equalizer_.reset();
     const auto guard = std::max(equalizer_.memory_symbols(), config_.modem.filter_span_symbols / 2U);
@@ -906,19 +942,20 @@ private:
         ++header_probe_index;
         continue;
       }
-      const auto decision = qpsk.decide(observed);
+      const auto decision = header_constellation.decide(observed);
       std::array<std::uint8_t, 2> bits{};
-      qpsk.symbol_to_bits(decision.symbol, bits);
-      repeated_bits.insert(repeated_bits.end(), bits.begin(), bits.end());
-      for (const auto bit : bits) coded_header.push_back({bit, decision.confidence >= tracking_confidence, decision.confidence});
-      equalizer_.update(qpsk.map_symbol(decision.symbol), observed, equalizer_step,
+      const auto decoded_bits = std::span(bits).first(header_constellation.bits_per_symbol());
+      header_constellation.symbol_to_bits(decision.symbol, decoded_bits);
+      repeated_bits.insert(repeated_bits.end(), decoded_bits.begin(), decoded_bits.end());
+      for (const auto bit : decoded_bits) coded_header.push_back({bit, decision.confidence >= tracking_confidence, decision.confidence});
+      equalizer_.update(header_constellation.map_symbol(decision.symbol), observed, equalizer_step,
                         decision.confidence >= tracking_confidence);
       ++header_data_index;
       header_probe_index = 0;
     }
     std::optional<RfStreamHeader> parsed;
     if (config_.compact_header) {
-      const auto decoded_header = SoftViterbiDecoder().decode(coded_header, compact_coded_symbols);
+      const auto decoded_header = SoftViterbiDecoder().decode(coded_header, compact_input_bits);
       std::array<std::uint8_t, compact_header_bytes> bytes{};
       for (std::size_t i = 0; i < bytes.size(); ++i) bytes[i] = decoded_header.bytes[i].value;
       auto candidate = placeholder_header();
@@ -935,6 +972,8 @@ private:
     }
     if (parsed->schedule_epoch_low != static_cast<std::uint32_t>(config_.expected_schedule_epoch & 0xFFFFFFFFULL) ||
         parsed->modulation != config_.modem.modulation ||
+        parsed->header_modulation != config_.header_modulation ||
+        parsed->differential_mapping != config_.differential_mapping ||
         parsed->symbols_per_frame != config_.symbols_per_frame ||
         parsed->pilot_interval_symbols != config_.pilot_interval_symbols) {
       state_ = RfStreamState::protocol_error;
@@ -954,6 +993,7 @@ private:
     pending_symbols_.clear();
     pending_symbol_offset_ = 0;
     data_decoder_.reset();
+    differential_.reset();
     bad_pilots_ = 0;
     pilot_group_bad_ = false;
     equalizer_.clear_history();
@@ -1003,8 +1043,10 @@ private:
           observed = equalizer_.track_pilot_gain(data_constellation_.map_symbol(
               config_.pilot_sequence[elapsed % config_.pilot_sequence.size()]), observed);
       }
-      const auto decision = data_constellation_.decide(observed);
-      if (!consume_modulation_symbol(decision, observed, out, result)) {
+      const bool payload = startup_discard_symbols_ == 0 && startup_pilots_remaining_ == 0 && symbols_until_pilot_ != 0;
+      const auto rotation = payload ? differential_.physical_rotation() : Complex{1, 0};
+      const auto decision = data_constellation_.decide(observed * std::conj(rotation));
+      if (!consume_modulation_symbol(decision, observed, rotation, out, result)) {
         return true;
       }
     }
@@ -1013,10 +1055,11 @@ private:
 
   bool consume_modulation_symbol(const SymbolDecision& decision,
                                  Complex observed,
+                                 Complex rotation,
                                  std::span<RfStreamSymbol> out,
                                  RfStreamReceiveResult& result) {
-    const auto symbol = decision.symbol;
-    const auto confidence = decision.confidence;
+    auto symbol = decision.symbol;
+    auto confidence = decision.confidence;
 
     if (startup_discard_symbols_ != 0) {
       equalizer_.update({}, observed, equalizer_step, false);
@@ -1029,11 +1072,13 @@ private:
       equalizer_.update(data_constellation_.map_symbol(config_.pilot_sequence[index]), observed, equalizer_step,
                         startup_pilot_symbols(config_) - startup_pilots_remaining_ >= equalizer_.memory_symbols(), true);
       --startup_pilots_remaining_;
+      differential_.observe_pilot(observed);
       return true;
     }
 
     if (symbols_until_pilot_ == 0) {
       const auto expected = config_.pilot_sequence[pilot_index_];
+      differential_.observe_pilot(observed);
       if (symbol != expected || confidence < config_.pilot_confidence_threshold) {
         pilot_group_bad_ = true;
       }
@@ -1058,8 +1103,13 @@ private:
     if (result.produced_symbols == out.size()) {
       return false;
     }
-    equalizer_.update(data_constellation_.map_symbol(symbol), observed, equalizer_step,
+    equalizer_.update(data_constellation_.map_symbol(symbol) * rotation, observed, equalizer_step,
                       confidence >= tracking_confidence);
+    if (differential_.enabled()) {
+      const auto decoded = differential_.decode(observed);
+      symbol = decoded.symbol;
+      confidence = decoded.confidence;
+    }
     out[result.produced_symbols++] = {.value = symbol,
                                       .bits_per_symbol = static_cast<std::uint8_t>(data_constellation_.bits_per_symbol()),
                                       .frame_counter = frame_counter_,
@@ -1122,6 +1172,7 @@ private:
   Decoder qpsk_decoder_;
   Decoder data_decoder_;
   Constellation data_constellation_;
+  detail::DifferentialPsk differential_;
   detail::RfEqualizer equalizer_;
   std::size_t bad_pilots_ = 0;
   bool pilot_group_bad_ = false;

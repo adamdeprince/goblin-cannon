@@ -51,6 +51,7 @@ inline int parse_int_or(const std::string& value, int fallback) {
 }
 
 inline goblin_cannon::Modulation parse_modulation(const std::string& value) {
+  if (value == "bpsk") return goblin_cannon::Modulation::bpsk;
   if (value == "qpsk") {
     return goblin_cannon::Modulation::qpsk;
   }

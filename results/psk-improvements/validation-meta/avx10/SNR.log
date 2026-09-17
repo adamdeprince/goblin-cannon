@@ -1,0 +1,10 @@
+simulated channel: 352 cases, tier=full, jobs=8
+simulated channel: 50/352 C1_psk_snr_10000_bpsk_2dB characterized
+simulated channel: 100/352 C1_psk_snr_10000_16qam_reference_6dB characterized
+simulated channel: 150/352 C1_psk_snr_10000_dqpsk_10dB characterized
+simulated channel: 200/352 C1_psk_snr_24000_qpsk_bpsk_header_16dB characterized
+simulated channel: 250/352 C1_psk_snr_24000_8psk_qpsk_header_18dB characterized
+simulated channel: 300/352 C1_psk_snr_24000_64qam_reference_20dB characterized
+simulated channel: 350/352 C1_psk_snr_24000_pi4_dqpsk_30dB characterized
+simulated channel: 352/352 C1_psk_snr_24000_pi4_dqpsk_28dB characterized
+simulated channel: 42.573s {'characterized': 352}; results/psk-improvements/SUMMARY.md

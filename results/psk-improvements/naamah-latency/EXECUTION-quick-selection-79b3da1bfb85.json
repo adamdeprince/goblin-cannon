@@ -1,0 +1,51 @@
+{
+  "budget_seconds": 120,
+  "complete_tier": false,
+  "elapsed_seconds": 281.82823129184544,
+  "executed_cases": 22,
+  "git_commit": "ad0a00e2289b576990ceccd628828307736c66c0",
+  "host": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43",
+  "jobs": 1,
+  "parameter_records": [
+    "B5_psk_10000_qpsk_reference_short_null/7446529.json",
+    "B5_psk_10000_qpsk_bpsk_header_short_null/7446529.json",
+    "B5_psk_10000_bpsk_qpsk_header_short_null/7446529.json",
+    "B5_psk_10000_bpsk_short_null/7446529.json",
+    "B5_psk_10000_8psk_qpsk_header_short_null/7446529.json",
+    "B5_psk_10000_8psk_bpsk_header_short_null/7446529.json",
+    "B5_psk_10000_16qam_reference_short_null/7446529.json",
+    "B5_psk_10000_64qam_reference_short_null/7446529.json",
+    "B5_psk_10000_dbpsk_short_null/7446529.json",
+    "B5_psk_10000_dqpsk_short_null/7446529.json",
+    "B5_psk_10000_pi4_dqpsk_short_null/7446529.json",
+    "B5_psk_24000_qpsk_reference_short_null/7446529.json",
+    "B5_psk_24000_qpsk_bpsk_header_short_null/7446529.json",
+    "B5_psk_24000_bpsk_qpsk_header_short_null/7446529.json",
+    "B5_psk_24000_bpsk_short_null/7446529.json",
+    "B5_psk_24000_8psk_qpsk_header_short_null/7446529.json",
+    "B5_psk_24000_8psk_bpsk_header_short_null/7446529.json",
+    "B5_psk_24000_16qam_reference_short_null/7446529.json",
+    "B5_psk_24000_64qam_reference_short_null/7446529.json",
+    "B5_psk_24000_dbpsk_short_null/7446529.json",
+    "B5_psk_24000_dqpsk_short_null/7446529.json",
+    "B5_psk_24000_pi4_dqpsk_short_null/7446529.json"
+  ],
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "report_header": "simulated channel non-canonical execution observations",
+  "selected_cases": 22,
+  "selection": {
+    "campaign": "psk_latency",
+    "cases": [],
+    "excluded_groups": [],
+    "groups": [],
+    "profile": "legacy",
+    "resume": false,
+    "seed": null,
+    "seeds": null
+  },
+  "source_tree_sha256": "fba0aaa45f0ca59ff434e08ecb6bc0e38d8346afed5a2347847cc0ac77baa8ec",
+  "statuses": {
+    "pass": 22
+  },
+  "tier": "quick"
+}

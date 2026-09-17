@@ -57,7 +57,7 @@ struct Json {
   }
 };
 Modulation modulation(const std::string& name) {
-  const std::map<std::string,Modulation> values={{"qpsk",Modulation::qpsk},{"8psk",Modulation::psk8},
+  const std::map<std::string,Modulation> values={{"bpsk",Modulation::bpsk},{"qpsk",Modulation::qpsk},{"8psk",Modulation::psk8},
     {"16qam",Modulation::qam16},{"64qam",Modulation::qam64},{"256qam",Modulation::qam256},
     {"1024qam",Modulation::qam1024},{"16qci",Modulation::qci16},{"64qci",Modulation::qci64},
     {"256qci",Modulation::qci256},{"1024qci",Modulation::qci1024}};
@@ -89,6 +89,10 @@ RfStreamConfig rf_config(const Arguments& a) {
   c.equalizer_feedback_taps=number(a,"equalizer_feedback_taps",4);
   c.equalizer_delay_symbols=number(a,"equalizer_delay_symbols",0);
   c.compact_header=number(a,"compact_header",0)!=0;
+  c.header_modulation=modulation(word(a,"header_modulation","qpsk"));
+  const std::map<std::string,DifferentialMapping> mappings={{"none",DifferentialMapping::none},
+      {"dbpsk",DifferentialMapping::dbpsk},{"dqpsk",DifferentialMapping::dqpsk},{"pi4_dqpsk",DifferentialMapping::pi4_dqpsk}};
+  c.differential_mapping=mappings.at(word(a,"differential_mapping","none"));
   c.recovery_interval_frames=number(a,"recovery_interval_frames",0);
   c.fractionally_spaced_equalization=number(a,"fractionally_spaced_equalization",0)!=0;
   c.equalizer_reselect_interval=number(a,"equalizer_reselect_interval",0);
@@ -221,7 +225,8 @@ Json run_rf(const Arguments& a) {
     const double sps=c.modem.sample_rate_hz/rate,half=c.modem.filter_span_symbols/2.0;
     const auto pulse_samples=[&](double symbols) {return std::floor((symbols-1+half)*sps)+1;};
     const auto startup=std::max<std::size_t>(c.modem.filter_span_symbols,c.equalizer_feedforward_taps+c.equalizer_feedback_taps);
-    const auto header_symbols=c.compact_header?166:128*c.header_repetition;
+    const auto header_data=(c.compact_header?268:256*c.header_repetition)/bits_per_symbol(c.header_modulation);
+    const auto header_symbols=header_data+(c.compact_header?(header_data-1)/16*4:0);
     const auto segment=pulse_samples(c.acquisition_sequence.size())+
         pulse_samples(c.equalizer_training_sequence.size()+header_symbols)+
         pulse_samples(n+startup+n/c.pilot_interval_symbols*c.pilot_sequence.size()+c.equalizer_delay_symbols);
@@ -270,6 +275,8 @@ Json run_rf(const Arguments& a) {
   Constellation constellation(c.modem.modulation,c.modem.constellation_profile);
   std::vector<double> amplitudes;
   const bool calibrate=number(a,"calibrate_clip")!=0;
+  double tx_power_sum=0,tx_peak_power=0;
+  std::uint64_t tx_sample_count=0;
   const std::uint64_t target_samples=static_cast<std::uint64_t>((duration+0.25)*c.modem.sample_rate_hz);
   std::size_t receive_tail=channel_cfg.pure_noise?0:static_cast<std::size_t>(number(a,"receive_tail_samples",2));
   // Finish the declared payload, including all recurring control airtime.
@@ -305,6 +312,9 @@ Json run_rf(const Arguments& a) {
       std::fill(clean.begin(),clean.end(),Complex{});
     }
     if(calibrate)for(std::size_t i=0;i<produced;++i)amplitudes.push_back(std::abs(clean[i]));
+    for(std::size_t i=0;i<produced;++i) {
+      const double power=std::norm(clean[i]);tx_power_sum+=power;tx_peak_power=std::max(tx_peak_power,power);++tx_sample_count;
+    }
     if(std::isfinite(channel_cfg.data_sir_db)) {
       const auto tx=interferer.push_symbols(other_send,std::span(other).first(produced));
       if(tx.produced_samples!=produced)throw std::runtime_error("interferer stalled");
@@ -389,6 +399,10 @@ Json run_rf(const Arguments& a) {
     std::sort(amplitudes.begin(),amplitudes.end());
     for(const auto percent:{1,5,10})out.set("clip_top_"+std::to_string(percent),amplitudes[static_cast<std::size_t>((1-percent/100.0)*(amplitudes.size()-1))]);
   }
+  out.set("tx_mean_sample_power",tx_sample_count?tx_power_sum/tx_sample_count:0);
+  out.set("tx_peak_sample_power",tx_peak_power);
+  out.set("tx_papr_db",tx_power_sum>0?10*std::log10(tx_peak_power*tx_sample_count/tx_power_sum):NAN);
+  out.set("tx_power_observed_samples",tx_sample_count);
   return out;
 }
 

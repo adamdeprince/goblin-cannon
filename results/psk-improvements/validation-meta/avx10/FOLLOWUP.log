@@ -1,0 +1,6 @@
+simulated channel: 198 cases, tier=full, jobs=8
+simulated channel: 50/198 E2_psk_followup_10000_dbpsk_high_lat_quiet characterized
+simulated channel: 100/198 E2_psk_followup_24000_8psk_bpsk_header_high_lat_moderate characterized
+simulated channel: 150/198 E2_psk_followup_24000_pi4_dqpsk_high_lat_moderate characterized
+simulated channel: 198/198 E2_psk_followup_24000_pi4_dqpsk_high_lat_disturbed characterized
+simulated channel: 1302.735s {'characterized': 198}; results/psk-improvements/SUMMARY.md

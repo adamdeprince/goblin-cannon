@@ -1,0 +1,51 @@
+{
+  "budget_seconds": 120,
+  "complete_tier": false,
+  "elapsed_seconds": 0.3505245987325907,
+  "executed_cases": 22,
+  "git_commit": "ad0a00e2289b576990ceccd628828307736c66c0",
+  "host": "Linux-7.0.0-1008-aws-x86_64-with-glibc2.43",
+  "jobs": 4,
+  "parameter_records": [
+    "C4_psk_10000_qpsk_reference_null/7446529.json",
+    "C4_psk_10000_qpsk_bpsk_header_null/7446529.json",
+    "C4_psk_10000_bpsk_qpsk_header_null/7446529.json",
+    "C4_psk_10000_bpsk_null/7446529.json",
+    "C4_psk_10000_8psk_qpsk_header_null/7446529.json",
+    "C4_psk_10000_8psk_bpsk_header_null/7446529.json",
+    "C4_psk_10000_16qam_reference_null/7446529.json",
+    "C4_psk_10000_64qam_reference_null/7446529.json",
+    "C4_psk_10000_dbpsk_null/7446529.json",
+    "C4_psk_10000_dqpsk_null/7446529.json",
+    "C4_psk_10000_pi4_dqpsk_null/7446529.json",
+    "C4_psk_24000_qpsk_reference_null/7446529.json",
+    "C4_psk_24000_qpsk_bpsk_header_null/7446529.json",
+    "C4_psk_24000_bpsk_qpsk_header_null/7446529.json",
+    "C4_psk_24000_bpsk_null/7446529.json",
+    "C4_psk_24000_8psk_qpsk_header_null/7446529.json",
+    "C4_psk_24000_8psk_bpsk_header_null/7446529.json",
+    "C4_psk_24000_16qam_reference_null/7446529.json",
+    "C4_psk_24000_64qam_reference_null/7446529.json",
+    "C4_psk_24000_dbpsk_null/7446529.json",
+    "C4_psk_24000_dqpsk_null/7446529.json",
+    "C4_psk_24000_pi4_dqpsk_null/7446529.json"
+  ],
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "report_header": "simulated channel non-canonical execution observations",
+  "selected_cases": 22,
+  "selection": {
+    "campaign": "psk_quick",
+    "cases": [],
+    "excluded_groups": [],
+    "groups": [],
+    "profile": "legacy",
+    "resume": false,
+    "seed": null,
+    "seeds": null
+  },
+  "source_tree_sha256": "fba0aaa45f0ca59ff434e08ecb6bc0e38d8346afed5a2347847cc0ac77baa8ec",
+  "statuses": {
+    "pass": 22
+  },
+  "tier": "quick"
+}

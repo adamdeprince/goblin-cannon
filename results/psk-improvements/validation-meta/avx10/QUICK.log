@@ -1,0 +1,3 @@
+simulated channel: 22 cases, tier=quick, jobs=4
+simulated channel: 22/22 C4_psk_24000_pi4_dqpsk_null pass
+simulated channel: 0.351s {'pass': 22}; results/psk-improvements/SUMMARY.md

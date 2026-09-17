@@ -111,6 +111,21 @@ class SimulatedChannelHarness(unittest.TestCase):
         self.assertEqual(m["usable_time_fraction"],.8)
         self.assertNotIn("latency_ms",m["missing_metric_reasons"])
 
+    def test_psk_campaign_preserves_boundary_and_declared_durations(self):
+        cases=[c for c in matrix() if c.parameters.get("rf_profile")=="psk"]
+        self.assertEqual(sum(c.parameters["campaign"]=="psk_screen" for c in cases),132)
+        self.assertEqual(sum(c.parameters["campaign"]=="psk_followup" for c in cases),66)
+        self.assertEqual(sum(c.parameters["campaign"]=="psk_snr" for c in cases),352)
+        for c in cases:
+            p=full_parameters(c,"commit","digest")
+            self.assertEqual(p["carrier_correction"],0)
+            self.assertTrue(p["adaptive_equalization"] and p["sample_clock_recovery"])
+            self.assertEqual(p["header_air_symbols"],332 if p["header_modulation"]=="bpsk" else 166)
+            if p["campaign"]=="psk_followup":
+                self.assertEqual(p["duration_s"],100 if "disturbed" in c.name else 300)
+            # Unknown assertion names must fail here, before expensive runs.
+            evaluate(c,{},summarize({}),{})
+
 
 if __name__=="__main__":
     unittest.main()

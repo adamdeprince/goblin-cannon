@@ -1,0 +1,10 @@
+simulated channel: 384 cases, tier=full, jobs=8
+simulated channel: 50/384 A2_psk_screen_10000_bpsk_qpsk_header_high_lat_disturbed characterized
+simulated channel: 100/384 E2_psk_screen_10000_8psk_bpsk_header_high_lat_moderate characterized
+simulated channel: 150/384 E2_psk_screen_10000_dbpsk_high_lat_quiet characterized
+simulated channel: 200/384 A2_psk_screen_24000_qpsk_reference_high_lat_quiet characterized
+simulated channel: 250/384 E2_psk_screen_24000_bpsk_high_lat_moderate characterized
+simulated channel: 300/384 A2_psk_screen_24000_16qam_reference_high_lat_moderate characterized
+simulated channel: 350/384 E2_psk_screen_24000_dqpsk_high_lat_quiet characterized
+simulated channel: 384/384 E2_psk_screen_24000_pi4_dqpsk_high_lat_disturbed characterized
+simulated channel: 124.961s {'characterized': 384}; results/psk-improvements/SUMMARY.md

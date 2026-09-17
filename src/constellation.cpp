@@ -23,6 +23,8 @@ bool is_qci(Modulation modulation) noexcept {
 
 std::vector<Complex> make_wbhf_points(Modulation modulation) {
   switch (modulation) {
+  case Modulation::bpsk:
+    return {{1.0F, 0.0F}, {-1.0F, 0.0F}};
   case Modulation::qpsk:
     return {
       {1.0F, 0.0F},
@@ -170,7 +172,7 @@ std::uint32_t gray_to_binary(std::uint32_t gray) {
 }
 
 std::vector<Complex> make_square_gray_points(Modulation modulation) {
-  if (modulation == Modulation::qpsk || modulation == Modulation::psk8) {
+  if (modulation == Modulation::bpsk || modulation == Modulation::qpsk || modulation == Modulation::psk8) {
     return make_wbhf_points(modulation);
   }
 
@@ -209,6 +211,8 @@ std::vector<Complex> make_qci_points(Modulation modulation) {
 
 std::string to_string(Modulation modulation) {
   switch (modulation) {
+  case Modulation::bpsk:
+    return "BPSK";
   case Modulation::qpsk:
     return "QPSK";
   case Modulation::psk8:
@@ -235,6 +239,8 @@ std::string to_string(Modulation modulation) {
 
 std::size_t bits_per_symbol(Modulation modulation) {
   switch (modulation) {
+  case Modulation::bpsk:
+    return 1;
   case Modulation::qpsk:
     return 2;
   case Modulation::psk8:

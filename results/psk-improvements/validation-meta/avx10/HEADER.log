@@ -1,0 +1,3 @@
+simulated channel: 12 cases, tier=full, jobs=4
+simulated channel: 12/12 E2_psk_screen_24000_qpsk_bpsk_header_high_lat_moderate characterized
+simulated channel: 3.974s {'characterized': 12}; results/psk-improvements/SUMMARY.md

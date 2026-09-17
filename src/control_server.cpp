@@ -65,6 +65,8 @@ bool symbol_allowed_by_mask(const SymbolPermissionMask& mask, std::uint8_t symbo
 
 Modulation from_proto_modulation(pb::Modulation modulation) {
   switch (modulation) {
+  case pb::MODULATION_BPSK:
+    return Modulation::bpsk;
   case pb::MODULATION_QPSK:
     return Modulation::qpsk;
   case pb::MODULATION_8PSK:
@@ -176,6 +178,16 @@ ReceiverRestartConfig parse_restart_request(const pb::RestartRequest& request) {
     config.pipeline.rf.equalizer_delay_symbols = request.equalizer_delay_symbols();
   }
   if (request.has_compact_header()) config.pipeline.rf.compact_header = request.compact_header();
+  if (request.has_header_modulation()) config.pipeline.rf.header_modulation = from_proto_modulation(request.header_modulation());
+  if (request.has_differential_mapping()) {
+    switch (request.differential_mapping()) {
+    case pb::DIFFERENTIAL_NONE: config.pipeline.rf.differential_mapping = DifferentialMapping::none; break;
+    case pb::DIFFERENTIAL_DBPSK: config.pipeline.rf.differential_mapping = DifferentialMapping::dbpsk; break;
+    case pb::DIFFERENTIAL_DQPSK: config.pipeline.rf.differential_mapping = DifferentialMapping::dqpsk; break;
+    case pb::DIFFERENTIAL_PI4_DQPSK: config.pipeline.rf.differential_mapping = DifferentialMapping::pi4_dqpsk; break;
+    default: throw std::invalid_argument("unknown differential mapping");
+    }
+  }
   if (request.has_recovery_interval_frames()) config.pipeline.rf.recovery_interval_frames = request.recovery_interval_frames();
   if (request.has_fractionally_spaced_equalization())
     config.pipeline.rf.fractionally_spaced_equalization = request.fractionally_spaced_equalization();

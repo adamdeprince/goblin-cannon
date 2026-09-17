@@ -22,6 +22,7 @@ void handle_signal(int) {
 }
 
 goblin_cannon::Modulation parse_modulation(const std::string& value) {
+  if (value == "bpsk") return goblin_cannon::Modulation::bpsk;
   if (value == "qpsk") {
     return goblin_cannon::Modulation::qpsk;
   }

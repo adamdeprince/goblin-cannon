@@ -43,6 +43,14 @@ enum Modulation {
   MODULATION_64QCI = 8;
   MODULATION_256QCI = 9;
   MODULATION_1024QCI = 10;
+  MODULATION_BPSK = 11;
+}
+
+enum DifferentialMapping {
+  DIFFERENTIAL_NONE = 0;
+  DIFFERENTIAL_DBPSK = 1;
+  DIFFERENTIAL_DQPSK = 2;
+  DIFFERENTIAL_PI4_DQPSK = 3;
 }
 
 message ConvolutionalFecConfig {
@@ -92,6 +100,8 @@ message RestartRequest {
   optional uint32 recovery_interval_frames = 32;
   optional bool fractionally_spaced_equalization = 33;
   optional uint32 equalizer_reselect_interval = 34;
+  optional Modulation header_modulation = 35;
+  optional DifferentialMapping differential_mapping = 36;
 }
 
 message BankUpdate {

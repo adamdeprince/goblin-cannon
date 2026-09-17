@@ -1,0 +1,13 @@
+{
+  "report_header": "simulated channel PSK HTML verification",
+  "url": "file:///Users/adam/dev/goblin-cannon/html/index.html",
+  "source_tree_sha256": "fba0aaa45f0ca59ff434e08ecb6bc0e38d8346afed5a2347847cc0ac77baa8ec",
+  "comparison_rows": 66,
+  "seed_links": 198,
+  "noise_points": 352,
+  "latency_configurations": 44,
+  "header_comparisons": 6,
+  "mobile_width": 390,
+  "no_javascript_rows": 11,
+  "page_errors": []
+}

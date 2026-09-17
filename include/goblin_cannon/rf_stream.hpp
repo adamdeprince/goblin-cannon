@@ -12,6 +12,8 @@
 
 namespace goblin_cannon {
 
+enum class DifferentialMapping : std::uint8_t { none, dbpsk, dqpsk, pi4_dqpsk };
+
 enum class RfStreamState {
   search,
   acquired,
@@ -47,6 +49,8 @@ struct RfStreamHeader {
   std::uint32_t symbols_per_frame = 0;
   std::uint32_t pilot_interval_symbols = 0;
   Modulation modulation = Modulation::qam64;
+  Modulation header_modulation = Modulation::qpsk;
+  DifferentialMapping differential_mapping = DifferentialMapping::none;
   std::uint32_t crc32 = 0;
 };
 
@@ -62,6 +66,12 @@ struct RfStreamConfig {
   // Configured over fiber at both ends. Compact headers carry only epoch,
   // absolute frame counter and CRC, with rate-1/2 FEC and embedded training.
   bool compact_header = false;
+  // Fiber configured; acquisition, equalizer training and embedded header
+  // probes stay QPSK. Only header data symbols switch to BPSK.
+  Modulation header_modulation = Modulation::qpsk;
+  // Payload differential mapping; pilots remain absolute phase references.
+  // DBPSK requires BPSK; DQPSK and pi/4-DQPSK require QPSK payload bits.
+  DifferentialMapping differential_mapping = DifferentialMapping::none;
   // Zero retains continuous legacy framing. Nonzero inserts a fresh preamble
   // and training block after this many payload frames, without restarting FEC
   // or the encryption keystream.
