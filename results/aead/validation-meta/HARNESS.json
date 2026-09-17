@@ -1,0 +1,12 @@
+{
+  "report_header": "simulated channel harness unit validation",
+  "kind": "assert",
+  "tier": "quick",
+  "seed": 7446529,
+  "source_tree_sha256": "5b5d0b660023e9c7df281a4171786fe546cb36534cfda9e4bcb56823d6a9e7bf",
+  "command": "python3 -m unittest discover -s tests/simulated_channel -p test_harness.py -v",
+  "checks": 14,
+  "passed": 14,
+  "failed": 0,
+  "elapsed_seconds": 1.186
+}

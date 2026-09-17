@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
 
     auto tx_queue = std::make_shared<TransmitMessageQueue>(4096);
     SpscRingBuffer<DelimitedMessage> rx_messages(4096);
-    const auto pipeline = make_pipeline(args.modulation, args.bandwidth_hz);
+    const auto pipeline = prepare_transmitter_config(make_pipeline(args.modulation, args.bandwidth_hz));
 
     auto receiver_control = std::make_shared<ReceiverControlState>(pipeline);
     auto transmitter_control = std::make_shared<TransmitterControlState>(pipeline);

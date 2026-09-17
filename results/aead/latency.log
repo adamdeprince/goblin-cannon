@@ -1,0 +1,12 @@
+simulated channel: 6 cases, tier=quick, jobs=1
+simulated channel: 6/6 B5_24000_64qam_null pass
+simulated channel: 76.590s {'pass': 6}; /tmp/goblin-cannon-aead.Kq5aJa/results/aead/brief-latency/SUMMARY.md
+simulated channel: 6 cases, tier=full, jobs=1
+simulated channel: 6/6 B5_24000_64qam_polar_span_null pass
+simulated channel: 78.416s {'pass': 6}; /tmp/goblin-cannon-aead.Kq5aJa/results/aead/brief-latency/SUMMARY.md
+simulated channel: 6 cases, tier=quick, jobs=1
+simulated channel: 6/6 B5_24000_64qam_null pass
+simulated channel: 76.793s {'pass': 6}; /tmp/goblin-cannon-aead.Kq5aJa/results/aead/naamah-latency/SUMMARY.md
+simulated channel: 6 cases, tier=full, jobs=1
+simulated channel: 6/6 B5_24000_64qam_polar_span_null pass
+simulated channel: 78.563s {'pass': 6}; /tmp/goblin-cannon-aead.Kq5aJa/results/aead/naamah-latency/SUMMARY.md

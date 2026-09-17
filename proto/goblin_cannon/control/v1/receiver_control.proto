@@ -3,6 +3,7 @@ syntax = "proto3";
 package goblin_cannon.control.v1;
 
 service ReceiverControl {
+  rpc GetMetrics(MetricsRequest) returns (ReceiverMetrics);
   rpc UpdateEncryptionKey(EncryptionKeyUpdate) returns (ControlAck);
   rpc Restart(RestartRequest) returns (ControlAck);
   rpc UpdateBank(BankUpdate) returns (ControlAck);
@@ -25,10 +26,23 @@ message ControlAck {
   bool ok = 1;
   string message = 2;
   uint64 generation = 3;
+  // Fresh, durably reserved TX epoch. Pass to the receiver Restart request.
+  uint64 transmitter_epoch = 4;
 }
 
 message EncryptionKeyUpdate {
-  bytes aes128_key = 1;
+  reserved 1; // Removed AES-128-CTR key. Old clients fail closed.
+  bytes aes256_key = 2;
+  uint32 key_id = 3;
+}
+
+message MetricsRequest {}
+message ReceiverMetrics {
+  uint64 authentication_failures = 1;
+  uint64 replay_rejections = 2;
+  uint64 lock_losses = 3;
+  uint64 valid_headers = 4;
+  uint64 gap_events = 5;
 }
 
 enum Modulation {
@@ -100,7 +114,7 @@ message RestartRequest {
   optional uint32 equalizer_feedback_taps = 26;
   // Receiver audio-clock recovery; independent of carrier correction.
   optional bool sample_clock_recovery = 27;
-  // Must match both ends; five base-254 sequence bytes per message, CRC covered.
+  // Application sequencing is authenticated; AEAD frame sequencing is mandatory.
   optional bool message_sequence_numbers = 28;
   optional bool recursive_equalization = 29;
   optional uint32 equalizer_delay_symbols = 30;
@@ -197,8 +211,7 @@ message ReceiverSessionServerMessage {
 
 message CanonicalMessageBatch {
   // Monotonic transmitter-side sequence number for payload[0]. The payloads
-  // are the delimiter-prefixed message bytes before the radio CRC trailer is
-  // added by MessageStreamFramer.
+  // are application message bytes before MessageStreamFramer seals the AEAD record.
   uint64 first_sequence = 1;
   uint64 transmitter_unix_nanos = 2;
   repeated bytes payload = 3;

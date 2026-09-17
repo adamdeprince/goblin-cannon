@@ -1,0 +1,8 @@
+simulated channel: 107 cases, tier=quick, jobs=2
+simulated channel: 50/107 D4_refinement_10000_8psk_bch_null pass
+simulated channel: 100/107 D4_duplicate pass
+simulated channel: 107/107 A4_10000_64qam_drift_10min xfail
+simulated channel: 30.093s {'xfail': 8, 'pass': 99}; /tmp/goblin-cannon-aead.G8SHbj/results/aead/SUMMARY.md
+simulated channel: 5 cases, tier=full, jobs=2
+simulated channel: 5/5 A8_cochannel_-10dB pass
+simulated channel: 1.053s {'pass': 4, 'xfail': 1}; /tmp/goblin-cannon-aead.G8SHbj/results/aead/SUMMARY.md

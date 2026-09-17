@@ -74,8 +74,13 @@ struct ActiveBankState {
   std::uint64_t generation = 0;
 };
 
+struct ReceiverMetricSnapshot {
+  std::uint64_t authentication_failures = 0, replay_rejections = 0;
+  std::uint64_t lock_losses = 0, valid_headers = 0, gap_events = 0;
+};
+
 struct ReceiverControlSnapshot {
-  Aes128Key aes_key = {};
+  Aes256Key aes_key = {};
   std::uint64_t key_generation = 0;
   ReceiverRestartConfig active_receiver = {};
   std::uint64_t restart_generation = 0;
@@ -88,7 +93,7 @@ struct ReceiverControlSnapshot {
 };
 
 struct TransmitterControlSnapshot {
-  Aes128Key aes_key = {};
+  Aes256Key aes_key = {};
   std::uint64_t key_generation = 0;
   TransmitterRestartConfig active_transmitter = {};
   std::uint64_t restart_generation = 0;
@@ -99,11 +104,13 @@ struct TransmitterControlSnapshot {
 
 class ReceiverControlState {
 public:
+  void note_receive_result(const RealtimeReceiveResult&) noexcept;
+  [[nodiscard]] ReceiverMetricSnapshot metrics() const noexcept;
   ReceiverControlState();
   explicit ReceiverControlState(RealtimePipelineConfig initial_pipeline);
 
   [[nodiscard]] ReceiverControlSnapshot snapshot() const;
-  [[nodiscard]] Aes128Key aes_key() const;
+  [[nodiscard]] Aes256Key aes_key() const;
   [[nodiscard]] std::uint64_t key_generation() const;
   [[nodiscard]] ReceiverRestartConfig active_receiver_config() const;
   [[nodiscard]] std::optional<ReceiverRestartConfig> take_pending_restart();
@@ -116,7 +123,7 @@ public:
   [[nodiscard]] bool symbol_allowed(std::uint8_t symbol_byte) const;
   [[nodiscard]] bool accept_received_symbol(std::uint8_t bank, std::uint8_t symbol_byte);
 
-  std::uint64_t update_encryption_key(Aes128Key key);
+  std::uint64_t update_encryption_key(Aes256Key key, std::uint32_t key_id = 1);
   ReceiverRestartConfig request_restart(ReceiverRestartConfig config);
   std::uint64_t update_bank(std::uint8_t bank, std::span<const std::uint64_t> prices);
   std::uint64_t replace_bank(std::uint8_t bank,
@@ -126,8 +133,11 @@ public:
   std::uint64_t update_permissions(std::span<const std::uint8_t> allowed_symbol_mask);
 
 private:
+  std::atomic<std::uint64_t> authentication_failures_{0}, replay_rejections_{0};
+  std::atomic<std::uint64_t> lock_losses_{0}, valid_headers_{0}, gap_events_{0};
   mutable std::mutex mutex_;
-  Aes128Key aes_key_ = {};
+  Aes256Key aes_key_ = {};
+  bool key_configured_ = false;
   std::uint64_t key_generation_ = 0;
   ReceiverRestartConfig active_receiver_ = {};
   std::optional<ReceiverRestartConfig> pending_restart_ = std::nullopt;
@@ -149,7 +159,7 @@ public:
   explicit TransmitterControlState(RealtimePipelineConfig initial_pipeline);
 
   [[nodiscard]] TransmitterControlSnapshot snapshot() const;
-  [[nodiscard]] Aes128Key aes_key() const;
+  [[nodiscard]] Aes256Key aes_key() const;
   [[nodiscard]] std::uint64_t key_generation() const;
   [[nodiscard]] TransmitterRestartConfig active_transmitter_config() const;
   [[nodiscard]] std::optional<TransmitterRestartConfig> take_pending_restart();
@@ -162,7 +172,7 @@ public:
   [[nodiscard]] std::vector<std::uint8_t> live_receiver_clients(
       std::chrono::milliseconds timeout = std::chrono::milliseconds(3000)) const;
 
-  std::uint64_t update_encryption_key(Aes128Key key);
+  std::uint64_t update_encryption_key(Aes256Key key, std::uint32_t key_id = 1);
   TransmitterRestartConfig request_restart(TransmitterRestartConfig config);
   std::uint64_t update_bank(std::uint8_t bank, std::span<const std::uint64_t> prices);
   ActiveBankState use_bank(std::uint8_t bank);
@@ -185,7 +195,8 @@ private:
   }
 
   mutable std::mutex mutex_;
-  Aes128Key aes_key_ = {};
+  Aes256Key aes_key_ = {};
+  bool key_configured_ = false;
   std::uint64_t key_generation_ = 0;
   TransmitterRestartConfig active_transmitter_ = {};
   std::optional<TransmitterRestartConfig> pending_restart_ = std::nullopt;

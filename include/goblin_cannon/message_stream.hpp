@@ -26,13 +26,18 @@ struct DelimitedMessage {
   std::optional<std::uint32_t> sequence = std::nullopt;
 };
 
-enum class MessageGapReason { fec_uncertain, checksum, oversized, malformed, rf_lock_lost, audio_discontinuity };
+enum class MessageGapReason { fec_uncertain, checksum, oversized, malformed, rf_lock_lost, audio_discontinuity, authentication };
 struct MessageGap {
   MessageGapReason reason;
   std::uint64_t missing_samples = 0;
 };
 
 inline constexpr std::size_t maximum_message_bytes = 65535;
+// COBS-delimited AES-GCM record: 25-byte authenticated header, ciphertext,
+// 16-byte tag. The application's bank byte is carried in the header.
+[[nodiscard]] std::size_t authenticated_message_wire_bytes(std::size_t application_bytes) noexcept;
+class AuthenticatedMessageEncoder;
+class AuthenticatedMessageDecoder;
 
 struct BidMessage {
   std::vector<std::uint8_t> payload;
@@ -177,6 +182,12 @@ private:
 
 class MessageStreamFramer {
 public:
+  MessageStreamFramer();
+  ~MessageStreamFramer();
+  // Explicitly selected by every production transmitter; the default raw
+  // CRC framer remains only for standalone legacy codec fixtures.
+  void authenticate(const Aes256Key&, std::uint32_t key_id, std::shared_ptr<TransmitterEpoch> epoch);
+  void set_authentication_context(std::span<const std::uint8_t> context);
   [[nodiscard]] MessageFrameEncodeResult next_payload_frame(
       QueueSource<DelimitedMessage>& input,
       std::span<std::uint8_t> payload_out);
@@ -191,6 +202,7 @@ public:
   void reset();
 
 private:
+  std::unique_ptr<AuthenticatedMessageEncoder> authentication_;
   std::vector<std::uint8_t> current_;
   std::size_t current_offset_ = 0;
   std::optional<std::uint8_t> active_bank_override_ = std::nullopt;
@@ -222,6 +234,12 @@ private:
 
 class MessageStreamDeframer {
 public:
+  MessageStreamDeframer();
+  ~MessageStreamDeframer();
+  void authenticate(const Aes256Key&, std::uint32_t key_id, std::uint64_t epoch);
+  void set_authentication_context(std::span<const std::uint8_t> context);
+  [[nodiscard]] std::uint64_t authentication_failures() const noexcept;
+  [[nodiscard]] std::uint64_t replay_rejections() const noexcept;
   [[nodiscard]] MessageFrameDecodeResult push_payload_frame(
       std::span<const std::uint8_t> payload,
       SpscRingBuffer<DelimitedMessage>& output);
@@ -239,6 +257,7 @@ public:
   void reset();
 
 private:
+  std::unique_ptr<AuthenticatedMessageDecoder> authentication_;
   [[nodiscard]] bool flush_pending(SpscRingBuffer<DelimitedMessage>& output);
   [[nodiscard]] bool push_completed(std::vector<std::uint8_t> message,
                                     SpscRingBuffer<DelimitedMessage>& output,
@@ -263,13 +282,21 @@ struct RealtimePipelineConfig {
   RfStreamConfig rf = {};
   PuncturedConvolutionalCodeConfig convolutional = PuncturedConvolutionalCodeConfig::rate_1_2();
   PayloadCodingConfig coding = {};
-  Aes128Key aes_key = {};
-  Aes128CtrCounter ctr_counter = {};
+  Aes256Key aes_key = {};
+  std::uint32_t key_id = 1;
+  // Provision once using goblin_cannon_epoch. No missing-file auto-reset.
+  // Empty uses GOBLIN_CANNON_EPOCH_STATE; no implicit temporary state in production.
+  std::string transmitter_epoch_path;
+  std::shared_ptr<TransmitterEpoch> transmitter_epoch;
   SyncTimestampConfig sync_timestamp = {};
   std::uint64_t frame_counter_start = 0;
   // Must match at both ends, negotiated over the fiber control path.
   bool sequence_numbers = true;
 };
+
+// Reserve before acknowledging a control-plane restart. The returned RF epoch
+// is also the authenticated message epoch; negotiate it with the receiver.
+[[nodiscard]] RealtimePipelineConfig prepare_transmitter_config(RealtimePipelineConfig config);
 
 struct RealtimeTransmitResult {
   std::size_t produced_samples = 0;
@@ -290,6 +317,8 @@ struct RealtimeReceiveResult {
   bool replay_rejected = false;
   double sync_timestamp_seconds = 0.0;
   std::size_t gap_events = 0;
+  std::uint64_t authentication_failures = 0;
+  std::uint64_t replay_rejections = 0;
 };
 
 class RealtimeTransmitter {

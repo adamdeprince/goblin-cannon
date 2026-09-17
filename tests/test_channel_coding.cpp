@@ -1,3 +1,4 @@
+#include "epoch_fixture.hpp"
 // Simulated channel coding regressions: assert / quick, seed 0x71A005.
 #include "goblin_cannon/channel_coding.hpp"
 #include "goblin_cannon/integer_codec.hpp"
@@ -109,20 +110,20 @@ void stream_test() {
       for (unsigned walsh : {0U, 3U})
         for (unsigned rows : {0U, 4U, 16U}) {
           PayloadCodingConfig c{bch, static_cast<std::uint8_t>(walsh), rows, rows ? 16U : 0U};
-          ChannelCodingEncoder tx(fec, c, key, ctr), bulk(fec, c, key, ctr);
+          ChannelCodingEncoder tx(fec, c), bulk(fec, c);
           std::vector<std::uint8_t> coded, reference;
           for (const auto& byte : source)
             tx.push_bytes_append(std::span(&byte, 1), coded);
           bulk.push_bytes_append(source, reference);
           require(coded == reference, "coding output depends on chunk size");
           if (!bch && !walsh && !rows)
-            require(coded == aes128_ctr_xor_bits(convolutional_encode_bytes(source, fec), key, ctr),
-                    "legacy coded bytes changed");
+            require(coded == convolutional_encode_bytes(source, fec),
+                    "FEC-only bytes changed");
           auto soft = hard_bits_to_soft(coded);
           for (auto& bit : soft)
             bit.log_likelihood_ratio = bit.value ? -8 : 8;
           for (unsigned chunk : {1U, 127U}) {
-            ChannelCodingDecoder rx(fec, c, key, ctr);
+            ChannelCodingDecoder rx(fec, c);
             std::vector<Token> decoded;
             for (std::size_t at = 0; at < soft.size(); at += chunk)
               rx.push_append(std::span(soft).subspan(at, std::min<std::size_t>(chunk, soft.size() - at)),
@@ -156,6 +157,7 @@ void stream_test() {
 }
 } // namespace
 int main() {
+  goblin_cannon::test::EpochFixture epoch_fixture;
   try {
     std::cout << "simulated channel coding / assert / quick / seed=" << seed << '\n';
     bch_test();

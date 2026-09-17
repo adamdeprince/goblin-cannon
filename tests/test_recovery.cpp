@@ -1,3 +1,4 @@
+#include "epoch_fixture.hpp"
 // Simulated channel regressions: assert, quick. All data uses the printed seed.
 #include "goblin_cannon/message_stream.hpp"
 #include "goblin_cannon/integer_codec.hpp"
@@ -109,7 +110,7 @@ void messages() {
     RealtimePipelineConfig c;c.rf=config(mode,bandwidth,true);c.convolutional=fec;c.frame_counter_start=100;
     c.sync_timestamp.enabled=false;
     SpscRingBuffer<DelimitedMessage> input(256),output(256);
-    RealtimeTransmitter tx(c,input);RealtimeReceiver rx(c,output);
+    RealtimeTransmitter tx(c,input);RealtimeReceiver rx(tx.config(),output);
     std::array<Complex,48> audio{};
     test::Impairments impairments;
     impairments.dropout_start_s=.3;impairments.dropout_duration_s=.2;
@@ -139,6 +140,7 @@ void messages() {
 }
 }
 int main() {
+  goblin_cannon::test::EpochFixture epoch_fixture;
   std::cout<<"simulated channel recovery regressions; kind=assert tier=quick seed="<<seed<<'\n';
   try {seek_and_resume();rf_chunks();messages();}
   catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

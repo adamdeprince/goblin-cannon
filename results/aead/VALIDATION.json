@@ -1,0 +1,71 @@
+{
+  "byte_identical_repeats": 12,
+  "closed_authentication_assertions": 6,
+  "failures": [],
+  "git_commit": "44d318b7b279dd0546f00a4b4b295f51d7160260",
+  "groups": {
+    "A4": {
+      "xfail": 2
+    },
+    "A8": {
+      "pass": 3
+    },
+    "B1": {
+      "xfail": 5
+    },
+    "B4": {
+      "pass": 3
+    },
+    "C4": {
+      "pass": 1
+    },
+    "D3": {
+      "xfail": 1
+    },
+    "D4": {
+      "pass": 92
+    },
+    "D6": {
+      "pass": 1,
+      "xfail": 1
+    },
+    "E1": {
+      "pass": 3
+    }
+  },
+  "host_latency_statuses": {
+    "pass": 24
+  },
+  "latency_baseline_note": "The brief's 1.019 ms / 13 assertions in 11 cases are from fixes-2-5. The newer recovery-profile ledger had 15 assertions in 13 cases; six crypto assertions now pass, leaving nine assertions in nine cases. Different profiles are never silently combined.",
+  "latency_configurations": 24,
+  "limitations": [
+    "Only the six ordinary BPSK/QPSK/8-PSK coding configurations were rerun for current polar delivery.",
+    "Configured 30 dB retains the uncalibrated nominal noise reference; measured sample power is reported. These are not actual-30-dB availability estimates.",
+    "High-latitude presets are simulated channels, not observations of the 71-degree route. No recorded-band noise or soak was run.",
+    "The 24 kHz two-path model extends beyond ITU-R F.1487's validated bandwidth scope.",
+    "Physical radio/audio devices and network sockets are outside the paced software loopback.",
+    "The combined quick selections, including both B5 profiles, exceed two minutes. Each selected invocation fits its tier, but this does not establish the whole quick tier's CI runtime."
+  ],
+  "metadata_source_tree_sha256": "2f7fcf1115a8893e4aad78609919d67844af2af0df62cd3f1625686d6b85a155",
+  "polar_records": 288,
+  "polar_statuses": {
+    "characterized": 216,
+    "pass": 72
+  },
+  "recorded_runs": 424,
+  "remaining_assertions": 9,
+  "remaining_cases": 9,
+  "report_header": "simulated channel AEAD validation",
+  "security_records": 112,
+  "security_statuses": {
+    "pass": 103,
+    "xfail": 9
+  },
+  "seeds": [
+    7446529,
+    7446530,
+    7446531
+  ],
+  "source_tree_sha256": "5b5d0b660023e9c7df281a4171786fe546cb36534cfda9e4bcb56823d6a9e7bf",
+  "unique_case_seed_profiles": 412
+}

@@ -1,3 +1,4 @@
+#include "epoch_fixture.hpp"
 // Simulated channel alternative-waveform regressions: assert / quick, seed 0x71A006.
 #include "channel_simulator.hpp"
 #include "goblin_cannon/integer_codec.hpp"
@@ -117,12 +118,15 @@ void pipeline_test(AudioWaveform wave, PayloadCodingConfig coding, Modulation mo
   c.sync_timestamp.enabled = false;
   c.convolutional.decoded_bit_confidence_threshold = 0;
   c.frame_counter_start = 7000;
-  SpscRingBuffer<DelimitedMessage> input(256), output(256);
+  SpscRingBuffer<DelimitedMessage> input(1024), output(1024);
   RealtimeTransmitter tx(c, input);
-  RealtimeReceiver rx(c, output);
+  RealtimeReceiver rx(tx.config(), output);
   std::array<Complex, 48> audio{};
   const bool fsk = wave == AudioWaveform::fsk4 || wave == AudioWaveform::fsk8;
-  const unsigned ticks = fsk ? 30000 : 2200;
+  // The authenticated header/tag take longer to serialize on 12 ms FSK
+  // symbols. Retain the source cadence and allow complete records on both
+  // sides of the dropout (120 s instead of the old 30 s CRC fixture).
+  const unsigned ticks = fsk ? 120000 : 2200;
   test::Impairments impairment;
   impairment.dropout_start_s = ticks / 2000.0;
   impairment.dropout_duration_s = .2;
@@ -204,6 +208,7 @@ void diversity_controls_test() {
 }
 } // namespace
 int main() {
+  goblin_cannon::test::EpochFixture epoch_fixture;
   try {
     std::cout << "simulated channel audio waveforms / assert / quick / seed=" << seed << '\n';
     for (auto w : {AudioWaveform::fsk4, AudioWaveform::fsk8, AudioWaveform::bpsk_frequency_diversity})

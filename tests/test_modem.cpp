@@ -1,3 +1,4 @@
+#include "epoch_fixture.hpp"
 #include "goblin_cannon/control/v1/receiver_control.grpc.pb.h"
 #include "goblin_cannon/accounting.hpp"
 #include "goblin_cannon/client_udp.hpp"
@@ -1064,7 +1065,7 @@ void test_client_udp_message_handler() {
                                    log_queue);
   check(result.queued_for_arbitration, "client UDP low backed-up bid not held");
   result = handler.handle_datagram(ClientUdpDatagram{.source = {.ip = "192.0.2.3", .port = 40000},
-                                                     .payload = make_client_udp_payload(280, high_message)},
+                                                     .payload = make_client_udp_payload(295, high_message)},
                                    intake,
                                    transmit_queue,
                                    log_queue);
@@ -1078,15 +1079,15 @@ void test_client_udp_message_handler() {
   bool saw_second_sent = false;
   while (log_queue.try_pop(log)) {
     saw_rejected = saw_rejected || (log.status == BidMessageLogStatus::rejected && log.bid_price == 300U &&
-                                    log.winning_bid_price == 280U);
-    saw_second_sent = saw_second_sent || (log.status == BidMessageLogStatus::sent && log.bid_price == 280U);
+                                    log.winning_bid_price == 295U);
+    saw_second_sent = saw_second_sent || (log.status == BidMessageLogStatus::sent && log.bid_price == 295U);
   }
   check(saw_rejected, "client UDP displaced bid was not logged rejected");
   check(saw_second_sent, "client UDP standing winner was not logged sent");
   const auto saw_lost_status = std::any_of(status_sink->records.begin(), status_sink->records.end(), [](const auto& record) {
     return record.status == ClientUdpStatusCode::insufficient_bid &&
            record.bid_price == 300U &&
-           record.winning_bid_price == 280U;
+           record.winning_bid_price == 295U;
   });
   check(saw_lost_status, "client UDP insufficient bid status missing");
 
@@ -1475,7 +1476,7 @@ void test_realtime_message_pipeline_end_to_end() {
   }
 
   RealtimeTransmitter transmitter(pipeline_cfg, tx_messages);
-  RealtimeReceiver receiver(pipeline_cfg, rx_messages);
+  RealtimeReceiver receiver(transmitter.config(), rx_messages);
 
   std::vector<DelimitedMessage> received;
   std::array<Complex, 2048> samples{};
@@ -1519,7 +1520,7 @@ void test_realtime_integer_message_pipeline_end_to_end() {
   }
 
   RealtimeTransmitter transmitter(pipeline_cfg, tx_messages);
-  RealtimeReceiver receiver(pipeline_cfg, rx_messages);
+  RealtimeReceiver receiver(transmitter.config(), rx_messages);
 
   std::vector<DelimitedMessage> received;
   std::array<Complex, 2048> samples{};
@@ -1662,10 +1663,11 @@ pb::RestartRequest make_restart_request(const ReceiverRestartConfig& restart) {
 
 void test_receiver_control_state_and_restart_receiver() {
   auto pipeline_cfg = make_realtime_pipeline_config(false, 1.0, 24500U);
+  pipeline_cfg = prepare_transmitter_config(std::move(pipeline_cfg));
   ReceiverRestartConfig restart{.pipeline = pipeline_cfg, .center_frequency_hz = 14'200'000.0};
   auto control = std::make_shared<ReceiverControlState>();
 
-  Aes128Key key;
+  Aes256Key key;
   for (std::size_t i = 0; i < key.bytes.size(); ++i) {
     key.bytes[i] = static_cast<std::uint8_t>(0xA0U + i);
   }
@@ -1721,6 +1723,7 @@ void test_receiver_control_state_and_restart_receiver() {
 void test_transmitter_control_state_and_use_bank() {
   auto pipeline_cfg = make_realtime_pipeline_config(false, 1.0, 25000U);
   auto control = std::make_shared<TransmitterControlState>();
+  control->update_encryption_key(pipeline_cfg.aes_key);
   SpscRingBuffer<DelimitedMessage> tx_messages(8);
   ControlledRealtimeTransmitter controlled(control, tx_messages);
   check(!controlled.active(), "default controlled transmitter should start off");
@@ -1771,12 +1774,13 @@ void test_receiver_control_grpc_server() {
   auto channel = grpc::CreateChannel(server.bound_address(), grpc::InsecureChannelCredentials());
   auto stub = pb::ReceiverControl::NewStub(channel);
 
-  Aes128Key key;
+  Aes256Key key;
   pb::EncryptionKeyUpdate key_request;
   for (std::size_t i = 0; i < key.bytes.size(); ++i) {
     key.bytes[i] = static_cast<std::uint8_t>(0x30U + i);
   }
-  key_request.set_aes128_key(reinterpret_cast<const char*>(key.bytes.data()), key.bytes.size());
+  key_request.set_key_id(1);
+  key_request.set_aes256_key(reinterpret_cast<const char*>(key.bytes.data()), key.bytes.size());
   pb::ControlAck ack;
   grpc::ClientContext key_context;
   auto status = stub->UpdateEncryptionKey(&key_context, key_request, &ack);
@@ -1887,6 +1891,7 @@ void test_receiver_control_grpc_server() {
   check(!control->take_pending_restart().has_value(), "invalid tracking settings scheduled a restart");
 
   auto legacy_restart = restart_request;
+  legacy_restart.set_expected_schedule_epoch(control->active_receiver_config().pipeline.rf.expected_schedule_epoch + 1);
   legacy_restart.clear_carrier_correction();
   legacy_restart.clear_adaptive_equalization();
   legacy_restart.clear_sample_clock_recovery();
@@ -1923,6 +1928,7 @@ void test_receiver_control_grpc_server() {
 
   for (const auto mapping : {DifferentialMapping::dbpsk, DifferentialMapping::dqpsk, DifferentialMapping::pi4_dqpsk}) {
     auto psk_restart = restart_request;
+    psk_restart.set_expected_schedule_epoch(control->active_receiver_config().pipeline.rf.expected_schedule_epoch + 1);
     psk_restart.set_modulation(mapping == DifferentialMapping::dbpsk ? pb::MODULATION_BPSK : pb::MODULATION_QPSK);
     psk_restart.set_differential_mapping(static_cast<pb::DifferentialMapping>(mapping));
     psk_restart.clear_pilot_sequence();
@@ -1950,6 +1956,7 @@ void test_receiver_control_grpc_server() {
     configured.pipeline.coding = {true,3,4,8};
     configured.pipeline.convolutional = PuncturedConvolutionalCodeConfig::k9_rate_1_3();
     auto request = make_restart_request(configured);
+    request.set_expected_schedule_epoch(control->active_receiver_config().pipeline.rf.expected_schedule_epoch + 1);
     grpc::ClientContext context;
     status = stub->Restart(&context,request,&ack);
     check(status.ok(), "gRPC rejected conventional coding/audio configuration");
@@ -2006,12 +2013,13 @@ void test_transmitter_control_grpc_server() {
   auto channel = grpc::CreateChannel(server.bound_address(), grpc::InsecureChannelCredentials());
   auto stub = pb::TransmitterControl::NewStub(channel);
 
-  Aes128Key key;
+  Aes256Key key;
   pb::EncryptionKeyUpdate key_request;
   for (std::size_t i = 0; i < key.bytes.size(); ++i) {
     key.bytes[i] = static_cast<std::uint8_t>(0x50U + i);
   }
-  key_request.set_aes128_key(reinterpret_cast<const char*>(key.bytes.data()), key.bytes.size());
+  key_request.set_key_id(1);
+  key_request.set_aes256_key(reinterpret_cast<const char*>(key.bytes.data()), key.bytes.size());
   pb::ControlAck ack;
   grpc::ClientContext key_context;
   auto status = stub->UpdateEncryptionKey(&key_context, key_request, &ack);
@@ -2381,7 +2389,7 @@ void test_realtime_timestamp_accepts_fresh_stream() {
   check(tx_messages.try_push(expected), "failed to queue timestamp fresh message");
 
   RealtimeTransmitter transmitter(pipeline_cfg, tx_messages);
-  RealtimeReceiver receiver(pipeline_cfg, rx_messages);
+  RealtimeReceiver receiver(transmitter.config(), rx_messages);
   std::array<Complex, 2048> samples{};
   bool timestamp_valid = false;
 
@@ -2397,6 +2405,29 @@ void test_realtime_timestamp_accepts_fresh_stream() {
   DelimitedMessage received;
   check(rx_messages.try_pop(received), "fresh timestamp stream did not emit message");
   check(received.bytes == expected.bytes, "fresh timestamp stream message mismatch");
+}
+
+void test_realtime_authentication_metrics() {
+  auto config=make_realtime_pipeline_config(false,1.0,29000U);
+  SpscRingBuffer<DelimitedMessage> input(4),output(4);
+  for (unsigned i=0;i<3;++i) check(input.try_push(make_message(0,3,static_cast<std::uint8_t>(19+i))),"auth fixture input");
+  RealtimeTransmitter tx(config,input);
+  auto wrong_key=tx.config();wrong_key.aes_key.bytes[0]^=1;
+  auto control=std::make_shared<ReceiverControlState>(wrong_key);
+  ControlledRealtimeReceiver rx(control,output);
+  std::array<Complex,2048> samples{};
+  for (unsigned i=0;i<2000 && control->metrics().authentication_failures<3;++i) {
+    const auto sent=tx.push_samples(samples);
+    (void)rx.push_samples(std::span(samples).first(sent.produced_samples));
+  }
+  ReceiverControlServer server(control,{.listen_address="127.0.0.1:0"});server.start();
+  auto stub=pb::ReceiverControl::NewStub(grpc::CreateChannel(server.bound_address(),grpc::InsecureChannelCredentials()));
+  grpc::ClientContext context;pb::MetricsRequest request;pb::ReceiverMetrics metrics;
+  const auto status=stub->GetMetrics(&context,request,&metrics);
+  check(status.ok() && metrics.authentication_failures()==3 && metrics.valid_headers()>0,
+        "gRPC lost production authentication-failure counters");
+  check(metrics.lock_losses()==0 && output.empty(),"authentication failure caused lock loss or delivered plaintext");
+  server.stop();
 }
 
 void test_realtime_timestamp_rejects_stale_stream() {
@@ -2421,7 +2452,7 @@ void test_realtime_timestamp_rejects_stale_stream() {
 
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  RealtimeReceiver receiver(pipeline_cfg, rx_messages);
+  RealtimeReceiver receiver(transmitter.config(), rx_messages);
   bool rejected = false;
   for (std::size_t offset = 0; offset < held_samples.size() && !rejected;) {
     const auto n = std::min<std::size_t>(held_samples.size() - offset, 1024U);
@@ -2635,6 +2666,7 @@ void test_convolutional_latency_estimates() {
 } // namespace
 
 int main() {
+  goblin_cannon::test::EpochFixture epoch_fixture;
   test_constellations();
   test_qci_radial_constellations();
   test_config_validation();
@@ -2675,6 +2707,7 @@ int main() {
   test_receiver_session_logs_client_and_signal_events();
   test_transmitter_bank_switch_price_provider();
   test_realtime_timestamp_accepts_fresh_stream();
+  test_realtime_authentication_metrics();
   test_realtime_timestamp_rejects_stale_stream();
   test_route_planning_model();
   test_convolutional_latency_estimates();

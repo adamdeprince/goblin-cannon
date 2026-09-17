@@ -49,6 +49,11 @@
 .encoding-defects li + li { margin-top: 12px; }
 @media (max-width: 680px) { #psk-controls, #encoding-controls, #refinement-controls { grid-template-columns: 1fr; } }
 .rf-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; padding: 24px; background: var(--dark); color: white; }
+#rf-controls { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+#rf-controls[hidden], #rf-comparison[hidden] { display: none; }
+.rf-source-links { margin: 22px 28px 28px; font-size: .78rem; }
+.rf-seed-tracks { display: grid; gap: 3px; }
+.rf-seed-tracks .rf-bar-track { height: 5px; }
 .rf-controls label { min-width: 0; font: 750 .65rem/1.4 var(--mono); text-transform: uppercase; }
 .rf-controls select { width: 100%; min-height: 44px; margin-top: 10px; padding: 9px; border: 1px solid #757a6d; border-radius: 0; background: #23271e; color: white; font: .76rem/1.3 var(--sans); }
 .rf-outcome { padding: 30px 28px 25px; background: var(--acid-pale); }
@@ -63,7 +68,7 @@
 .rf-metrics span { min-height: 3em; }
 .rf-metrics strong { display: block; margin: 14px 0 10px; font: 800 clamp(1.25rem, 2.3vw, 1.85rem)/1.2 var(--mono); letter-spacing: -.04em; }
 .rf-comparison { display: grid; gap: 16px; padding: 28px; }
-.rf-bar-row { display: grid; grid-template-columns: 150px 1fr 90px; gap: 16px; align-items: center; font: .76rem/1.4 var(--mono); }
+.rf-bar-row { display: grid; grid-template-columns: 120px 1fr 145px; gap: 16px; align-items: center; font: .76rem/1.4 var(--mono); }
 .rf-bar-label small { display: block; color: var(--muted); font-size: .65rem; }
 .rf-bar-track { height: 14px; background: var(--paper); border: 1px solid var(--line); }
 .rf-bar-fill { height: 100%; background: var(--acid-dark); }
@@ -73,6 +78,7 @@
 @media (max-width: 980px) {
   .evidence-columns { grid-template-columns: 1fr; gap: 28px; }
   .rf-controls, .rf-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #rf-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rf-metrics > div:nth-child(3) { border-left: 0; }
   .rf-metrics > div:nth-child(n+3) { border-top: 1px solid var(--line); }
 }
@@ -89,7 +95,7 @@
   .rf-outcome { padding: 24px 20px; }
   .rf-metrics > div { padding: 18px; }
   .rf-comparison { padding: 24px 18px; }
-  .rf-bar-row { grid-template-columns: 90px 1fr 62px; gap: 10px; font-size: .68rem; }
+  .rf-bar-row { grid-template-columns: 72px 1fr 116px; gap: 10px; font-size: .68rem; }
   .rf-bar-label small { font-size: .58rem; }
   .rf-parameters { padding-inline: 20px; }
   .evidence-link { margin-inline: 20px; }

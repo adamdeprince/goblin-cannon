@@ -36,7 +36,6 @@ from market_shm import MarketDataShmProducer
 
 BASE254_RADIX = 254
 BASE254_MIN_BYTE = 2
-MESSAGE_CRC_BYTES = 4
 INT64_MIN = -(1 << 63)
 INT64_MAX = (1 << 63) - 1
 
@@ -166,7 +165,10 @@ def encode_bank_symbol_delta(bank: int, radio_symbol: int, delta_units: int) -> 
 
 
 def radio_billable_bytes(payload: bytes) -> int:
-    return len(payload) + (MESSAGE_CRC_BYTES if len(payload) > 1 else 0)
+    # Match authenticated_message_wire_bytes: bank is in the 25-byte header,
+    # followed by ciphertext, a 16-byte tag, and the conservative COBS bound.
+    record_bytes = len(payload) - 1 + 25 + 16
+    return record_bytes + record_bytes // 254 + 2
 
 
 def parse_events(raw: str | bytes) -> list[dict[str, Any]]:

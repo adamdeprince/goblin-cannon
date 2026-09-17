@@ -1,0 +1,14 @@
+simulated channel: 72 cases, tier=quick, jobs=2
+simulated channel: 50/72 C4_refinement_24000_8psk_soft_null pass
+simulated channel: 72/72 D4_refinement_24000_8psk_bch_null pass
+simulated channel: 3.559s {'pass': 72}; /tmp/goblin-cannon-aead.G8SHbj/results/aead/polar/SUMMARY.md
+simulated channel: 108 cases, tier=full, jobs=2
+simulated channel: 50/108 A2_refinement_screen_10000_8psk_bch_high_lat_moderate characterized
+simulated channel: 100/108 A2_refinement_screen_24000_8psk_bch_high_lat_quiet characterized
+simulated channel: 108/108 A2_refinement_screen_24000_8psk_bch_high_lat_disturbed characterized
+simulated channel: 43.122s {'characterized': 108}; /tmp/goblin-cannon-aead.G8SHbj/results/aead/polar/SUMMARY.md
+simulated channel: 108 cases, tier=full, jobs=2
+simulated channel: 50/108 E2_refinement_followup_24000_8psk_soft_high_lat_quiet characterized
+simulated channel: 100/108 E2_refinement_followup_24000_bpsk_bch_high_lat_disturbed characterized
+simulated channel: 108/108 E2_refinement_followup_24000_8psk_bch_high_lat_disturbed characterized
+simulated channel: 871.234s {'characterized': 108}; /tmp/goblin-cannon-aead.G8SHbj/results/aead/polar/SUMMARY.md

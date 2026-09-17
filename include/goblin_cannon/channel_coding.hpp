@@ -9,7 +9,7 @@ namespace goblin_cannon {
 
 // Conventional binary primitive BCH(63,45,7), GF(64), p(x)=x^6+x+1.
 // Systematic data occupy bits 62..18; bounded-distance decoding corrects <=3
-// errors. A success is a codeword, not authentication; retain the message CRC.
+// errors. A success is a codeword, not authentication; verify the AEAD record.
 struct BchDecodeResult {
   std::uint64_t data = 0;
   bool valid = false;
@@ -44,12 +44,11 @@ void validate(const PayloadCodingConfig& config);
 [[nodiscard]] double payload_coding_rate(const PayloadCodingConfig& config,
                                          const PuncturedConvolutionalCodeConfig& fec);
 
-// Order: source -> FEC -> AES CTR -> optional Walsh -> optional interleaver.
+// Order: authenticated message record -> FEC -> optional Walsh -> interleaver.
 // The receiver reverses these stages. All parameters are configured over fiber.
 class ChannelCodingEncoder {
 public:
-  ChannelCodingEncoder(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig coding, Aes128Key key,
-                       Aes128CtrCounter counter);
+  ChannelCodingEncoder(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig coding);
   ~ChannelCodingEncoder();
   void push_bytes_append(std::span<const std::uint8_t> bytes, std::vector<std::uint8_t>& out);
 
@@ -59,13 +58,12 @@ private:
 };
 class ChannelCodingDecoder {
 public:
-  ChannelCodingDecoder(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig coding, Aes128Key key,
-                       Aes128CtrCounter counter);
+  ChannelCodingDecoder(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig coding);
   ~ChannelCodingDecoder();
   void push_append(std::span<const SoftBit> bits, std::vector<Token>& out);
   void reset();
   // Discard partial interleaver/spreading blocks. Returned skip is in wire bits;
-  // decryption and FEC independently resume at the matching absolute position.
+  // FEC resumes at the matching absolute position. AEAD resumes by record.
   [[nodiscard]] std::size_t resume_at_wire_bit(std::uint64_t position);
 
 private:

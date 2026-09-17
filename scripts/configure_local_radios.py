@@ -58,7 +58,7 @@ def modulation_value(pb2: object, value: str) -> int:
 
 
 def session_key() -> bytes:
-    return bytes((0x41 + i * 17) & 0xFF for i in range(16))
+    return bytes((0x41 + i * 17) & 0xFF for i in range(32))
 
 
 def make_restart_request(pb2: object, args: argparse.Namespace) -> object:
@@ -205,9 +205,9 @@ def configure(args: argparse.Namespace) -> None:
         receiver = pb2_grpc.ReceiverControlStub(receiver_channel)
         transmitter = pb2_grpc.TransmitterControlStub(transmitter_channel)
 
-        require_ack(receiver.UpdateEncryptionKey(pb2.EncryptionKeyUpdate(aes128_key=key)), "receiver key update")
-        require_ack(transmitter.UpdateEncryptionKey(pb2.EncryptionKeyUpdate(aes128_key=key)), "transmitter key update")
-        print("updated AES-128 key on receiver and sender")
+        require_ack(receiver.UpdateEncryptionKey(pb2.EncryptionKeyUpdate(aes256_key=key, key_id=1)), "receiver key update")
+        require_ack(transmitter.UpdateEncryptionKey(pb2.EncryptionKeyUpdate(aes256_key=key, key_id=1)), "transmitter key update")
+        print("updated AES-256-GCM key on receiver and sender")
 
         clients = read_clients_constant()
         if not args.no_permissions:
@@ -217,8 +217,10 @@ def configure(args: argparse.Namespace) -> None:
             scope = "all symbols" if args.allow_all_permissions else f"market symbols plus client {args.client_id}"
             print(f"updated receiver permissions to allow {scope}")
 
+        ack = transmitter.Restart(restart)
+        require_ack(ack, "transmitter restart")
+        restart.expected_schedule_epoch = ack.transmitter_epoch
         require_ack(receiver.Restart(restart), "receiver restart")
-        require_ack(transmitter.Restart(restart), "transmitter restart")
 
         if not args.no_bank_seed:
             for bank in banks_to_seed(args):

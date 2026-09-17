@@ -676,6 +676,12 @@ int main(int argc, char** argv) {
         }
         const auto result = receiver.push_samples(std::span<const Complex>(samples).first(n));
         consumed_samples += result.consumed_samples;
+        if (result.authentication_failures != 0U) {
+          session_events->push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::signal_event,
+                                                    .timestamp_ns = epoch_nanos(),
+                                                    .event_type = "authentication_failure",
+                                                    .count = result.authentication_failures});
+        }
         if (result.gap_events != 0U) {
           session_events->push(ReceiverSessionEvent{.type = ReceiverSessionEvent::Type::signal_event,
                                                     .timestamp_ns = epoch_nanos(),

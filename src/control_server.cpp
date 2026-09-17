@@ -109,11 +109,11 @@ std::vector<std::uint8_t> copy_puncture_pattern(const google::protobuf::Repeated
   return pattern;
 }
 
-Aes128Key parse_key(std::string_view bytes) {
-  if (bytes.size() != aes128_key_bytes) {
-    throw std::invalid_argument("AES-128 key update must contain exactly 16 bytes");
+Aes256Key parse_key(std::string_view bytes) {
+  if (bytes.size() != 32) {
+    throw std::invalid_argument("AES-256-GCM key update must contain exactly 32 bytes");
   }
-  Aes128Key key;
+  Aes256Key key;
   std::copy(bytes.begin(), bytes.end(), key.bytes.begin());
   return key;
 }
@@ -344,6 +344,15 @@ grpc::Status invalid_argument_status(const std::exception& exception) {
 
 class ReceiverControlService final : public pb::ReceiverControl::Service {
 public:
+  grpc::Status GetMetrics(grpc::ServerContext*, const pb::MetricsRequest*, pb::ReceiverMetrics* response) override {
+    const auto counters = control_->metrics();
+    response->set_authentication_failures(counters.authentication_failures);
+    response->set_replay_rejections(counters.replay_rejections);
+    response->set_lock_losses(counters.lock_losses);
+    response->set_valid_headers(counters.valid_headers);
+    response->set_gap_events(counters.gap_events);
+    return grpc::Status::OK;
+  }
   explicit ReceiverControlService(std::shared_ptr<ReceiverControlState> control)
       : control_(std::move(control)) {}
 
@@ -351,8 +360,8 @@ public:
                                    const pb::EncryptionKeyUpdate* request,
                                    pb::ControlAck* response) override {
     try {
-      const auto key = parse_key(request->aes128_key());
-      const auto generation = control_->update_encryption_key(key);
+      const auto key = parse_key(request->aes256_key());
+      const auto generation = control_->update_encryption_key(key, request->key_id());
       response->set_ok(true);
       response->set_message("key updated");
       response->set_generation(generation);
@@ -453,8 +462,8 @@ public:
                                    const pb::EncryptionKeyUpdate* request,
                                    pb::ControlAck* response) override {
     try {
-      const auto key = parse_key(request->aes128_key());
-      const auto generation = control_->update_encryption_key(key);
+      const auto key = parse_key(request->aes256_key());
+      const auto generation = control_->update_encryption_key(key, request->key_id());
       response->set_ok(true);
       response->set_message("key updated");
       response->set_generation(generation);
@@ -473,6 +482,7 @@ public:
       response->set_ok(true);
       response->set_message("transmitter restart scheduled");
       response->set_generation(active.generation);
+      response->set_transmitter_epoch(active.pipeline.rf.expected_schedule_epoch);
       return grpc::Status::OK;
     } catch (const std::exception& exception) {
       return invalid_argument_status(exception);
@@ -962,10 +972,23 @@ std::vector<CanonicalMessageRecord> CanonicalMessageBroadcaster::wait_for_messag
 ReceiverControlState::ReceiverControlState()
     : permissions_(allow_all_symbol_permissions()) {}
 
+void ReceiverControlState::note_receive_result(const RealtimeReceiveResult& result) noexcept {
+  authentication_failures_.fetch_add(result.authentication_failures, std::memory_order_relaxed);
+  replay_rejections_.fetch_add(result.replay_rejections, std::memory_order_relaxed);
+  lock_losses_.fetch_add(result.lock_lost, std::memory_order_relaxed);
+  valid_headers_.fetch_add(result.header_valid, std::memory_order_relaxed);
+  gap_events_.fetch_add(result.gap_events, std::memory_order_relaxed);
+}
+ReceiverMetricSnapshot ReceiverControlState::metrics() const noexcept {
+  return {authentication_failures_.load(std::memory_order_relaxed), replay_rejections_.load(std::memory_order_relaxed),
+          lock_losses_.load(std::memory_order_relaxed), valid_headers_.load(std::memory_order_relaxed), gap_events_.load(std::memory_order_relaxed)};
+}
+
 ReceiverControlState::ReceiverControlState(RealtimePipelineConfig initial_pipeline)
     : permissions_(allow_all_symbol_permissions()) {
   active_receiver_.pipeline = std::move(initial_pipeline);
   aes_key_ = active_receiver_.pipeline.aes_key;
+  key_configured_ = true;
   pending_restart_ = active_receiver_;
   has_pending_restart_.store(true, std::memory_order_release);
 }
@@ -984,7 +1007,7 @@ ReceiverControlSnapshot ReceiverControlState::snapshot() const {
           .market_bank_deactivation_generation = market_bank_deactivation_generation_};
 }
 
-Aes128Key ReceiverControlState::aes_key() const {
+Aes256Key ReceiverControlState::aes_key() const {
   std::scoped_lock lock(mutex_);
   return aes_key_;
 }
@@ -1094,10 +1117,13 @@ bool ReceiverControlState::accept_received_symbol(std::uint8_t bank, std::uint8_
   return true;
 }
 
-std::uint64_t ReceiverControlState::update_encryption_key(Aes128Key key) {
+std::uint64_t ReceiverControlState::update_encryption_key(Aes256Key key, std::uint32_t key_id) {
+  if (!key_id) throw std::invalid_argument("key ID must be nonzero");
   std::scoped_lock lock(mutex_);
   aes_key_ = key;
   active_receiver_.pipeline.aes_key = key;
+  active_receiver_.pipeline.key_id = key_id;
+  key_configured_ = true;
   return ++key_generation_;
 }
 
@@ -1112,7 +1138,12 @@ ReceiverRestartConfig ReceiverControlState::request_restart(ReceiverRestartConfi
   }
 
   std::scoped_lock lock(mutex_);
+  if (!config.pipeline.rf.expected_schedule_epoch ||
+      config.pipeline.rf.expected_schedule_epoch <= active_receiver_.pipeline.rf.expected_schedule_epoch)
+    throw std::invalid_argument("receiver restart requires a fresh transmitter epoch negotiated over fiber");
+  if (!key_configured_) throw std::invalid_argument("configure an AES-256-GCM key before restarting");
   config.pipeline.aes_key = aes_key_;
+  config.pipeline.key_id = active_receiver_.pipeline.key_id;
   config.generation = ++restart_generation_;
   active_receiver_ = config;
   pending_restart_ = config;
@@ -1189,8 +1220,9 @@ std::uint64_t ReceiverControlState::update_permissions(std::span<const std::uint
 TransmitterControlState::TransmitterControlState() = default;
 
 TransmitterControlState::TransmitterControlState(RealtimePipelineConfig initial_pipeline) {
-  active_transmitter_.pipeline = std::move(initial_pipeline);
+  active_transmitter_.pipeline = prepare_transmitter_config(std::move(initial_pipeline));
   aes_key_ = active_transmitter_.pipeline.aes_key;
+  key_configured_ = true;
   pending_restart_ = active_transmitter_;
   has_pending_restart_.store(true, std::memory_order_release);
   active_bank_packed_.store(pack_active_bank(active_bank_.bank, active_bank_.generation),
@@ -1208,7 +1240,7 @@ TransmitterControlSnapshot TransmitterControlState::snapshot() const {
           .active_bank = active_bank_};
 }
 
-Aes128Key TransmitterControlState::aes_key() const {
+Aes256Key TransmitterControlState::aes_key() const {
   std::scoped_lock lock(mutex_);
   return aes_key_;
 }
@@ -1285,10 +1317,13 @@ std::vector<std::uint8_t> TransmitterControlState::live_receiver_clients(std::ch
   return clients;
 }
 
-std::uint64_t TransmitterControlState::update_encryption_key(Aes128Key key) {
+std::uint64_t TransmitterControlState::update_encryption_key(Aes256Key key, std::uint32_t key_id) {
+  if (!key_id) throw std::invalid_argument("key ID must be nonzero");
   std::scoped_lock lock(mutex_);
   aes_key_ = key;
   active_transmitter_.pipeline.aes_key = key;
+  active_transmitter_.pipeline.key_id = key_id;
+  key_configured_ = true;
   return ++key_generation_;
 }
 
@@ -1304,6 +1339,12 @@ TransmitterRestartConfig TransmitterControlState::request_restart(TransmitterRes
 
   std::scoped_lock lock(mutex_);
   config.pipeline.aes_key = aes_key_;
+  config.pipeline.key_id = active_transmitter_.pipeline.key_id;
+  if (!key_configured_) throw std::invalid_argument("configure an AES-256-GCM key before restarting");
+  if (config.pipeline.transmitter_epoch_path.empty())
+    config.pipeline.transmitter_epoch_path = active_transmitter_.pipeline.transmitter_epoch_path;
+  config.pipeline.transmitter_epoch.reset();
+  config.pipeline = prepare_transmitter_config(std::move(config.pipeline));
   config.generation = ++restart_generation_;
   active_transmitter_ = config;
   pending_restart_ = config;
@@ -1415,7 +1456,9 @@ RealtimeReceiveResult ControlledRealtimeReceiver::push_samples(std::span<const C
   if (!receiver_) {
     return {};
   }
-  return receiver_->push_samples(samples);
+  auto result = receiver_->push_samples(samples);
+  control_->note_receive_result(result);
+  return result;
 }
 
 RealtimeReceiveResult ControlledRealtimeReceiver::push_audio_block(std::span<const Complex> samples,
@@ -1425,7 +1468,9 @@ RealtimeReceiveResult ControlledRealtimeReceiver::push_audio_block(std::span<con
   if (!receiver_) {
     return {};
   }
-  return receiver_->push_audio_block(samples, first_sample, valid);
+  auto result = receiver_->push_audio_block(samples, first_sample, valid);
+  control_->note_receive_result(result);
+  return result;
 }
 
 RealtimeReceiveResult ControlledRealtimeReceiver::push_timed_audio_block(std::span<const Complex> samples,
@@ -1433,8 +1478,10 @@ RealtimeReceiveResult ControlledRealtimeReceiver::push_timed_audio_block(std::sp
     std::size_t maximum_lateness_samples, bool valid) {
   apply_pending_restart();
   if (!receiver_) return {};
-  return receiver_->push_timed_audio_block(samples, first_sample, arrival_sample,
-                                          maximum_lateness_samples, valid);
+  auto result = receiver_->push_timed_audio_block(samples, first_sample, arrival_sample,
+                                                maximum_lateness_samples, valid);
+  control_->note_receive_result(result);
+  return result;
 }
 
 ControlledRealtimeTransmitter::ControlledRealtimeTransmitter(QueueSource<DelimitedMessage>& input)

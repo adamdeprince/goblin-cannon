@@ -1,0 +1,125 @@
+{
+  "cases": [
+    {
+      "body_bytes": 3,
+      "context_initialization_us": 936.452,
+      "open_us": {
+        "max": 14.988,
+        "p50": 0.161,
+        "p99": 0.171,
+        "p99_9": 0.261
+      },
+      "seal_us": {
+        "max": 8.456,
+        "p50": 0.16,
+        "p99": 0.181,
+        "p99_9": 0.28
+      }
+    },
+    {
+      "body_bytes": 16,
+      "context_initialization_us": 1.904,
+      "open_us": {
+        "max": 9.508,
+        "p50": 0.15,
+        "p99": 0.16,
+        "p99_9": 0.201
+      },
+      "seal_us": {
+        "max": 36.158,
+        "p50": 0.141,
+        "p99": 0.161,
+        "p99_9": 0.21
+      }
+    },
+    {
+      "body_bytes": 128,
+      "context_initialization_us": 1.814,
+      "open_us": {
+        "max": 9.247,
+        "p50": 0.191,
+        "p99": 0.33,
+        "p99_9": 0.38
+      },
+      "seal_us": {
+        "max": 42.25,
+        "p50": 0.19,
+        "p99": 0.301,
+        "p99_9": 0.35
+      }
+    },
+    {
+      "body_bytes": 1024,
+      "context_initialization_us": 10.269,
+      "open_us": {
+        "max": 12.193,
+        "p50": 0.381,
+        "p99": 0.471,
+        "p99_9": 0.601
+      },
+      "seal_us": {
+        "max": 17.002,
+        "p50": 0.341,
+        "p99": 0.431,
+        "p99_9": 0.501
+      }
+    },
+    {
+      "body_bytes": 65534,
+      "context_initialization_us": 2.965,
+      "open_us": {
+        "max": 73.569,
+        "p50": 14.558,
+        "p99": 23.685,
+        "p99_9": 26.801
+      },
+      "seal_us": {
+        "max": 44.515,
+        "p50": 11.843,
+        "p99": 20.769,
+        "p99_9": 22.733
+      }
+    }
+  ],
+  "host": {
+    "compiler": "c++ (GCC) 16.1.0\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+    "cpu_flags": "flags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 hw_pstate ssbd mba ibrs ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin brs arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif v_spec_ctrl umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor smca fsrm debug_swap",
+    "git_commit": "44d318b7b279dd0546f00a4b4b295f51d7160260",
+    "hostname": "naamah",
+    "openssl": "OpenSSL 3.5.5 27 Jan 2026 (Library: OpenSSL 3.5.5 27 Jan 2026)\nbuilt on: Wed Aug 26 11:58:23 2026 UTC\nplatform: debian-amd64\noptions:  bn(64,64)\ncompiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -Wa,--noexecstack -g -O2 -Werror=implicit-function-declaration -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/openssl-YuD4uC/openssl-3.5.5=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/openssl-YuD4uC/openssl-3.5.5=/usr/src/openssl-3.5.5-1ubuntu3.5 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DZLIB -DZSTD -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=3\nOPENSSLDIR: \"/usr/lib/ssl\"\nENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\"\nMODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\"\nSeeding source: os-specific JITTER (3060300)\nCPUINFO: OPENSSL_ia32cap=0x7efa320b078bffff:0x0040069c219c97a9:0x0000000000000010:0x0000000000000000:0x0000000000000000\n",
+    "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43",
+    "report_header": "simulated channel quiet-host provenance",
+    "source_tree_sha256": "5b5d0b660023e9c7df281a4171786fe546cb36534cfda9e4bcb56823d6a9e7bf"
+  },
+  "iterations": 20000,
+  "parameters": {
+    "associated_data": "25 bytes: 01 00 01 followed by 22 zero bytes",
+    "channel_model": "none: isolated GCM host benchmark",
+    "delay_spread_ms": 0,
+    "doppler_spread_hz": 0,
+    "frame_body_sizes_bytes": [
+      3,
+      16,
+      128,
+      1024,
+      65534
+    ],
+    "git_commit": "44d318b7b279dd0546f00a4b4b295f51d7160260",
+    "interferers": "disabled",
+    "interleaver": "none",
+    "iterations_per_size": 20000,
+    "key": "32 zero bytes, benchmark fixture only",
+    "nonce": "epoch 1..5 by body size, sequence 1..21000 per epoch; first 1000 iterations are warmup",
+    "plaintext": "body size copies of byte 71",
+    "profile_source_sha256": "a6a4138571ae93c480a11bb296ba123fb45b8bfb4282b16503973e3da6275992",
+    "rate": null,
+    "seed": 7446529,
+    "snr_db": null,
+    "source_tree_sha256": "5b5d0b660023e9c7df281a4171786fe546cb36534cfda9e4bcb56823d6a9e7bf",
+    "warmup_per_size": 1000
+  },
+  "report_header": "simulated channel AES-256-GCM host profile",
+  "scope": "Reused EVP contexts; GCM seal/open only, including verified plaintext copy and scratch cleansing; excludes FEC, framing and nonce-journal startup",
+  "seed": 7446529,
+  "warmup": 1000
+}

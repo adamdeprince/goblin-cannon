@@ -8,6 +8,7 @@
 #include <limits>
 #include <stdexcept>
 #include <utility>
+#include <cstdlib>
 
 namespace goblin_cannon {
 
@@ -112,10 +113,6 @@ bool message_carries_crc(std::span<const std::uint8_t> message) noexcept {
   return message.size() > 1U;
 }
 
-std::size_t message_wire_bytes(std::span<const std::uint8_t> message) noexcept {
-  return message.size() + (message_carries_crc(message) ? message_crc_bytes : 0U);
-}
-
 void append_message_crc(std::vector<std::uint8_t>& message) {
   if (!message_carries_crc(message)) {
     return;
@@ -146,11 +143,11 @@ std::optional<std::vector<std::uint8_t>> verify_and_strip_message_crc(std::vecto
 }
 
 bool bid_score_better(const BidMessage& candidate, const BidMessage& incumbent, bool sequenced) noexcept {
-  const std::size_t overhead = sequenced ? 5U : 0U;
+  (void)sequenced; // All production envelopes carry a fixed authenticated header.
   const auto candidate_score = static_cast<long double>(candidate.bid_price) /
-                               static_cast<long double>(message_wire_bytes(candidate.payload) + overhead);
+                               static_cast<long double>(authenticated_message_wire_bytes(candidate.payload.size()));
   const auto incumbent_score = static_cast<long double>(incumbent.bid_price) /
-                               static_cast<long double>(message_wire_bytes(incumbent.payload) + overhead);
+                               static_cast<long double>(authenticated_message_wire_bytes(incumbent.payload.size()));
   if (candidate_score != incumbent_score) {
     return candidate_score > incumbent_score;
   }
@@ -217,6 +214,153 @@ void validate_realtime_config(const RealtimePipelineConfig& config) {
 
 } // namespace
 
+namespace {
+constexpr std::size_t authenticated_header_bytes = 25;
+void append_integer(std::vector<std::uint8_t>& bytes, std::uint64_t value, unsigned width) {
+  for (unsigned i = width; i > 0; --i) bytes.push_back(static_cast<std::uint8_t>(value >> ((i - 1) * 8)));
+}
+std::uint64_t read_integer(std::span<const std::uint8_t> bytes) {
+  std::uint64_t value = 0;
+  for (auto b : bytes) value = (value << 8) | b;
+  return value;
+}
+// Ordinary COBS framing reserves only zero. All header and ciphertext bytes,
+// including 0/1, are representable without changing the authenticated record.
+std::vector<std::uint8_t> cobs_encode(std::span<const std::uint8_t> bytes) {
+  std::vector<std::uint8_t> out{0, 0};
+  out.reserve(bytes.size() + bytes.size() / 254 + 3);
+  std::size_t code_at = 1;
+  std::uint8_t code = 1;
+  for (auto byte : bytes) {
+    if (byte == 0) {
+      out[code_at] = code; code_at = out.size(); out.push_back(0); code = 1;
+    } else {
+      out.push_back(byte);
+      if (++code == 255) { out[code_at] = code; code_at = out.size(); out.push_back(0); code = 1; }
+    }
+  }
+  out[code_at] = code;
+  return out;
+}
+bool cobs_decode(std::span<const std::uint8_t> in, std::vector<std::uint8_t>& out) {
+  out.clear();
+  for (std::size_t at = 0; at < in.size();) {
+    const auto code = in[at++];
+    if (!code || code - 1U > in.size() - at) return false;
+    for (unsigned i = 1; i < code; ++i) {
+      if (in[at] == 0) return false;
+      out.push_back(in[at++]);
+    }
+    if (code != 255 && at < in.size()) out.push_back(0);
+  }
+  return true;
+}
+}
+
+std::size_t authenticated_message_wire_bytes(std::size_t application_bytes) noexcept {
+  const auto record = application_bytes + authenticated_header_bytes + GcmTag{}.size() - 1;
+  return record + record / 254 + 2;
+}
+
+class AuthenticatedMessageEncoder {
+public:
+  AuthenticatedMessageEncoder(const Aes256Key& key, std::uint32_t id, std::shared_ptr<TransmitterEpoch> e)
+      : cipher(key), key_id(id), epoch(std::move(e)) {
+    if (!key_id || !epoch) throw std::invalid_argument("key ID and durable epoch are required");
+    epoch->claim();
+  }
+  std::vector<std::uint8_t> seal(const DelimitedMessage& message, bool sequenced) {
+    if (sequence == std::numeric_limits<std::uint32_t>::max()) throw std::overflow_error("AEAD frame sequence exhausted; restart with a fresh epoch");
+    ++sequence; // Never zero; a failed encryption burns this nonce too.
+    record.clear();
+    record.push_back(1); record.push_back(message.bytes[0]); record.push_back(sequenced ? 1 : 0);
+    append_integer(record, key_id, 4); append_integer(record, epoch->value(), 8);
+    append_integer(record, sequence, 4); append_integer(record, message.sequence.value_or(0), 4);
+    append_integer(record, message.bytes.size() - 1, 2);
+    ad = record; ad.insert(ad.end(), context.begin(), context.end());
+    GcmTag tag{};
+    cipher.seal(message_nonce(epoch->value(), sequence), ad, std::span(message.bytes).subspan(1), encrypted, tag);
+    record.insert(record.end(), encrypted.begin(), encrypted.end());
+    record.insert(record.end(), tag.begin(), tag.end());
+    return cobs_encode(record);
+  }
+  Aes256Gcm cipher;
+  std::uint32_t key_id, sequence = 0;
+  std::shared_ptr<TransmitterEpoch> epoch;
+  std::vector<std::uint8_t> context, ad, record, encrypted;
+};
+
+class AuthenticatedMessageDecoder {
+public:
+  AuthenticatedMessageDecoder(const Aes256Key& key, std::uint32_t id, std::uint64_t e)
+      : cipher(key), key_id(id), epoch(e) {
+    if (!key_id || !epoch) throw std::invalid_argument("receiver requires a key ID and negotiated nonzero transmitter epoch");
+  }
+  std::optional<DelimitedMessage> open(std::span<const std::uint8_t> wire, bool sequenced) {
+    const auto fail = [&]() -> std::optional<DelimitedMessage> { ++failures; return std::nullopt; };
+    if (wire.empty() || wire[0] != 0 || !cobs_decode(wire.subspan(1), record) ||
+        record.size() < authenticated_header_bytes + GcmTag{}.size()) return fail();
+    const auto header = std::span(record).first(authenticated_header_bytes);
+    const auto observed_id = read_integer(header.subspan(3, 4));
+    const auto observed_epoch = read_integer(header.subspan(7, 8));
+    const auto sequence = static_cast<std::uint32_t>(read_integer(header.subspan(15, 4)));
+    if (!observed_epoch || !sequence || observed_id != key_id) return fail();
+    const auto length = read_integer(header.subspan(23, 2));
+    if (record.size() != authenticated_header_bytes + length + GcmTag{}.size()) return fail();
+    ad.assign(header.begin(), header.end()); ad.insert(ad.end(), context.begin(), context.end());
+    GcmTag tag{}; std::copy_n(record.end() - tag.size(), tag.size(), tag.begin());
+    if (!cipher.open(message_nonce(observed_epoch, sequence), ad,
+                     std::span(record).subspan(authenticated_header_bytes, length), tag, clear)) return fail();
+    // Only authenticated metadata may update replay state. A fresh receiver
+    // negotiates a fresh TX epoch over fiber, so old sessions are rejected too.
+    if (observed_epoch != epoch || sequence <= latest) { ++replays; return std::nullopt; }
+    if (header[0] != 1 || header[1] > 1 || header[2] != (sequenced ? 1 : 0) ||
+        std::any_of(clear.begin(), clear.end(), [](auto b) { return b < 2; })) return fail();
+    latest = sequence;
+    DelimitedMessage message{.bytes = {header[1]}};
+    message.bytes.insert(message.bytes.end(), clear.begin(), clear.end());
+    if (sequenced) message.sequence = static_cast<std::uint32_t>(read_integer(header.subspan(19, 4)));
+    return message;
+  }
+  Aes256Gcm cipher;
+  std::uint32_t key_id, latest = 0;
+  std::uint64_t epoch, failures = 0, replays = 0;
+  std::vector<std::uint8_t> context, ad, record, clear;
+};
+
+MessageStreamFramer::MessageStreamFramer() = default;
+MessageStreamFramer::~MessageStreamFramer() = default;
+void MessageStreamFramer::authenticate(const Aes256Key& key, std::uint32_t id, std::shared_ptr<TransmitterEpoch> epoch) {
+  if (authentication_) throw std::logic_error("cannot reinitialize a live message authenticator");
+  authentication_ = std::make_unique<AuthenticatedMessageEncoder>(key, id, std::move(epoch));
+}
+void MessageStreamFramer::set_authentication_context(std::span<const std::uint8_t> context) {
+  if (authentication_) authentication_->context.assign(context.begin(), context.end());
+}
+MessageStreamDeframer::MessageStreamDeframer() = default;
+MessageStreamDeframer::~MessageStreamDeframer() = default;
+void MessageStreamDeframer::authenticate(const Aes256Key& key, std::uint32_t id, std::uint64_t epoch) {
+  if (authentication_) throw std::logic_error("cannot reset live replay protection");
+  authentication_ = std::make_unique<AuthenticatedMessageDecoder>(key, id, epoch);
+}
+void MessageStreamDeframer::set_authentication_context(std::span<const std::uint8_t> context) {
+  if (authentication_) authentication_->context.assign(context.begin(), context.end());
+}
+std::uint64_t MessageStreamDeframer::authentication_failures() const noexcept { return authentication_ ? authentication_->failures : 0; }
+std::uint64_t MessageStreamDeframer::replay_rejections() const noexcept { return authentication_ ? authentication_->replays : 0; }
+
+RealtimePipelineConfig prepare_transmitter_config(RealtimePipelineConfig config) {
+  if (!config.transmitter_epoch) {
+    if (config.transmitter_epoch_path.empty()) {
+      if (const auto* path = std::getenv("GOBLIN_CANNON_EPOCH_STATE")) config.transmitter_epoch_path = path;
+    }
+    config.transmitter_epoch = TransmitterEpoch::reserve(config.transmitter_epoch_path,
+        std::max<std::uint64_t>(1, config.rf.expected_schedule_epoch));
+  }
+  config.rf.expected_schedule_epoch = config.transmitter_epoch->value();
+  return config;
+}
+
 MessageFrameEncodeResult MessageStreamFramer::next_payload_frame(QueueSource<DelimitedMessage>& input,
                                                                  std::span<std::uint8_t> payload_out) {
   if (payload_out.empty()) {
@@ -242,7 +386,9 @@ MessageFrameEncodeResult MessageStreamFramer::next_payload_frame(QueueSource<Del
       if (observer_ != nullptr) {
         observer_->on_delimited_message(DelimitedMessage{.bytes = current_, .sequence = next.sequence});
       }
-      if (sequence_numbers_ && current_.size() > 1U) {
+      if (authentication_) {
+        current_ = authentication_->seal(DelimitedMessage{.bytes = current_, .sequence = next.sequence}, sequence_numbers_);
+      } else if (sequence_numbers_ && current_.size() > 1U) {
         auto sequence = *next.sequence;
         std::array<std::uint8_t, 5> encoded{};
         for (auto& byte : encoded) {
@@ -251,7 +397,7 @@ MessageFrameEncodeResult MessageStreamFramer::next_payload_frame(QueueSource<Del
         }
         current_.insert(current_.begin() + 2, encoded.begin(), encoded.end());
       }
-      append_message_crc(current_);
+      if (!authentication_) append_message_crc(current_);
       current_offset_ = 0;
       ++result.consumed_messages;
     }
@@ -275,7 +421,7 @@ MessageFrameEncodeResult MessageStreamFramer::next_payload_frame(QueueSource<Del
   result.message_continues = current_offset_ != 0U && current_offset_ < current_.size();
   std::fill(payload_out.begin() + static_cast<std::ptrdiff_t>(offset),
             payload_out.end(),
-            active_bank_override_.value_or(0U));
+            authentication_ ? 0U : active_bank_override_.value_or(0U));
   return result;
 }
 
@@ -284,7 +430,7 @@ void MessageStreamFramer::set_active_bank(std::uint8_t bank) {
     throw std::invalid_argument("active bank must be 0 or 1");
   }
   active_bank_override_ = bank;
-  if (!current_.empty()) {
+  if (!current_.empty() && !authentication_) {
     current_.front() = bank;
   }
 }
@@ -443,13 +589,23 @@ bool MessageStreamDeframer::push_completed(std::vector<std::uint8_t> message,
   if (message.size() <= 1U) {
     return true;
   }
-  auto verified = verify_and_strip_message_crc(std::move(message));
-  if (!verified.has_value()) {
-    report_gap({MessageGapReason::checksum});
-    return true;
+  DelimitedMessage completed;
+  if (authentication_) {
+    const auto failures = authentication_->failures;
+    auto verified = authentication_->open(message, sequence_numbers_);
+    if (!verified) {
+      if (authentication_->failures != failures) report_gap({MessageGapReason::authentication});
+      else ++suppressed_messages_;
+      return true;
+    }
+    completed = std::move(*verified);
+    if (completed.bytes.size() <= 1) return true;
+  } else {
+    auto verified = verify_and_strip_message_crc(std::move(message));
+    if (!verified) { report_gap({MessageGapReason::checksum}); return true; }
+    completed.bytes = std::move(*verified);
   }
-  DelimitedMessage completed{.bytes = std::move(*verified)};
-  if (sequence_numbers_) {
+  if (sequence_numbers_ && !authentication_) {
     if (completed.bytes.size() < 7U) {
       report_gap({MessageGapReason::malformed});
       return true;
@@ -460,9 +616,13 @@ bool MessageStreamDeframer::push_completed(std::vector<std::uint8_t> message,
       report_gap({MessageGapReason::malformed});
       return true;
     }
+    completed.sequence = static_cast<std::uint32_t>(sequence);
+    completed.bytes.erase(completed.bytes.begin() + 2, completed.bytes.begin() + 7);
+  }
+  if (sequence_numbers_) {
     const auto key = completed.bytes[0] * 254U + completed.bytes[1] - 2U;
     auto& latest = latest_sequence_[key];
-    const auto serial = static_cast<std::uint32_t>(sequence);
+    const auto serial = *completed.sequence;
     const auto distance = serial - latest.value_or(serial);
     // Serial arithmetic: duplicates, older frames, and the ambiguous half of
     // the sequence space are rejected. Ordinary uint32 wrap advances normally.
@@ -471,8 +631,6 @@ bool MessageStreamDeframer::push_completed(std::vector<std::uint8_t> message,
       return true;
     }
     latest = serial;
-    completed.sequence = serial;
-    completed.bytes.erase(completed.bytes.begin() + 2, completed.bytes.begin() + 7);
   }
   if (output.try_push(completed)) {
     if (observer_ != nullptr) {
@@ -521,7 +679,7 @@ MessageFrameDecodeResult MessageStreamDeframer::push_payload_tokens(std::span<co
     }
 
     const auto byte = token.value;
-    if (is_delimiter(byte)) {
+    if (authentication_ ? byte == 0 : is_delimiter(byte)) {
       auto completed = std::move(current_);
       current_.clear();
       current_.push_back(byte);
@@ -540,7 +698,8 @@ MessageFrameDecodeResult MessageStreamDeframer::push_payload_tokens(std::span<co
 
     if (!require_delimiter_ && !current_.empty()) {
       current_.push_back(byte);
-      if (current_.size() > maximum_message_bytes + message_crc_bytes + (sequence_numbers_ ? 5U : 0U)) {
+      const auto maximum = authentication_ ? authenticated_message_wire_bytes(maximum_message_bytes) : maximum_message_bytes + message_crc_bytes + (sequence_numbers_ ? 5U : 0U);
+      if (current_.size() > maximum) {
         report_gap({MessageGapReason::oversized});
         current_.clear();
         require_delimiter_ = true;
@@ -565,12 +724,13 @@ void MessageStreamDeframer::reset() {
 }
 
 RealtimeTransmitter::RealtimeTransmitter(RealtimePipelineConfig config, QueueSource<DelimitedMessage>& input)
-    : config_(std::move(config)),
+    : config_(prepare_transmitter_config(std::move(config))),
       input_(input),
-      coding_(config_.convolutional, config_.coding, config_.aes_key, config_.ctr_counter),
+      coding_(config_.convolutional, config_.coding),
       rf_(config_.rf),
       constellation_(config_.rf.modem.modulation, config_.rf.modem.constellation_profile) {
   validate_realtime_config(config_);
+  framer_.authenticate(config_.aes_key, config_.key_id, config_.transmitter_epoch);
   framer_.set_sequence_numbers(config_.sequence_numbers);
   if (auto* auction = dynamic_cast<TransmitMessageQueue*>(&input_)) auction->set_sequence_numbers(config_.sequence_numbers);
   if (config_.sync_timestamp.enabled) {
@@ -591,6 +751,7 @@ void RealtimeTransmitter::ensure_symbol_block(RealtimeTransmitResult& result) {
     if (sync_timestamp_offset_ < sync_timestamp_bytes_.size()) {
       if (!sync_timestamp_initialized_) {
         sync_timestamp_bytes_ = encode_native_double(current_epoch_seconds());
+        framer_.set_authentication_context(sync_timestamp_bytes_);
         sync_timestamp_initialized_ = true;
       }
       byte[0] = sync_timestamp_bytes_[sync_timestamp_offset_++];
@@ -668,10 +829,11 @@ void RealtimeTransmitter::set_consumed_message_observer(DelimitedMessageObserver
 RealtimeReceiver::RealtimeReceiver(RealtimePipelineConfig config, SpscRingBuffer<DelimitedMessage>& output)
     : config_(std::move(config)),
       output_(output),
-      coding_(config_.convolutional, config_.coding, config_.aes_key, config_.ctr_counter),
+      coding_(config_.convolutional, config_.coding),
       rf_(config_.rf),
       constellation_(config_.rf.modem.modulation, config_.rf.modem.constellation_profile) {
   validate_realtime_config(config_);
+  deframer_.authenticate(config_.aes_key, config_.key_id, config_.rf.expected_schedule_epoch);
   deframer_.set_sequence_numbers(config_.sequence_numbers);
   reset_coded_stream();
 }
@@ -720,6 +882,7 @@ bool RealtimeReceiver::accept_sync_timestamp_byte(const Token& token, RealtimeRe
   }
 
   sync_timestamp_validated_ = true;
+  deframer_.set_authentication_context(sync_timestamp_bytes_);
   result.timestamp_valid = true;
   return true;
 }
@@ -749,6 +912,8 @@ bool RealtimeReceiver::process_decoded_tokens(std::span<const Token> tokens, Rea
 RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> samples) {
   RealtimeReceiveResult result;
   const auto gaps_before = deframer_.gap_count();
+  const auto auth_before = deframer_.authentication_failures();
+  const auto replay_before = deframer_.replay_rejections();
   auto& symbols = symbol_buffer_;
   std::size_t offset = 0;
   while (offset < samples.size()) {
@@ -790,7 +955,7 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
           deframer_.report_gap({MessageGapReason::rf_lock_lost});
           deframer_.reset();
           // A session that has never validated its timestamp must still do so
-          // at the start. Recovery does not turn a CRC into authentication.
+          // at the start. The timestamp is also bound into every message tag.
           if (!sync_timestamp_validated_ && position != 0) {
             reject_stream(result);
             break;
@@ -824,6 +989,8 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
     }
   }
   result.gap_events = deframer_.gap_count() - gaps_before;
+  result.authentication_failures = deframer_.authentication_failures() - auth_before;
+  result.replay_rejections = deframer_.replay_rejections() - replay_before;
   return result;
 }
 

@@ -222,15 +222,15 @@ Diversity requires BPSK and recurring recovery markers; its two half-band
 copies share the original total transmit power. `--diversity-wait-ms` controls
 the maximum wait for a matching second copy.
 
-The payload order is source bytes → convolutional **or** BCH FEC → AES-CTR →
+The payload order is source bytes → AES-256-GCM record → convolutional **or** BCH FEC →
 optional Walsh spreading → optional block interleaving → waveform. BCH replaces
 convolutional payload coding; the protected RF header keeps its own code.
 Ordinary BCH decoding corrects up to three hard bit errors per shortened word.
 Soft demapping uses exhaustive Euclidean bit distances and known-pilot noise
 estimates, with the existing fixed constellation. New soft experiments use
-Viterbi hard output followed by the existing message CRC; post-Viterbi confidence
+Viterbi hard output followed by mandatory GCM verification; post-Viterbi confidence
 is not a calibrated probability. Soft demapping with differential mappings is
-currently rejected. CRC does not provide AEAD authentication.
+currently rejected. Payload FEC success alone does not authenticate a message.
 
 FSK acquires from its own tone preamble and coded tone header. It uses energy
 detection and per-frame timing acquisition, with no RLS, Gardner or carrier
@@ -345,7 +345,7 @@ first validated header after signal return. Acquisition deadlines remain open.
 
 D1 keeps the isolated auction test and also runs a null-channel overload stream
 through the actual auction, framer, FEC, crypto, modem and sink. The latter offers
-wire bytes (including CRC and sequence metadata) at each multiple of the declared steady payload bit
+wire bytes (including the authenticated header, tag and COBS bound) at each multiple of the declared steady payload bit
 rate. Results retain newest-only per-key latency and ten chronological windows.
 D3's contention and flood checks isolate the auction so RF acquisition does not
 hide starvation. Newer same-key market bids replace the standing winner even
@@ -454,14 +454,14 @@ To reproduce a particular measurement, also match its bandwidth, symbol rate,
 frame size, pilot cadence, training length and equalizer span from the saved
 parameters; the four recovery flags alone do not select those values.
 
-Recovery seeks the existing continuous CTR keystream and aligns the punctured
-Viterbi decoder at the next source-byte boundary; it never resets the transmitter
-counter to zero. Uncertain recovery bytes and partial messages are discarded
+Recovery aligns the payload FEC decoder at the next source-byte boundary.
+The message deframer retains authenticated replay high-water marks; it never
+resets the transmitter's nonce counter. Uncertain recovery bytes and partial messages are discarded
 with downstream gaps. With timestamp validation enabled, the initial session
 timestamp must first have been validated; a later CRC-protected header does not
 bypass that check. Mid-stream joining in the simulation uses its explicitly
-declared disabled timestamp check. AEAD and restart nonce safety remain separate
-open defects.
+declared disabled timestamp check. AES-256-GCM binds an enabled timestamp into
+the record's associated data; durable epochs prevent transmitter restart nonce reuse.
 
 The two endpoints must receive matching settings over the fiber gRPC control
 path. `RestartRequest` and `scripts/configure_local_radios.py` expose
@@ -471,13 +471,12 @@ Use carrier correction off and adaptive/recursive equalization on for this
 acceptance boundary. The library retains the legacy NLMS option. Equalizer
 lookahead adds the declared number of symbols of modem residence.
 
-The default realtime message format adds five base-254 bytes for a 32-bit serial
-number covered by the existing CRC. Both endpoints must enable this format
-together; `message_sequence_numbers=false` selects the legacy format. Per-key
-serial comparison suppresses duplicates and stale arrivals across audio resets
-and handles wraparound. A new receiver/session clears the high-water marks.
-This sequencing does not provide cryptographic authentication or restart-safe
-replay protection; the separate AES-CTR/AEAD/nonce findings remain open.
+The realtime message format authenticates both mandatory frame sequencing and
+optional per-key application sequencing. `message_sequence_numbers=false`
+disables only the application serial field's interpretation; it never disables
+GCM or replay checking. A new receiver session must negotiate a fresh durable
+transmitter epoch over fiber. See [AEAD.md](AEAD.md) for provisioning, wire format,
+control metrics and the still-open coordinated key-rotation assertion.
 
 Audio integrations should call `push_audio_block(samples, first_sample, valid)`
 on the realtime or controlled receiver. The monotonically increasing device
@@ -486,9 +485,43 @@ For delivery jitter, `push_timed_audio_block` additionally accepts the arrival
 position in the same device sample clock and the configured playout slack. Late
 blocks produce a gap even when their sample positions are contiguous.
 `DelimitedMessageObserver::on_message_gap` and `RealtimeReceiveResult::gap_events`
-expose discontinuities, FEC uncertainty and malformed/checksum failures. The raw
+expose discontinuities, FEC uncertainty and authentication failures. The raw
 `push_samples` API cannot infer device events for which no metadata is supplied.
 
 The source auction coalesces unsent market updates. Once serialization begins,
 newer source data cannot retract bits already in flight. Receiver suppression
 uses newer **received** sequence numbers; it cannot infer unseen source updates.
+
+## Simulated channel AEAD campaign
+
+Build the Release targets first. The runner reuses the existing simulator and
+preserves the full parameter records, seeds, durations and tier markers:
+
+```sh
+AEAD_COMMIT=$(git rev-parse HEAD)
+AEAD_SOURCE=$(python3 -c 'import sys; sys.path.insert(0, "tests/simulated_channel"); from run import source_digest; print(source_digest())')
+# avx10: security regressions and the current six-configuration polar matrix
+python3 scripts/aead_campaign.py security --git-commit "$AEAD_COMMIT" --source-digest "$AEAD_SOURCE"
+python3 scripts/aead_campaign.py polar --git-commit "$AEAD_COMMIT" --source-digest "$AEAD_SOURCE"
+# quiet naamah: serial host timing, twelve cases for each declared RF profile
+python3 scripts/aead_campaign.py latency --git-commit "$AEAD_COMMIT" --source-digest "$AEAD_SOURCE"
+```
+
+Collect the three selections under `results/aead/`, then run
+`python3 scripts/aead_results.py --snapshot` and
+`python3 scripts/update_html_results.py`. The report validates source hashes,
+host/canonical parameter agreement and repeated JSON before publishing. It lists
+the runtime of each invocation; combining all quick selections, including both
+B5 profiles, exceeds two minutes. These selections do not certify whole-tier
+runtime or complete the full A1–E4 matrix.
+
+For a standalone GCM CPU profile on the built host:
+
+```sh
+c++ -O3 -std=c++23 -Iinclude scripts/profile_aead.cpp build/libgoblin_cannon.a -lcrypto -o build/profile_aead
+build/profile_aead
+```
+
+This measures reused EVP contexts separately from framing, FEC and buffering.
+Production integrations must provision their durable epoch journal as described
+in [AEAD.md](AEAD.md); only simulated test fixtures create temporary journals.

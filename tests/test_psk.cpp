@@ -1,3 +1,4 @@
+#include "epoch_fixture.hpp"
 // Simulated channel PSK regressions: assert / quick; explicit seed below.
 #include "goblin_cannon/message_stream.hpp"
 #include "goblin_cannon/integer_codec.hpp"
@@ -120,7 +121,7 @@ void messages(const RfStreamConfig& rf) {
   c.rf.symbols_per_frame=64;c.rf.recovery_interval_frames=16;
   constexpr std::size_t message_period=9600;
   SpscRingBuffer<DelimitedMessage> input(256),output(256);
-  RealtimeTransmitter tx(c,input);RealtimeReceiver rx(c,output);
+  RealtimeTransmitter tx(c,input);RealtimeReceiver rx(tx.config(),output);
   test::Impairments impairment;impairment.dropout_start_s=.4;impairment.dropout_duration_s=.2;
   test::SimulatedChannel channel(48000,derived_symbol_rate_hz(rf.modem)/48000,impairment,seed);
   std::array<Complex,48> audio{};std::vector<Complex> received;
@@ -142,6 +143,7 @@ void messages(const RfStreamConfig& rf) {
 }
 
 int main() {
+  goblin_cannon::test::EpochFixture epoch_fixture;
   std::cout<<"simulated channel PSK regressions; kind=assert tier=quick seed="<<seed<<'\n';
   try {
     mapping_vectors();

@@ -1,0 +1,10 @@
+{
+  "report_header": "simulated channel corrected metadata harness validation",
+  "source_tree_sha256": "2f7fcf1115a8893e4aad78609919d67844af2af0df62cd3f1625686d6b85a155",
+  "seed": 7446529,
+  "kind": "assert",
+  "tier": "quick",
+  "passed": 14,
+  "failed": 0,
+  "log_sha256": "0993d122d2338e9c425390212262d120d95a1415457f80bf75c4c7bbe91ec044"
+}

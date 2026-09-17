@@ -1,3 +1,4 @@
+#include "epoch_fixture.hpp"
 // Simulated channel; quick/assert D1, D3, D4 and B4 regressions.
 #include "goblin_cannon/integer_codec.hpp"
 #include "goblin_cannon/control_server.hpp"
@@ -139,6 +140,7 @@ void concurrent_auction() {
 }
 void audio_gaps() {
   RealtimePipelineConfig config;
+  config.rf.expected_schedule_epoch=1;
   config.sync_timestamp.enabled=false;config.rf.carrier_correction=false;
   config.rf.acquisition_sequence=make_default_qpsk_sequence(64,seed);
   config.rf.equalizer_training_sequence=make_default_qpsk_sequence(64,seed+1);
@@ -174,6 +176,7 @@ void supersession_under_log_backpressure() {
 }
 }
 int main() {
+  goblin_cannon::test::EpochFixture epoch_fixture;
   std::cout<<"simulated channel data-path regressions; seed="<<seed<<'\n';
   try {sequencing();gaps_and_bounds();auction_accounting();concurrent_auction();audio_gaps();supersession_under_log_backpressure();}
   catch(const std::exception& error) {std::cerr<<error.what()<<'\n';return 1;}

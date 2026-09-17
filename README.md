@@ -10,7 +10,7 @@ Goblin Cannon targets x86-64 systems. The library uses an AVX baseline and runti
 
 The [HTML report](html/index.html) contains recorded latency benchmarks, the
 test ledger, and interactive comparisons of recorded polar channels, constellations
-and coding options. See the [latest encoding comparison](results/encoding-improvements/REPORT.md) for results and
+and coding options. See the [current authenticated-message report](results/aead/SUMMARY.md) for results and
 remaining defects, and [TESTING.md](TESTING.md) for reproduction commands.
 The 2.1 ms limit applies to added processing and buffering; transmission and
 modem/FEC delays are reported separately. Acceptance tests run with carrier
@@ -73,8 +73,8 @@ remain QPSK. Differential detection uses adjacent equalized observations;
 pilots supply absolute references. It adds no frequency tracker or CMA.
 Configure matching settings at both ends over gRPC. The Python control client
 accepts `--header-modulation bpsk --differential-mapping pi4_dqpsk
---modulation qpsk --no-carrier-correction`. Existing defaults preserve the coherent wire format.
-See [PSK simulated channel results](results/psk-improvements/REPORT.md).
+--modulation qpsk --no-carrier-correction`. These optional mappings retain the coherent modem default.
+See [current PSK simulated channel results](results/aead/SUMMARY.md).
 
 Optional conventional coding experiments add fixed-constellation soft bit metrics,
 K9 convolutional rates 1/2 and 1/3, BCH(58,40,7), Walsh-8 spreading and rectangular
@@ -83,7 +83,8 @@ half-band BPSK copies sharing fixed total transmit power. Configure these throug
 the existing fiber/gRPC interface. See the [coding and waveform guide](TESTING.md#conventional-encoding-simulated-channel-comparison)
 for pipeline order, controls and latency accounting, and the
 [patent screen](results/encoding-improvements/PATENT_SCREEN.md) for implementation
-boundaries and exclusions. Existing defaults retain their wire format.
+boundaries and exclusions. The production message envelope now requires GCM
+at both endpoints, regardless of the selected waveform or payload code.
 
 ## RF stream acquisition
 
@@ -129,35 +130,31 @@ through the fiber gRPC control link; these changes add no RF negotiation message
 ```text
 SpscRingBuffer<DelimitedMessage>
   -> MessageStreamFramer
+     (AES-256-GCM authenticated record, COBS framing)
   -> punctured convolutional encoder
-  -> AES-128-CTR coded-bit xor
   -> QAM/RF stream
-  -> AES-128-CTR soft-bit xor
   -> soft-decision Viterbi decoder
-  -> MessageStreamDeframer
+  -> MessageStreamDeframer (verify tag, reject replays, then deliver)
   -> SpscRingBuffer<DelimitedMessage>
 ```
 
 The default code is `K=7`, generators `171` and `133` octal, base rate `1/2`.
 `PuncturedConvolutionalCodeConfig` also provides `rate_2_3()` and `rate_3_4()` presets, and callers can supply other constraint lengths, generators, puncture patterns, and confidence thresholds.
-The AES-128-CTR counter and session key are supplied by the control plane.
+The 32-byte AES-256-GCM key and nonzero key ID are supplied over the fiber control plane.
 
-Before the first message byte of each acquired stream, the transmitter sends an 8-byte native Intel IEEE double containing seconds since the Unix epoch. The receiver validates that timestamp after Viterbi decode and before message deframing. `SyncTimestampConfig` controls the allowed clock skew and can disable the check for deterministic tests.
+With `SyncTimestampConfig` enabled, the transmitter prefixes the stream with an 8-byte native Intel IEEE double containing seconds since the Unix epoch. The receiver checks clock skew after FEC decoding, and every message authenticates those exact bytes as additional associated data. The timestamp is never used to construct a nonce. Deterministic simulated-channel tests disable this optional clock-skew check.
 
-Messages are byte strings whose first byte is the retained start delimiter `0` or `1`; body bytes must be in `[2,255]`. For non-empty messages, `MessageStreamFramer` appends a 4-byte base254 CRC trailer: it computes CRC-32 over the delimiter-prefixed message, masks the result to 31 bits, and encodes the value into four bytes in `[2,255]`. `MessageStreamDeframer` verifies and strips that trailer before emitting. Zero-length delimiter runs from padding, such as repeated `0` or repeated `1`, carry no CRC and are ignored. If a fade, decoder erasure, or CRC mismatch touches a message, the partial message is dropped and later bytes are ignored until a new clear delimiter arrives.
+Application messages retain their bank byte (`0` or `1`) and body bytes in `[2,255]`. The production wire format is a COBS-delimited AES-256-GCM record. Its 25-byte clear, authenticated header contains version, bank, sequencing flag, key ID, 64-bit epoch, 32-bit frame sequence, 32-bit application sequence, and 16-bit body length, all integers in network byte order. The body is encrypted and followed by a 16-byte tag. Idle zero delimiters are ignored. Damaged or unverified records never reach a sink; tag/framing authentication failures increment `authentication_failures` and emit a gap, without causing RF lock loss.
 
-The realtime pipeline enables a five-byte base-254 sequence field by default,
-covered by that CRC. Both ends must select the same format; the legacy format
-remains available. The receiver suppresses duplicate and older per-key serials,
-handles wraparound, and emits explicit gaps for damaged messages and audio
-discontinuities. AES-CTR plus CRC is not authenticated encryption: restart
-keystream reuse and coordinated key retirement remain open defects.
+Every production record has mandatory nonce/replay sequencing. Optional application sequencing suppresses duplicate and older per-key serials and handles application-counter wraparound. RF reacquisition retains both high-water marks. The frame counter never wraps: exhaustion stops transmission until a fresh epoch is reserved. The standalone default CRC framer and AES-128-CTR helpers remain for legacy codec fixtures; the realtime classes always enable GCM and have no downgrade path. RF-header CRCs remain solely for acquisition/framing screening; they do not authenticate messages.
 
-The transmitter also publishes the same CRC-free, delimiter-prefixed message sequence over every active `ReceiverSession` gRPC stream. Canonical messages are batched up to 128 payloads; if a batch does not fill, it is flushed within 100 ms. Receivers use this TCP stream to account for radio messages they decoded locally. A radio message that is still missing from the canonical stream after the configured timeout is treated as possible injection or a CRC false accept and emits a distinct bad-message UDP packet.
+See [AEAD deployment and nonce lifecycle](AEAD.md) before starting a transmitter. This is a wire-format and control-API break: upgrade both ends together. Authenticated key IDs provide the basis for a future two-key receiver, but coordinated mid-stream rotation and old-key retirement remain unimplemented.
+
+The transmitter also publishes the original application message sequence over every active `ReceiverSession` gRPC stream. Canonical messages are batched up to 128 payloads; if a batch does not fill, it is flushed within 100 ms. Receivers use this stream for accounting. A decoded message missing from that stream after the configured timeout emits a distinct bad-message UDP packet; this accounting check is separate from mandatory GCM verification before delivery.
 
 The transmitter reads from its input ring continuously and pads with zero delimiters when the input ring is empty. It does not wait to fill a block; the only steady-state buffering in the message layer is the delimiter rule that a completed message is emitted after the following delimiter is decoded.
 
-For client intake, `BidMessageTransmitIntake` accepts already-encoded delimiter-prefixed byte strings plus a bid price. One auction winner remains replaceable until the framer claims it for serialization; that is when transmission is logged and a client fee is reserved. A newer unsent market value replaces an older value on the same key even when its bid is lower. Across keys, bid per actual wire byte wins, including the configured sequence field and CRC, with newest winning ties. Displaced and losing candidates are rejected. Old bids receive no age boost; strict cross-key priority can still starve lower bids. The auction holds at most one waiting candidate, and cannot retract bits already serialized.
+For client intake, `BidMessageTransmitIntake` accepts already-encoded application messages plus a bid price. One auction winner remains replaceable until the framer claims it for serialization; that is when transmission is logged and a client fee is reserved. A newer unsent market value replaces an older value on the same key even when its bid is lower. Across keys, bid per reserved wire byte wins, including the authenticated header, tag and conservative COBS length bound, with newest winning ties. Displaced and losing candidates are rejected. Old bids receive no age boost; strict cross-key priority can still starve lower bids. The auction holds at most one waiting candidate, and cannot retract bits already serialized.
 
 `Clients` is a compile-time constant currently set to `20`. Market-price symbols occupy `[2, 256 - Clients - 1]`; the top `Clients` symbols are per-client symbols. With `Clients=20`, client symbols are `236..255`, and a client id maps to `236 + client_id`.
 
@@ -181,7 +178,8 @@ The integer codec uses canonical little-endian base-254 digits offset by `2`, so
 
 The service accepts:
 
-- `UpdateEncryptionKey`: 16-byte AES-128 key. The running receiver keeps its current stream key; the next restart uses the latest key.
+- `UpdateEncryptionKey`: 32-byte `aes256_key` and nonzero `key_id`. The next restart uses the latest key. The removed 16-byte field is reserved and rejected.
+- `ReceiverControl.GetMetrics`: cumulative authentication failures, replay rejections, RF lock losses, validated headers and gaps. Authentication failures are counted separately from RF lock losses.
 - `Restart`: receiver rebuild parameters, including modulation, bandwidth, center frequency for the later SDR layer, RF acquisition/training/pilot sequences, timestamp policy, and convolutional FEC settings.
 - `UpdateBank`: one bank id (`0` or `1`) plus exactly `254 - Clients` `uint64` prices in configured instrument units. Receiver bank caches are optional so a stale control link can clear them and stop UDP forwarding until fresh bank data arrives. Symbol byte `2` maps to index `0`, and the top `Clients` symbols are reserved for client messages rather than bank prices.
 - `Permissions`: exactly 32 bytes containing 254 permission bits. Bit index `0` maps to symbol byte `2`, bit index `253` maps to symbol byte `255`, and the two unused high bits in the final byte are ignored. The radio receiver binary defaults to all market symbols plus its own client-specific symbol `236 + client_id`.
@@ -226,7 +224,7 @@ shadow = K * W[i] * (abs(log(P_now) - log(P_last_sent))
          + H * abs(log(P_now) - log(P_prev)) / dt_ms) / billable_bytes
 ```
 
-`billable_bytes` is the actual radio message length used by the auction, including the delimiter byte and the 4-byte message CRC trailer. When `P_last_sent` or `P_prev` is not known, the bridge uses `K` as the bid. Public market symbols are not charged against client budgets; their shadow bids only decide which candidate uses the next radio slot.
+`billable_bytes` matches the auction's reserved AEAD wire length: header, encrypted body, tag and COBS framing bound. When `P_last_sent` or `P_prev` is not known, the bridge uses `K` as the bid. Public market symbols are not charged against client budgets; their shadow bids only decide which candidate uses the next radio slot.
 
 For local hand testing, build the examples and start a loopback receiver/transmitter pair:
 

@@ -1,0 +1,13 @@
+{
+  "report_header": "simulated channel current AEAD HTML verification",
+  "url": "file:///Users/adam/dev/goblin-cannon/html/index.html",
+  "status": "pass",
+  "source_tree_sha256": "5b5d0b660023e9c7df281a4171786fe546cb36534cfda9e4bcb56823d6a9e7bf",
+  "explorer_views": 72,
+  "source_links": 216,
+  "latency_rows": 12,
+  "defects": 9,
+  "no_javascript_rows": 6,
+  "mobile_width": 390,
+  "page_errors": []
+}

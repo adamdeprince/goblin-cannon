@@ -143,9 +143,8 @@ double payload_coding_rate(const PayloadCodingConfig& c, const PuncturedConvolut
 
 class ChannelCodingEncoder::Impl {
 public:
-  Impl(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig config, Aes128Key key,
-       Aes128CtrCounter counter)
-      : coding(config), convolutional(std::move(fec)), cipher(key, counter) {
+  Impl(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig config)
+      : coding(config), convolutional(std::move(fec)) {
     validate(coding);
   }
   void push(std::span<const std::uint8_t> bytes, std::vector<std::uint8_t>& out) {
@@ -163,7 +162,6 @@ public:
           bch_bytes = 0;
         }
       }
-    cipher.xor_bits_in_place(coded);
     for (auto bit : coded) {
       if (!coding.walsh_bits)
         interleave(bit, out);
@@ -195,7 +193,6 @@ private:
   }
   PayloadCodingConfig coding;
   PuncturedConvolutionalEncoder convolutional;
-  Aes128CtrBitXor cipher;
   Bch63_45 bch;
   std::uint64_t bch_data = 0;
   unsigned bch_bytes = 0, walsh_row = 0, walsh_count = 0;
@@ -204,13 +201,12 @@ private:
 
 class ChannelCodingDecoder::Impl {
 public:
-  Impl(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig config, Aes128Key k, Aes128CtrCounter ctr)
-      : coding(config), viterbi(std::move(fec)), key(k), counter(ctr), cipher(k, ctr) {
+  Impl(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig config)
+      : coding(config), viterbi(std::move(fec)) {
     validate(coding);
   }
   void reset() {
     viterbi.reset();
-    cipher = Aes128CtrBitXor(key, counter);
     permutation.clear();
     walsh.clear();
     fec_bits.clear();
@@ -228,7 +224,6 @@ public:
     auto fec_position = position + skip;
     if (coding.walsh_bits)
       fec_position = fec_position / 8 * 3;
-    cipher = Aes128CtrBitXor(key, counter, fec_position);
     fec_skip = coding.bch ? (58 - fec_position % 58) % 58 : viterbi.resume_at_coded_bit(fec_position);
     if (fec_position == 0) {
       viterbi.reset();
@@ -272,7 +267,6 @@ public:
 
 private:
   void clear_bit(SoftBit bit) {
-    bit = cipher.xor_soft_bit(bit);
     if (fec_skip)
       --fec_skip;
     else
@@ -310,26 +304,21 @@ private:
   }
   PayloadCodingConfig coding;
   StreamingSoftViterbiDecoder viterbi;
-  Aes128Key key;
-  Aes128CtrCounter counter;
-  Aes128CtrBitXor cipher;
   Bch63_45 bch;
   std::vector<SoftBit> permutation, walsh, fec_bits, bch_bits;
   std::size_t fec_skip = 0;
 };
 
-ChannelCodingEncoder::ChannelCodingEncoder(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig coding,
-                                           Aes128Key key, Aes128CtrCounter counter)
-    : impl_(std::make_unique<Impl>(std::move(fec), coding, key, counter)) {
+ChannelCodingEncoder::ChannelCodingEncoder(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig coding)
+    : impl_(std::make_unique<Impl>(std::move(fec), coding)) {
 }
 ChannelCodingEncoder::~ChannelCodingEncoder() = default;
 void ChannelCodingEncoder::push_bytes_append(std::span<const std::uint8_t> bytes,
                                              std::vector<std::uint8_t>& out) {
   impl_->push(bytes, out);
 }
-ChannelCodingDecoder::ChannelCodingDecoder(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig coding,
-                                           Aes128Key key, Aes128CtrCounter counter)
-    : impl_(std::make_unique<Impl>(std::move(fec), coding, key, counter)) {
+ChannelCodingDecoder::ChannelCodingDecoder(PuncturedConvolutionalCodeConfig fec, PayloadCodingConfig coding)
+    : impl_(std::make_unique<Impl>(std::move(fec), coding)) {
 }
 ChannelCodingDecoder::~ChannelCodingDecoder() = default;
 void ChannelCodingDecoder::push_append(std::span<const SoftBit> bits, std::vector<Token>& out) {

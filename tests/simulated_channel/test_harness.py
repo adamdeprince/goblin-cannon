@@ -74,7 +74,7 @@ class SimulatedChannelHarness(unittest.TestCase):
         status,checks=evaluate(c,raw,summarize(raw),known)
         self.assertEqual(status,"fail")
         self.assertEqual([r["status"] for r in checks],["xfail","fail"])
-        raw["aead_supported"]=1
+        raw.update(aead_supported=1,authentication_failure_counter_available=1,authentication_failures=0)
         status,checks=evaluate(c,raw,summarize(raw),known)
         self.assertEqual(checks[0]["status"],"xpass")
 

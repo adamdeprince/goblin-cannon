@@ -1,3 +1,5 @@
+#include "epoch_fixture.hpp"
+#include "aead_audit.hpp"
 // Test-only adapters to production APIs. All observations are simulated channel
 // observations. This executable does not alter receiver or scheduler behavior.
 #include "channel_simulator.hpp"
@@ -267,7 +269,7 @@ Json run_rf(const Arguments& a) {
     double ratio=payload_coding_rate(payload_config(a),fec_config(a));
     source_bytes.resize(static_cast<std::size_t>(count*bits*ratio/8));
     for(std::size_t i=0;i<source_bytes.size();++i)source_bytes[i]=static_cast<std::uint8_t>(pattern(i,seed^0xC011AB1EU,name));
-    ChannelCodingEncoder coder(fec_config(a),payload_config(a),Aes128Key{},{});
+    ChannelCodingEncoder coder(fec_config(a),payload_config(a));
     coder.push_bytes_append(source_bytes,coded);
     Constellation constellation(c.modem.modulation,c.modem.constellation_profile);
     coded.resize((coded.size()+bits-1)/bits*bits,0);
@@ -413,7 +415,7 @@ Json run_rf(const Arguments& a) {
   }
   if(fec && !received_coded.empty()) {
     received_coded.resize(std::min(received_coded.size(),coded.size()));
-    ChannelCodingDecoder decoder(fec_config(a),payload_config(a),Aes128Key{},{});
+    ChannelCodingDecoder decoder(fec_config(a),payload_config(a));
     std::vector<Token> bytes;decoder.push_append(received_coded,bytes);
     std::uint64_t count_bytes=std::min(bytes.size(),source_bytes.size()),decoded_errors=0;
     for(std::size_t i=0;i<count_bytes;++i)decoded_errors+=std::popcount(static_cast<unsigned>(bytes[i].value^source_bytes[i]));
@@ -443,8 +445,15 @@ Json run_messages(const Arguments& a) {
   config.frame_counter_start=7000;
   TransmitMessageQueue input(1024);
   SpscRingBuffer<DelimitedMessage> output(1024),other_input(16);
-  RealtimeTransmitter tx(config,input),other_tx(config,other_input);
-  RealtimeReceiver rx(config,output);
+  RealtimeTransmitter tx(config,input);
+  // A second sender has its own key and epoch journal, but the same waveform
+  // and preamble. A completed foreign record must fail GCM authentication.
+  test::EpochFixture interferer_epoch;
+  auto other_config=config;
+  other_config.aes_key.bytes[0]=0xA8;
+  other_config.transmitter_epoch_path=interferer_epoch.path;
+  RealtimeTransmitter other_tx(other_config,other_input);
+  RealtimeReceiver rx(tx.config(),output);
   GapAudit gap_audit;rx.set_decoded_message_observer(&gap_audit);
   std::uint64_t audio_sample_position=0;
   const auto fs=config.rf.modem.sample_rate_hz;
@@ -498,7 +507,7 @@ Json run_messages(const Arguments& a) {
     if(id>=created.size())throw std::runtime_error("unknown consumed message");
     consumed_ids.push_back(id);
     const auto message=encode_bank_symbol_integer(0,static_cast<std::uint8_t>(id%16+2),id);
-    serialization_estimates.push_back((message.bytes.size()+9)*8/capacity_bps*1000);
+    serialization_estimates.push_back(authenticated_message_wire_bytes(message.bytes.size())*8/capacity_bps*1000);
     source_to_framer.push_back((tx_audio_clock-created[id])*1000);
     if(host_timing)host_source_to_framer.push_back((wall_seconds()-host_created[id])*1000);
   };
@@ -508,6 +517,7 @@ Json run_messages(const Arguments& a) {
   std::uint64_t total=static_cast<std::uint64_t>(duration*fs),generated=0,delivered=0,corrupted=0,stale=0,duplicates=0,queued_max=0,gaps=0;
   std::uint64_t source_tick_misses=0;
   std::uint64_t losses=0,headers=0,locked_samples=0,delivered_bits=0,backpressure=0;
+  std::uint64_t authentication_failures=0,replay_rejections=0;
   bool locked=false;
   double first_acquisition=-1,reacquisition=-1,next_creation=0;
   const double dropout_end=channel_cfg.dropout_start_s+channel_cfg.dropout_duration_s;
@@ -545,10 +555,10 @@ Json run_messages(const Arguments& a) {
         ++source_tick_misses;
       const auto key=generated%16;
       auto message=encode_bank_symbol_integer(0,static_cast<std::uint8_t>(key+2),static_cast<std::int64_t>(generated));
-      // This fixture's bank/symbol messages carry the production four-byte CRC
-      // trailer. Offer wire bits at the declared multiple of steady payload
+      // Include the production AEAD envelope and COBS bound. Offer wire bits
+      // at the declared multiple of steady payload
       // capacity, including pilot and puncturing overhead, excluding startup.
-      const double interval=source_load>0 ? (message.bytes.size()+9)*8/(capacity_bps*source_load) : period;
+      const double interval=source_load>0 ? authenticated_message_wire_bytes(message.bytes.size())*8/(capacity_bps*source_load) : period;
       if(!soak && !aggregate)created.push_back(next_creation);
       if(host_timing)host_created.push_back(wall_seconds());
       newest[key]=static_cast<std::int64_t>(generated);
@@ -617,6 +627,8 @@ Json run_messages(const Arguments& a) {
         rx.push_audio_block(impaired,audio_first,audio_valid);
     if(host_timing)host_rx.push_back((wall_seconds()-rx_begin)*1000);
     losses+=received.lock_lost;headers+=received.header_valid;
+    authentication_failures+=received.authentication_failures;
+    replay_rejections+=received.replay_rejections;
     locked=rx.rf_state()==RfStreamState::locked;
     if(received.lock_lost) {if(first_loss<0)first_loss=delivery_clock;if(loss_start<0)loss_start=delivery_clock;}
     if(received.header_valid && loss_start>=0) {rf_recovery.add(delivery_clock-loss_start);loss_start=-1;}
@@ -679,7 +691,8 @@ Json run_messages(const Arguments& a) {
   out.set("fresh_useful_bits_delivered",fresh_bits);
   out.set("audio_gap_api",injected_audio_gaps>0 && gap_audit.audio_events==injected_audio_gaps);
   out.set("injected_audio_gaps",injected_audio_gaps);
-  out.set("audio_gap_events",gap_audit.audio_events);out.set("gap_events",gap_audit.events);out.set("aead_supported",0);
+  out.set("audio_gap_events",gap_audit.audio_events);out.set("gap_events",gap_audit.events);
+  out.set("fec_gap_events",gap_audit.fec_events);
   out.set("audio_block_ms",block/fs*1000);
   if(!soak && !aggregate) {
     out.array("latency_ms",latencies);out.array("delivery_times_s",deliveries);out.array("delivered_ids",delivered_ids);
@@ -700,6 +713,11 @@ Json run_messages(const Arguments& a) {
     out.fields["modem_delay_estimates"]=modem_delay.str();
     out.text("source_to_framer_scope","Message creation to first-byte framer consumption; sample-clock observations have audio-block resolution; host observer timestamps are exact steady-clock call times.");
   }
+  out.set("aead_supported",1);out.set("authentication_failure_counter_available",1);
+  out.set("authentication_failures",authentication_failures);
+  out.set("replay_rejections",replay_rejections);
+  out.text("transmitter_epoch",std::to_string(tx.config().rf.expected_schedule_epoch));
+  out.set("authenticated_key_id",config.key_id);
   out.text("latency_clock","deterministic audio sample clock; CPU, OS, device latency unmeasured");
   if(source_load>0) {
     Json by_key,by_window;
@@ -833,11 +851,13 @@ Json run_semantics(const Arguments& a) {
       messages.push_back(std::move(message));
     }
   }
-  std::size_t byte_count=64;for(const auto& m:messages)byte_count+=m.bytes.size()+9;
+  std::size_t byte_count=64;for(const auto& m:messages)byte_count+=authenticated_message_wire_bytes(m.bytes.size());
   SpscRingBuffer<DelimitedMessage> input(messages.size()+8),output(messages.size()+8);
   for(const auto& m:messages)(void)input.try_push(m);
   MessageStreamFramer framer;
   framer.set_sequence_numbers(true);
+  const auto epoch=TransmitterEpoch::reserve(std::getenv("GOBLIN_CANNON_EPOCH_STATE"));
+  framer.authenticate(Aes256Key{},1,epoch);
   std::vector<std::uint8_t> bytes(byte_count);
   (void)framer.next_payload_frame(input,bytes);
   auto tokens=std::vector<Token>();
@@ -858,6 +878,7 @@ Json run_semantics(const Arguments& a) {
   }
   MessageStreamDeframer deframer;
   deframer.set_sequence_numbers(true);
+  deframer.authenticate(Aes256Key{},1,epoch->value());
   GapAudit gap_audit;deframer.set_observer(&gap_audit);
   (void)deframer.push_payload_tokens(tokens,output);
   std::set<std::vector<std::uint8_t>> seen;
@@ -885,18 +906,19 @@ Json run_semantics(const Arguments& a) {
 }
 
 Json run_crypto(const Arguments& a) {
-  Aes128Key key;
   const auto seed=static_cast<std::uint32_t>(number(a,"seed",0x71A001));
-  for(std::size_t i=0;i<key.bytes.size();++i)key.bytes[i]=static_cast<std::uint8_t>(pattern(i,seed,"random"));
-  std::array<std::uint8_t,128> first{},second{};
-  Aes128CtrKeystream before_restart(key),after_restart(key);
-  before_restart.generate(first);after_restart.generate(second);
+  const auto audit=test::audit_aead(seed);
   Json out;attach_isa(out,a);
-  out.set("reused_keystream_after_default_counter_restart",first==second?1:0);
-  out.set("aead_supported",0);out.set("authentication_failure_counter_available",0);
+  out.set("aead_supported",1);out.set("authentication_failure_counter_available",1);
+  out.set("authentication_failures",audit.authentication_failures);
+  out.set("tamper_attempts",audit.tamper_attempts);
+  out.set("nonces_observed",audit.nonces);out.set("reused_nonces_after_process_restart",audit.reused_nonces);
+  out.set("corrupted_messages_delivered",audit.unverified_deliveries);
+  out.set("valid_authenticated_deliveries",audit.valid_deliveries);
+  out.set("replay_rejections",audit.replay_rejections);
+  out.set("replay_deliveries",audit.unverified_deliveries);
+  out.set("authenticated_key_id_supported",1);
   out.set("coordinated_key_rotation_api",0);
-  auto replay=run_semantics(Arguments{{"seed",std::to_string(seed)},{"semantics","duplicate"}});
-  out.fields["replay_deliveries"]=replay.fields.at("duplicate_messages_delivered");
   return out;
 }
 
@@ -916,6 +938,8 @@ Json run_erasure(const Arguments& a) {
   for(std::size_t i=survived.size();i>1;--i)std::swap(survived[i-1],survived[random()%i]);
   SpscRingBuffer<DelimitedMessage> input(1024),output(1024);
   MessageStreamFramer framer;MessageStreamDeframer deframer;
+  const auto epoch=TransmitterEpoch::reserve(std::getenv("GOBLIN_CANNON_EPOCH_STATE"));
+  framer.authenticate(Aes256Key{},1,epoch);deframer.authenticate(Aes256Key{},1,epoch->value());
   framer.set_sequence_numbers(true);deframer.set_sequence_numbers(true);
   std::uint64_t created=0,delivered=0,stale=0,queue_max=0,useful_bits=0,out_of_order=0,duplicates=0;
   std::vector<double> latency,ids;
@@ -979,6 +1003,7 @@ Json run_model(const Arguments& a) {
 }
 
 int main(int argc,char** argv) {
+  goblin_cannon::test::EpochFixture epoch_fixture;
   try {
     Arguments a;
     for(int i=1;i<argc;++i) {

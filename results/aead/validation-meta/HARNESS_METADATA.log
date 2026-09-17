@@ -1,0 +1,19 @@
+test_aggregate_delivery_metrics_keep_every_observation (test_harness.SimulatedChannelHarness.test_aggregate_delivery_metrics_keep_every_observation) ... ok
+test_characterization_does_not_acquire_acceptance_thresholds (test_harness.SimulatedChannelHarness.test_characterization_does_not_acquire_acceptance_thresholds) ... ok
+test_encoding_campaign_has_real_parameters_and_fixed_power (test_harness.SimulatedChannelHarness.test_encoding_campaign_has_real_parameters_and_fixed_power) ... ok
+test_expected_failure_does_not_mask_a_new_assertion (test_harness.SimulatedChannelHarness.test_expected_failure_does_not_mask_a_new_assertion) ... ok
+test_latency_attribution_pairs_messages_and_requires_coverage (test_harness.SimulatedChannelHarness.test_latency_attribution_pairs_messages_and_requires_coverage) ... ok
+test_matrix_identity_and_markers (test_harness.SimulatedChannelHarness.test_matrix_identity_and_markers) ... ok
+test_metric_denominators (test_harness.SimulatedChannelHarness.test_metric_denominators) ... ok
+test_parameters_are_complete_and_json_finite (test_harness.SimulatedChannelHarness.test_parameters_are_complete_and_json_finite) ... ok
+test_percentiles_and_missing_values (test_harness.SimulatedChannelHarness.test_percentiles_and_missing_values) ... ok
+test_polar_campaign_keeps_declared_durations (test_harness.SimulatedChannelHarness.test_polar_campaign_keeps_declared_durations) ... ok
+test_psk_campaign_preserves_boundary_and_declared_durations (test_harness.SimulatedChannelHarness.test_psk_campaign_preserves_boundary_and_declared_durations) ... ok
+test_refinement_comparisons_hold_power_rate_and_delays (test_harness.SimulatedChannelHarness.test_refinement_comparisons_hold_power_rate_and_delays) ... ok
+test_result_serialization_is_stable (test_harness.SimulatedChannelHarness.test_result_serialization_is_stable) ... ok
+test_unobserved_bits_are_not_zero_ber (test_harness.SimulatedChannelHarness.test_unobserved_bits_are_not_zero_ber) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 1.198s
+
+OK
