@@ -1,0 +1,4 @@
+simulated channel: 84 cases, tier=quick, jobs=8
+simulated channel: 50/84 D4_encoding_24000_bpsk_reference_messages pass
+simulated channel: 84/84 D4_encoding_24000_bpsk_diversity_messages pass
+simulated channel: 3.277s {'pass': 84}; /tmp/goblin-cannon-encoding.nUyo0L/results/SUMMARY.md

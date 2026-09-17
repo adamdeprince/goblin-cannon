@@ -53,12 +53,20 @@ enum DifferentialMapping {
   DIFFERENTIAL_PI4_DQPSK = 3;
 }
 
+enum AudioWaveform {
+  AUDIO_SINGLE_CARRIER = 0;
+  AUDIO_FSK4 = 1;
+  AUDIO_FSK8 = 2;
+  AUDIO_BPSK_FREQUENCY_DIVERSITY = 3;
+}
+
 message ConvolutionalFecConfig {
   uint32 constraint_length = 1;
   uint32 generator0 = 2;
   uint32 generator1 = 3;
   repeated uint32 puncture_pattern = 4;
   float decoded_bit_confidence_threshold = 5;
+  uint32 generator2 = 6; // Zero retains a two-output mother code.
 }
 
 message RestartRequest {
@@ -102,6 +110,15 @@ message RestartRequest {
   optional uint32 equalizer_reselect_interval = 34;
   optional Modulation header_modulation = 35;
   optional DifferentialMapping differential_mapping = 36;
+  optional bool soft_demapping = 37;
+  optional bool bch_payload = 38;
+  optional uint32 walsh_bits = 39;
+  optional uint32 interleaver_rows = 40;
+  optional uint32 interleaver_columns = 41;
+  optional AudioWaveform audio_waveform = 42;
+  optional double fsk_useful_ms = 43;
+  optional double fsk_guard_ms = 44;
+  optional double diversity_wait_ms = 45;
 }
 
 message BankUpdate {

@@ -43,6 +43,7 @@ def summarize(raw):
     sent=raw.get("frames_sent", 0)
     survived=raw.get("frames_survived", 0)
     metrics=dict(
+        fresh_goodput_bps=ratio(raw.get("fresh_useful_bits_delivered",0),duration) if "fresh_useful_bits_delivered" in raw else None,
         ber=ratio(raw.get("bit_errors", 0), raw.get("bits_compared", 0)),
         coded_ber=ratio(raw.get("coded_bit_errors", 0), raw.get("coded_bits_compared", 0)),
         bit_observation_fraction=ratio(raw.get("bits_compared", 0), raw.get("bits_sent", 0)),
@@ -105,6 +106,7 @@ def check(name, raw, metrics):
         "acquired":(raw.get("valid_headers",0)>0,"No validated stream header at the requested acquisition condition."),
         "zero_false_acquisitions":(raw.get("acquisitions",0)==0,"Pure noise caused a preamble acquisition during the full 600-second trace."),
         "authenticated_delivery":(raw.get("aead_supported",0)==1,"Production crypto is AES-CTR plus CRC; AEAD authentication is absent."),
+        "messages_observed":(raw.get("messages_delivered",0)>0,"No message delivery observed."),
         "no_corrupt_messages":(raw.get("corrupted_messages_delivered",0)==0,"A delivered application message differs from the source."),
         "no_stale_messages":(raw.get("messages_delivered",0)>0 and raw.get("stale_messages_delivered",0)==0,"Stale messages were delivered, or no delivery established this property."),
         "audio_gap_reported":(raw.get("audio_gap_api",0)==1,"Injected audio discontinuities/deadline misses did not produce the expected downstream gap events."),
@@ -132,7 +134,7 @@ def check(name, raw, metrics):
 
 METRIC_DEFINITIONS = {
     "ber":"erroneous bits / compared received RF bits; lost bits excluded and observation fraction reported",
-    "coded_ber":"post-Viterbi bit errors / compared decoded source bits; missing data is not zero BER",
+    "coded_ber":"post-payload-FEC bit errors / compared decoded source bits; missing data is not zero BER",
     "frame_error_rate":"(missing + corrupted RF symbol frames) / transmitted frames",
     "frame_survival_fraction":"complete, bit-exact RF symbol frames / transmitted frames",
     "goodput_bps":"delivered useful message bits/s for message probes; error-free raw RF frame bits/s for RF probes (not application goodput)",

@@ -1,0 +1,16 @@
+simulated channel: 672 cases, tier=full, jobs=8
+simulated channel: 50/672 C1_encoding_snr_10000_fsk4_guard4_30dB characterized
+simulated channel: 100/672 C1_encoding_snr_24000_fsk4_guard4_4dB characterized
+simulated channel: 150/672 C1_encoding_snr_10000_bpsk_reference_10dB characterized
+simulated channel: 200/672 C1_encoding_snr_10000_16qam_reference_16dB characterized
+simulated channel: 250/672 C1_encoding_snr_10000_16qam_soft_18dB characterized
+simulated channel: 300/672 C1_encoding_snr_10000_bpsk_walsh8_22dB characterized
+simulated channel: 350/672 C1_encoding_snr_10000_bpsk_interleave256_26dB characterized
+simulated channel: 400/672 C1_encoding_snr_10000_bpsk_halfband_control_30dB characterized
+simulated channel: 450/672 C1_encoding_snr_24000_bpsk_soft_bpsk_header_2dB characterized
+simulated channel: 500/672 C1_encoding_snr_24000_bpsk_soft_6dB characterized
+simulated channel: 550/672 C1_encoding_snr_24000_bpsk_k9_third_10dB characterized
+simulated channel: 600/672 C1_encoding_snr_24000_bpsk_interleave32_16dB characterized
+simulated channel: 650/672 C1_encoding_snr_24000_bpsk_diversity_18dB characterized
+simulated channel: 672/672 C1_encoding_snr_24000_bpsk_halfband_control_30dB characterized
+simulated channel: 80.920s {'characterized': 672}; /tmp/goblin-cannon-encoding.nUyo0L/results/SUMMARY.md

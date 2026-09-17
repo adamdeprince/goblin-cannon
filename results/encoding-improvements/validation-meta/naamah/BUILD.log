@@ -1,0 +1,51 @@
+[1/47] Generating generated/goblin_cannon/control/v1/receiver_control.pb.cc, generated/goblin_cannon/control/v1/receiver_control.grpc.pb.cc, generated/goblin_cannon/control/v1/receiver_control.pb.h, generated/goblin_cannon/control/v1/receiver_control.grpc.pb.h
+[2/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/crypto.cpp.o
+[3/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/constellation.cpp.o
+[4/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/demapper.cpp.o
+[5/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/channel_coding.cpp.o
+[6/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/convolutional.cpp.o
+[7/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/audio_waveform.cpp.o
+[8/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/accounting.cpp.o
+[9/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/client_udp.cpp.o
+[10/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/integer_codec.cpp.o
+[11/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/frame.cpp.o
+[12/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/io.cpp.o
+[13/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/market_data_shm.cpp.o
+[14/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/modem.cpp.o
+[15/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/quote_udp.cpp.o
+[16/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/message_stream.cpp.o
+[17/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/demapper_avx2.cpp.o
+[18/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/demapper_avx512.cpp.o
+[19/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/control_server.cpp.o
+[20/47] Building CXX object CMakeFiles/goblin_cannon_stream_loopback.dir/examples/stream_loopback.cpp.o
+[21/47] Building CXX object CMakeFiles/goblin_cannon.dir/generated/goblin_cannon/control/v1/receiver_control.pb.cc.o
+[22/47] Building CXX object CMakeFiles/goblin_cannon.dir/src/rf_stream.cpp.o
+[23/47] Building CXX object CMakeFiles/goblin_cannon_local_node.dir/examples/local_node.cpp.o
+[24/47] Building CXX object CMakeFiles/goblin_cannon_radio_sender.dir/examples/radio_sender.cpp.o
+[25/47] Building CXX object CMakeFiles/goblin_cannon.dir/generated/goblin_cannon/control/v1/receiver_control.grpc.pb.cc.o
+[26/47] Linking CXX static library libgoblin_cannon.a
+[27/47] Building CXX object CMakeFiles/goblin_cannon_audio_waveform_tests.dir/tests/test_audio_waveform.cpp.o
+[28/47] Building CXX object CMakeFiles/goblin_cannon_channel_tests.dir/tests/test_channel.cpp.o
+[29/47] Building CXX object CMakeFiles/goblin_cannon_recovery_tests.dir/tests/test_recovery.cpp.o
+[30/47] Linking CXX executable goblin_cannon_stream_loopback
+[31/47] Linking CXX executable goblin_cannon_local_node
+[32/47] Building CXX object CMakeFiles/goblin_cannon_channel_coding_tests.dir/tests/test_channel_coding.cpp.o
+[33/47] Linking CXX executable goblin_cannon_radio_sender
+[34/47] Linking CXX executable goblin_cannon_channel_tests
+[35/47] Linking CXX executable goblin_cannon_recovery_tests
+[36/47] Linking CXX executable goblin_cannon_channel_coding_tests
+[37/47] Linking CXX executable goblin_cannon_audio_waveform_tests
+[38/47] Building CXX object CMakeFiles/goblin_cannon_psk_tests.dir/tests/test_psk.cpp.o
+[39/47] Building CXX object CMakeFiles/goblin_cannon_radio_receiver.dir/examples/radio_receiver.cpp.o
+[40/47] Linking CXX executable goblin_cannon_psk_tests
+[41/47] Linking CXX executable goblin_cannon_radio_receiver
+[42/47] Building CXX object CMakeFiles/goblin_cannon_data_path_tests.dir/tests/test_data_path.cpp.o
+[43/47] Linking CXX executable goblin_cannon_data_path_tests
+[44/47] Building CXX object CMakeFiles/goblin_cannon_simulated_channel_probe.dir/tests/simulated_channel_probe.cpp.o
+/tmp/goblin-cannon-encoding.pP4ZMk/tests/simulated_channel_probe.cpp: In function ‘{anonymous}::Json {anonymous}::run_rf(const Arguments&)’:
+/tmp/goblin-cannon-encoding.pP4ZMk/tests/simulated_channel_probe.cpp:400:58: note: the ABI of passing structure with ‘complex float’ member has changed in GCC 4.4
+  400 |   out.set("sample_clock_error_ppm",receiver.sync_estimate().sample_clock_error_ppm);
+      |                                    ~~~~~~~~~~~~~~~~~~~~~~^~
+[45/47] Building CXX object CMakeFiles/goblin_cannon_tests.dir/tests/test_modem.cpp.o
+[46/47] Linking CXX executable goblin_cannon_simulated_channel_probe
+[47/47] Linking CXX executable goblin_cannon_tests

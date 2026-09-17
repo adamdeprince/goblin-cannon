@@ -93,11 +93,30 @@ def make_restart_request(pb2: object, args: argparse.Namespace) -> object:
     request.fractionally_spaced_equalization = args.fractionally_spaced_equalization
     request.equalizer_reselect_interval = args.equalizer_reselect_interval
     request.pilot_sequence.extend([0, 1] if args.modulation.lower()=="bpsk" else [0, 1, 2, 3])
+    request.soft_demapping = args.soft_demapping
+    request.bch_payload = args.bch_payload
+    request.walsh_bits = args.walsh_bits
+    request.interleaver_rows = args.interleaver_rows
+    request.interleaver_columns = args.interleaver_columns
+    request.audio_waveform = getattr(pb2, {
+        "single_carrier": "AUDIO_SINGLE_CARRIER", "fsk4": "AUDIO_FSK4", "fsk8": "AUDIO_FSK8",
+        "bpsk_frequency_diversity": "AUDIO_BPSK_FREQUENCY_DIVERSITY",
+    }[args.audio_waveform])
+    request.fsk_useful_ms = args.fsk_useful_ms
+    request.fsk_guard_ms = args.fsk_guard_ms
+    request.diversity_wait_ms = args.diversity_wait_ms
     request.fec.constraint_length = 7
     request.fec.generator0 = 0o171
     request.fec.generator1 = 0o133
-    request.fec.puncture_pattern.extend([1, 1])
-    request.fec.decoded_bit_confidence_threshold = 0.20
+    if args.fec == "k9-1/2":
+        request.fec.constraint_length = 9
+        request.fec.generator0, request.fec.generator1 = 0o753, 0o561
+    elif args.fec == "k9-1/3":
+        request.fec.constraint_length = 9
+        request.fec.generator0, request.fec.generator1, request.fec.generator2 = 0o557, 0o663, 0o711
+    request.fec.puncture_pattern.extend([1, 1, 1] if args.fec == "k9-1/3" else [1, 1])
+    # Conventional Viterbi hard output goes through the existing message CRC.
+    request.fec.decoded_bit_confidence_threshold = 0.0 if args.soft_demapping or args.walsh_bits or args.audio_waveform != "single_carrier" else 0.20
     request.sync_timestamp_enabled = args.sync_timestamp
     request.sync_timestamp_max_skew_seconds = args.sync_timestamp_max_skew_seconds
     request.acquisition_confidence_threshold = 0.35
@@ -245,6 +264,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--equalizer-feedforward-taps", type=int, default=3)
     parser.add_argument("--equalizer-feedback-taps", type=int, default=4)
     parser.add_argument("--compact-header", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--fec", choices=("1/2", "k9-1/2", "k9-1/3"), default="1/2")
+    parser.add_argument("--soft-demapping", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--bch-payload", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--walsh-bits", type=int, choices=(0, 3), default=0)
+    parser.add_argument("--interleaver-rows", type=int, default=0)
+    parser.add_argument("--interleaver-columns", type=int, default=0)
+    parser.add_argument("--audio-waveform", choices=("single_carrier", "fsk4", "fsk8", "bpsk_frequency_diversity"), default="single_carrier")
+    parser.add_argument("--fsk-useful-ms", type=float, default=4)
+    parser.add_argument("--diversity-wait-ms", type=float, default=1)
+    parser.add_argument("--fsk-guard-ms", type=float, default=8)
     parser.add_argument("--header-modulation", choices=("qpsk", "bpsk"), default="qpsk")
     parser.add_argument("--differential-mapping", choices=("none", "dbpsk", "dqpsk", "pi4_dqpsk"), default="none")
     parser.add_argument("--recovery-interval-frames", type=int, default=0)

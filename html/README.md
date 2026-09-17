@@ -10,7 +10,18 @@ The benchmark tables, test ledger and RF explorer publish the saved
 `results/recovery-improvements` campaign. The browser selects recorded cases; it does not
 simulate RF. The static tables remain readable without JavaScript.
 
-The newer PSK section publishes `results/psk-improvements` separately, preserving
+The latest encoding section publishes `results/encoding-improvements`: 21
+configurations, both bandwidths, three polar presets and three sustained seeds.
+It includes all 672 noise points and 42 quiet-host latency measurements, with
+interleaver and diversity wait charged as added buffering. The patent-screen
+link states the implementation boundaries and exclusions. Regenerate it with
+`python3 scripts/encoding_results.py` before updating the HTML.
+`encoding_html.py` supplies the static moderate-channel table;
+`encoding-explorer.js` selects the saved comparisons and noise curves.
+No absent observation is replaced by zero and no expected latency failure is
+presented as a pass.
+
+The earlier PSK section publishes `results/psk-improvements` separately, preserving
 the earlier source provenance. Its two bandwidths and three polar presets each
 compare eleven configurations over three seeds. Noise curves retain all sixteen
 SNR points; the 44 latency records come from naamah. Regenerate the completed
@@ -72,7 +83,7 @@ changes, then upload the assets before the page that references them:
 python3 scripts/update_html_results.py --check
 
 rsync --archive --checksum --itemize-changes \
-  html/evidence.css html/rf-explorer.js html/psk-explorer.js html/simulated-channel.js html/goblin.png \
+  html/evidence.css html/rf-explorer.js html/psk-explorer.js html/encoding-explorer.js html/simulated-channel.js html/goblin.png \
   hail::distribution/cannon.goblinreactor.com/
 
 rsync --archive --checksum --itemize-changes \

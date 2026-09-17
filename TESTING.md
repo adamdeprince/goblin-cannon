@@ -95,6 +95,91 @@ source events that slip across their aligned audio tick.
 
 ## Read simulated channel results
 
+### Conventional encoding simulated channel comparison
+
+The [encoding report](results/encoding-improvements/REPORT.md) compares 21
+configurations at 10 and 24 kHz. It includes fixed-constellation soft bit
+metrics, K9 convolutional rates 1/2 and 1/3, plain Walsh-8 spreading,
+shortened BCH(58,40,7), rectangular interleaving, noncoherent 4/8-FSK and
+two-subband BPSK diversity. The [patent screen](results/encoding-improvements/PATENT_SCREEN.md)
+records the historical implementation boundaries and excluded designs. It is
+a public-record engineering screen, not worldwide patent clearance.
+
+```sh
+python3 tests/simulated_channel/run.py --tier quick --campaign encoding_quick --jobs 8 --results results/encoding-improvements
+python3 tests/simulated_channel/run.py --tier full --campaign encoding_screen --seeds 7446529 7446530 7446531 --jobs 8 --results results/encoding-improvements
+python3 tests/simulated_channel/run.py --tier full --campaign encoding_snr --jobs 8 --results results/encoding-improvements
+python3 tests/simulated_channel/run.py --tier full --campaign encoding_followup --seeds 7446529 7446530 7446531 --jobs 8 --results results/encoding-improvements
+# On naamah, build without the AVX-512 requirement and measure serially:
+python3 tests/simulated_channel/run.py --tier full --campaign encoding_latency --jobs 1 --allow-non-avx512 --results results/encoding-improvements/naamah-latency
+```
+
+The quick campaign has 84 cases. Full selections contain 756 channel screens,
+672 AWGN points, 378 sustained message cases and 42 latency measurements.
+Screens and SNR points last 10 seconds for coherent modes and 30 for FSK;
+sustained quiet/moderate/disturbed runs last 300/300/100 seconds for every
+configuration and seed. B5 uses 12 seconds for coherent modes and 30 for FSK.
+These declared durations are retained even when a runtime allowance is exceeded.
+The complete original matrix and its runtime findings remain separate.
+
+All new options are explicit in `RestartRequest` and
+`scripts/configure_local_radios.py`; both endpoints receive matching settings
+over fiber/gRPC. For example, add the following to the existing radio setup
+command to select soft BPSK with the longer half-rate code:
+
+```sh
+--modulation bpsk --bandwidth-hz 24000 --symbol-rate-hz 0 \
+--no-carrier-correction --soft-demapping --fec k9-1/2
+```
+
+The exact equalizer, training and recovery settings used by a measurement are
+in its JSON; the example does not reproduce an entire polar test configuration.
+Additional options are `--bch-payload`, `--walsh-bits 3`,
+`--interleaver-rows R --interleaver-columns C`, and
+`--audio-waveform fsk4|fsk8|bpsk_frequency_diversity`.
+FSK4 uses QPSK bit labels; FSK8 uses 8-PSK labels, selected with
+`--modulation qpsk|8psk`. Its physical signal is a tone, not a PSK symbol.
+`--fsk-useful-ms 4 --fsk-guard-ms 8` selects the longer guard experiment.
+Diversity requires BPSK and recurring recovery markers; its two half-band
+copies share the original total transmit power. `--diversity-wait-ms` controls
+the maximum wait for a matching second copy.
+
+The payload order is source bytes → convolutional **or** BCH FEC → AES-CTR →
+optional Walsh spreading → optional block interleaving → waveform. BCH replaces
+convolutional payload coding; the protected RF header keeps its own code.
+Ordinary BCH decoding corrects up to three hard bit errors per shortened word.
+Soft demapping uses exhaustive Euclidean bit distances and known-pilot noise
+estimates, with the existing fixed constellation. New soft experiments use
+Viterbi hard output followed by the existing message CRC; post-Viterbi confidence
+is not a calibrated probability. Soft demapping with differential mappings is
+currently rejected. CRC does not provide AEAD authentication.
+
+FSK acquires from its own tone preamble and coded tone header. It uses energy
+detection and per-frame timing acquisition, with no RLS, Gardner or carrier
+frequency loop. Coherent modes retain the existing RLS and clock recovery.
+FSK's long serialization needs an appropriate control-plane timestamp window
+if timestamp checks are enabled; the simulation disables that check as in
+earlier campaigns. It does not change the production replay rule.
+
+Nominal full-band sample power is held fixed, including FSK and diversity.
+The half-band BPSK control distinguishes slower symbols from a diversity gain.
+The fixed 5/12 kHz center separation is commensurate with the presets' integer-ms
+path delays: the two-path channel response repeats at those centers. These
+comparisons therefore do not establish a gain from decorrelated frequency paths.
+Interleaver and diversity combining waits are disabled in B5's intrinsic
+reference and charged to **added buffering**. Their 2.1 ms failures remain
+visible. Fresh goodput additionally excludes a correct delivery if a newer
+source-created message exists for its key; this uses simulator observations
+without feeding source truth to the receiver.
+
+The `goblin_cannon_channel_coding` and `goblin_cannon_audio_waveform` quick
+assertions use seeds 7446533 and 7446534. They cover analytical soft metrics,
+every three-bit BCH error pattern on the zero codeword, generated codewords,
+stream chunk boundaries and absolute-position recovery, unchanged legacy
+bytes, fixed-power FSK, residual phase/offset and production-message recovery.
+After collecting all records and host evidence, regenerate the report with
+`python3 scripts/encoding_results.py`.
+
 ### PSK simulated channel comparison
 
 The PSK campaign compares eleven configurations at both bandwidths: QPSK

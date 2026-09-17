@@ -16,10 +16,16 @@ struct PuncturedConvolutionalCodeConfig {
   std::uint32_t generator1 = 0133;
   std::vector<std::uint8_t> puncture_pattern = {1, 1};
   float decoded_bit_confidence_threshold = 0.20F;
+  // Zero keeps the two-output mother code and its existing wire format.
+  std::uint32_t generator2 = 0;
+
+  [[nodiscard]] std::size_t mother_outputs() const noexcept { return generator2 ? 3U : 2U; }
 
   [[nodiscard]] static PuncturedConvolutionalCodeConfig rate_1_2();
   [[nodiscard]] static PuncturedConvolutionalCodeConfig rate_2_3();
   [[nodiscard]] static PuncturedConvolutionalCodeConfig rate_3_4();
+  [[nodiscard]] static PuncturedConvolutionalCodeConfig k9_rate_1_2();
+  [[nodiscard]] static PuncturedConvolutionalCodeConfig k9_rate_1_3();
 };
 
 void validate(const PuncturedConvolutionalCodeConfig& config);

@@ -39,7 +39,7 @@ def build():
         f'<td>{r["reference"]["p50"]:.3f} / {r["reference"]["p99_9"]:.3f}</td><td>{escape(r["status"])}</td></tr>' for r in data["latency"])
     section=f'''
     <section class="evidence-section polar-section" id="psk-results"><div class="section-inner">
-      <header class="evidence-head"><p class="section-label">New PSK comparison · three matched seeds</p>
+      <header class="evidence-head"><p class="section-label">Earlier PSK comparison · three matched seeds</p>
         <h2 class="section-title">Simulated channel.<br>BPSK helps through moderate fading.</h2>
         <p class="section-intro">BPSK, 8-PSK, DBPSK, DQPSK and π/4-DQPSK face the same polar traces, with QPSK, 16-QAM and 64-QAM as controls. Header-only experiments separate the cost of a BPSK header from changing the payload. {m['main_cases']} AVX-512 cases and 44 quiet-host latency cases are complete.</p></header>
       <p class="evidence-provenance">Carrier correction stays off; adaptive RLS equalization and sample-clock recovery stay on. Both ends receive settings over fiber. Differential detection adds no frequency tracker or CMA. Ranges below span three seeds, not confidence intervals. The browser selects saved results.</p>

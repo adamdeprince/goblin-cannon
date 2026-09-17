@@ -1,0 +1,9 @@
+simulated channel: 42 cases, tier=full, jobs=1
+simulated channel: 21/42 B5_encoding_10000_bpsk_interleave32_latency fail
+simulated channel: 22/42 B5_encoding_10000_bpsk_interleave256_latency fail
+simulated channel: 23/42 B5_encoding_10000_bpsk_interleave2048_latency fail
+simulated channel: 38/42 B5_encoding_24000_bpsk_interleave32_latency fail
+simulated channel: 39/42 B5_encoding_24000_bpsk_interleave256_latency fail
+simulated channel: 40/42 B5_encoding_24000_bpsk_interleave2048_latency fail
+simulated channel: 42/42 B5_encoding_24000_bpsk_halfband_control_latency pass
+simulated channel: 673.629s {'pass': 36, 'host_latency_fail': 6, 'fail': 6}; /tmp/goblin-cannon-encoding.pP4ZMk/results/SUMMARY.md

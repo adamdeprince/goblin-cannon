@@ -200,10 +200,32 @@ ReceiverRestartConfig parse_restart_request(const pb::RestartRequest& request) {
     config.pipeline.rf.equalizer_feedback_taps = request.equalizer_feedback_taps();
   }
 
+  if (request.has_audio_waveform()) {
+    switch (request.audio_waveform()) {
+      case pb::AUDIO_SINGLE_CARRIER: config.pipeline.rf.waveform = AudioWaveform::single_carrier; break;
+      case pb::AUDIO_FSK4: config.pipeline.rf.waveform = AudioWaveform::fsk4; break;
+      case pb::AUDIO_FSK8: config.pipeline.rf.waveform = AudioWaveform::fsk8; break;
+      case pb::AUDIO_BPSK_FREQUENCY_DIVERSITY: config.pipeline.rf.waveform = AudioWaveform::bpsk_frequency_diversity; break;
+      default: throw std::invalid_argument("unknown audio waveform");
+    }
+  }
+  if (request.has_fsk_useful_ms()) config.pipeline.rf.fsk_useful_ms = request.fsk_useful_ms();
+  if (request.has_fsk_guard_ms()) config.pipeline.rf.fsk_guard_ms = request.fsk_guard_ms();
+  if (request.has_diversity_wait_ms()) config.pipeline.rf.diversity_wait_ms = request.diversity_wait_ms();
+  if (request.has_soft_demapping()) config.pipeline.rf.soft_demapping = request.soft_demapping();
+  if (request.has_bch_payload()) config.pipeline.coding.bch = request.bch_payload();
+  if (request.has_walsh_bits()) {
+    if (request.walsh_bits() != 0 && request.walsh_bits() != 3) throw std::invalid_argument("Walsh requires zero or three bits");
+    config.pipeline.coding.walsh_bits = request.walsh_bits();
+  }
+  if (request.has_interleaver_rows()) config.pipeline.coding.interleaver_rows = request.interleaver_rows();
+  if (request.has_interleaver_columns()) config.pipeline.coding.interleaver_columns = request.interleaver_columns();
+  validate(config.pipeline.coding);
   const auto& fec = request.fec();
   config.pipeline.convolutional.constraint_length = static_cast<std::uint8_t>(fec.constraint_length());
   config.pipeline.convolutional.generator0 = fec.generator0();
   config.pipeline.convolutional.generator1 = fec.generator1();
+  config.pipeline.convolutional.generator2 = fec.generator2();
   config.pipeline.convolutional.puncture_pattern = copy_puncture_pattern(fec.puncture_pattern());
   config.pipeline.convolutional.decoded_bit_confidence_threshold = fec.decoded_bit_confidence_threshold();
   config.pipeline.sync_timestamp.enabled = request.sync_timestamp_enabled();

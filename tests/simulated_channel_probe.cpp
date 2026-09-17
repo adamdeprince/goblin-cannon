@@ -69,6 +69,8 @@ RfStreamConfig rf_config(const Arguments& a) {
   c.modem.sample_rate_hz=number(a,"sample_rate_hz",48000);
   c.modem.bandwidth_hz=number(a,"bandwidth_hz",24000);
   c.modem.rrc_rolloff=0.25;
+  c.modem.tx_gain*=number(a,"tx_gain_multiplier",1);
+  if(number(a,"symbol_rate_fraction",1)!=1) c.modem.symbol_rate_hz=c.modem.bandwidth_hz/1.25*number(a,"symbol_rate_fraction",1);
   c.expected_schedule_epoch=0x1020304050607080ULL;
   c.acquisition_sequence=make_default_qpsk_sequence(64,0xA5A50001U);
   c.equalizer_training_sequence=make_default_qpsk_sequence(static_cast<std::size_t>(number(a,"training_symbols",64)),0x5A5A0002U);
@@ -81,6 +83,12 @@ RfStreamConfig rf_config(const Arguments& a) {
   c.acquisition_sidelobe_guard_samples=48;
   // The brief assigns frequency correction to the radio. This existing switch
   // also disables the residual phase PLL; that coupling is a reported conflict.
+  c.waveform=std::map<std::string,AudioWaveform>{{"single_carrier",AudioWaveform::single_carrier},
+      {"fsk4",AudioWaveform::fsk4},{"fsk8",AudioWaveform::fsk8},
+      {"bpsk_frequency_diversity",AudioWaveform::bpsk_frequency_diversity}}.at(word(a,"audio_waveform","single_carrier"));
+  c.diversity_wait_ms=number(a,"diversity_wait_ms",1);
+  c.fsk_useful_ms=number(a,"fsk_useful_ms",4);c.fsk_guard_ms=number(a,"fsk_guard_ms",8);
+  c.soft_demapping=number(a,"soft_demapping",0)!=0;
   c.carrier_correction=number(a,"carrier_correction",0)!=0;
   c.adaptive_equalization=number(a,"adaptive_equalization",1)!=0;
   c.recursive_equalization=number(a,"recursive_equalization",1)!=0;
@@ -97,6 +105,15 @@ RfStreamConfig rf_config(const Arguments& a) {
   c.fractionally_spaced_equalization=number(a,"fractionally_spaced_equalization",0)!=0;
   c.equalizer_reselect_interval=number(a,"equalizer_reselect_interval",0);
   return c;
+}
+PayloadCodingConfig payload_config(const Arguments& a) {
+  return {.bch=number(a,"bch_payload")!=0, .walsh_bits=static_cast<std::uint8_t>(number(a,"walsh_bits")),
+    .interleaver_rows=static_cast<std::uint32_t>(number(a,"interleaver_rows")),
+    .interleaver_columns=static_cast<std::uint32_t>(number(a,"interleaver_columns"))};
+}
+double nominal_sample_power(const RfStreamConfig& c) {
+  const auto equivalent_rate=c.waveform==AudioWaveform::single_carrier?derived_symbol_rate_hz(c.modem):c.modem.bandwidth_hz/1.25;
+  return c.modem.tx_gain*c.modem.tx_gain*equivalent_rate/c.modem.sample_rate_hz;
 }
 Impairments impairments(const Arguments& a) {
   Impairments c;
@@ -142,6 +159,8 @@ Impairments impairments(const Arguments& a) {
 }
 PuncturedConvolutionalCodeConfig fec_config(const Arguments& a) {
   const auto fec=word(a,"fec","1/2");
+  if (fec=="k9-1/2") return PuncturedConvolutionalCodeConfig::k9_rate_1_2();
+  if (fec=="k9-1/3") return PuncturedConvolutionalCodeConfig::k9_rate_1_3();
   if (fec=="2/3") return PuncturedConvolutionalCodeConfig::rate_2_3();
   if (fec=="3/4") return PuncturedConvolutionalCodeConfig::rate_3_4();
   return PuncturedConvolutionalCodeConfig::rate_1_2();
@@ -217,7 +236,7 @@ Json run_rf(const Arguments& a) {
   const auto channel_cfg=impairments(a);
   const auto seed=static_cast<std::uint32_t>(number(a,"seed",0x71A001));
   const auto bits=bits_per_symbol(c.modem.modulation);
-  const auto rate=derived_symbol_rate_hz(c.modem);
+  const auto rate=rf_symbol_rate_hz(c);
   const auto duration=number(a,"duration_s",2);
   double payload_symbol_rate=rate*c.pilot_interval_symbols/(c.pilot_interval_symbols+c.pilot_sequence.size());
   if(c.recovery_interval_frames) {
@@ -232,17 +251,21 @@ Json run_rf(const Arguments& a) {
         pulse_samples(n+startup+n/c.pilot_interval_symbols*c.pilot_sequence.size()+c.equalizer_delay_symbols);
     payload_symbol_rate=n*c.modem.sample_rate_hz/segment;
   }
+  if(c.waveform==AudioWaveform::fsk4 || c.waveform==AudioWaveform::fsk8) {
+    const auto header=(268+bits-1)/bits;
+    payload_symbol_rate=rate*c.symbols_per_frame/(16+header+c.symbols_per_frame);
+  }
   const std::uint64_t count=channel_cfg.pure_noise?0:static_cast<std::uint64_t>(duration*payload_symbol_rate);
   const auto name=word(a,"pattern","random");
   const bool fec=word(a,"fec","none")!="none";
   std::vector<std::uint8_t> source_bytes,coded;
   std::vector<std::uint32_t> payload;
   if(fec) {
-    double ratio=word(a,"fec")=="1/2"?0.5:word(a,"fec")=="2/3"?2.0/3.0:0.75;
+    double ratio=payload_coding_rate(payload_config(a),fec_config(a));
     source_bytes.resize(static_cast<std::size_t>(count*bits*ratio/8));
     for(std::size_t i=0;i<source_bytes.size();++i)source_bytes[i]=static_cast<std::uint8_t>(pattern(i,seed^0xC011AB1EU,name));
-    coded=convolutional_encode_bytes(source_bytes,fec_config(a));
-    coded=aes128_ctr_xor_bits(coded,Aes128Key{});
+    ChannelCodingEncoder coder(fec_config(a),payload_config(a),Aes128Key{},{});
+    coder.push_bytes_append(source_bytes,coded);
     Constellation constellation(c.modem.modulation,c.modem.constellation_profile);
     coded.resize((coded.size()+bits-1)/bits*bits,0);
     for(std::size_t i=0;i<coded.size();i+=bits)payload.push_back(constellation.bits_to_symbol(std::span(coded).subspan(i,bits)));
@@ -261,7 +284,7 @@ Json run_rf(const Arguments& a) {
   for(std::size_t i=0;i<other_send.size();++i)other_send[i]=pattern(i,seed^0xE294183BU,"random")&((1U<<bits)-1);
   // RRC taps are energy-normalized. Unit-mean constellation power gives this
   // pre-fade sample power; no per-fade or per-chunk renormalization is done.
-  const double signal_power=c.modem.tx_gain*c.modem.tx_gain*rate/c.modem.sample_rate_hz;
+  const double signal_power=nominal_sample_power(c);
   SimulatedChannel channel(c.modem.sample_rate_hz,signal_power,channel_cfg,seed);
   channel.residual_offset_hz=number(a,"residual_offset_hz");
   channel.residual_drift_hz_per_second=number(a,"residual_drift_hz_per_second");
@@ -342,7 +365,7 @@ Json run_rf(const Arguments& a) {
       if(fec && i==received_coded.size()/bits) {
         std::array<std::uint8_t,max_bits_per_symbol> unpacked{};
         constellation.symbol_to_bits(s.value,std::span(unpacked).first(bits));
-        for(std::size_t k=0;k<bits;++k)received_coded.push_back({unpacked[k],s.certain,s.confidence});
+        for(std::size_t k=0;k<bits;++k)received_coded.push_back(s.has_soft_bits ? s.soft_bits[k] : SoftBit{unpacked[k],s.certain,s.confidence});
       }
     }
   }
@@ -387,9 +410,8 @@ Json run_rf(const Arguments& a) {
   }
   if(fec && !received_coded.empty()) {
     received_coded.resize(std::min(received_coded.size(),coded.size()));
-    const auto clear=aes128_ctr_descramble_soft_bits(received_coded,Aes128Key{});
-    StreamingSoftViterbiDecoder decoder(fec_config(a));
-    const auto bytes=decoder.push(clear);
+    ChannelCodingDecoder decoder(fec_config(a),payload_config(a),Aes128Key{},{});
+    std::vector<Token> bytes;decoder.push_append(received_coded,bytes);
     std::uint64_t count_bytes=std::min(bytes.size(),source_bytes.size()),decoded_errors=0;
     for(std::size_t i=0;i<count_bytes;++i)decoded_errors+=std::popcount(static_cast<unsigned>(bytes[i].value^source_bytes[i]));
     out.set("coded_bits_compared",count_bytes*8);out.set("coded_bit_errors",decoded_errors);
@@ -412,6 +434,8 @@ Json run_rf(const Arguments& a) {
 Json run_messages(const Arguments& a) {
   RealtimePipelineConfig config;
   config.rf=rf_config(a);config.convolutional=fec_config(a);
+  config.coding=payload_config(a);
+  if (config.rf.soft_demapping || config.coding.walsh_bits || config.rf.waveform!=AudioWaveform::single_carrier) config.convolutional.decoded_bit_confidence_threshold = 0;
   config.sync_timestamp.enabled=false; // wall-clock replay-window check is audited separately
   config.frame_counter_start=7000;
   TransmitMessageQueue input(1024);
@@ -444,16 +468,17 @@ Json run_messages(const Arguments& a) {
   const auto source_load=number(a,"source_load_factor");
   const double period_samples=period*fs;
   const bool integral_source_period=source_load==0 && period_samples==std::floor(period_samples);
-  const double code_rate=word(a,"fec")=="2/3"?2.0/3.0:word(a,"fec")=="3/4"?0.75:0.5;
-  const double symbol_rate=derived_symbol_rate_hz(config.rf.modem);
-  const double pilot_duty=static_cast<double>(config.rf.pilot_interval_symbols)/
+  const double code_rate=payload_coding_rate(config.coding,config.convolutional);
+  const double symbol_rate=rf_symbol_rate_hz(config.rf);
+  const bool fsk=config.rf.waveform==AudioWaveform::fsk4 || config.rf.waveform==AudioWaveform::fsk8;
+  const double pilot_duty=fsk ? static_cast<double>(config.rf.symbols_per_frame)/(config.rf.symbols_per_frame+16+(268+bits_per_symbol(config.rf.modem.modulation)-1)/bits_per_symbol(config.rf.modem.modulation)) : static_cast<double>(config.rf.pilot_interval_symbols)/
       (config.rf.pilot_interval_symbols+config.rf.pilot_sequence.size());
   const double capacity_bps=symbol_rate*bits_per_symbol(config.rf.modem.modulation)*code_rate*pilot_duty;
   const auto wall_start=std::chrono::steady_clock::now();
   const auto wall_seconds=[&]() {return std::chrono::duration<double>(std::chrono::steady_clock::now()-wall_start).count();};
   BidMessageTransmitIntake intake;
   SpscRingBuffer<BidMessageLogRecord> bid_logs(64);
-  const auto power=config.rf.modem.tx_gain*config.rf.modem.tx_gain*derived_symbol_rate_hz(config.rf.modem)/fs;
+  const auto power=nominal_sample_power(config.rf);
   SimulatedChannel channel(fs,power,channel_cfg,seed);
   channel.residual_offset_hz=number(a,"residual_offset_hz");
   channel.residual_drift_hz_per_second=number(a,"residual_drift_hz_per_second");
@@ -476,6 +501,7 @@ Json run_messages(const Arguments& a) {
   };
   std::vector<std::vector<double>> newest_latency(16),latency_windows(10);
   std::set<std::int64_t> seen;
+  std::uint64_t fresh_bits=0;
   std::uint64_t total=static_cast<std::uint64_t>(duration*fs),generated=0,delivered=0,corrupted=0,stale=0,duplicates=0,queued_max=0,gaps=0;
   std::uint64_t source_tick_misses=0;
   std::uint64_t losses=0,headers=0,locked_samples=0,delivered_bits=0,backpressure=0;
@@ -605,6 +631,7 @@ Json run_messages(const Arguments& a) {
       if(id<last_delivered[key])++gaps;
       last_delivered[key]=id;
       ++delivered;delivered_bits+=message.bytes.size()*8;
+      if(id==newest[key])fresh_bits+=message.bytes.size()*8;
       const auto message_latency=delivery_clock-((soak || aggregate)?id*period:created[id]);
       delivery_latency.add(message_latency);
       delivery_silence.add(delivery_clock-previous_delivery);previous_delivery=delivery_clock;
@@ -646,6 +673,7 @@ Json run_messages(const Arguments& a) {
     out.set("usable_window_seconds",usable);
     out.text("aggregation","All messages counted; exact nearest-rank histograms rounded to the declared audio sample clock. Per-message JSON vectors omitted.");
   }
+  out.set("fresh_useful_bits_delivered",fresh_bits);
   out.set("audio_gap_api",injected_audio_gaps>0 && gap_audit.audio_events==injected_audio_gaps);
   out.set("injected_audio_gaps",injected_audio_gaps);
   out.set("audio_gap_events",gap_audit.audio_events);out.set("gap_events",gap_audit.events);out.set("aead_supported",0);
@@ -655,11 +683,15 @@ Json run_messages(const Arguments& a) {
     out.array("source_to_framer_ms",source_to_framer);out.array("consumed_ids",consumed_ids);
     out.array("nominal_message_serialization_ms",serialization_estimates);
     Json modem_delay;
-    modem_delay.set("tx_rrc_group_delay_ms",describe(config.rf.modem).nominal_filter_latency_symbols/symbol_rate*1000);
-    modem_delay.set("rx_rrc_group_delay_ms",describe(config.rf.modem).nominal_filter_latency_symbols/symbol_rate*1000);
+    modem_delay.set("tx_rrc_group_delay_ms",fsk ? 0 : describe(config.rf.modem).nominal_filter_latency_symbols/symbol_rate*1000);
+    modem_delay.set("rx_rrc_group_delay_ms",fsk ? 0 : describe(config.rf.modem).nominal_filter_latency_symbols/symbol_rate*1000);
     modem_delay.set("equalizer_decision_delay_ms",config.rf.equalizer_delay_symbols/symbol_rate*1000);
     modem_delay.set("viterbi_lookahead_nominal_ms",std::max(5U*config.convolutional.constraint_length,24U)/capacity_bps*1000);
     modem_delay.set("payload_capacity_bps",capacity_bps);
+    modem_delay.set("interleaver_wire_block_ms",config.coding.interleaver_rows*config.coding.interleaver_columns/(symbol_rate*bits_per_symbol(config.rf.modem.modulation))*1000);
+    modem_delay.set("fsk_integration_ms",fsk?config.rf.fsk_useful_ms:0);
+    modem_delay.set("fsk_guard_per_symbol_ms",fsk?config.rf.fsk_guard_ms:0);
+    modem_delay.set("diversity_combining_wait_max_ms",config.rf.waveform==AudioWaveform::bpsk_frequency_diversity?config.rf.diversity_wait_ms+std::min<std::size_t>(block,48)/fs*1000:0);
     modem_delay.text("scope","Analytical residence estimates, not CPU times: serialization includes coding and mean pilot duty; Viterbi emits bytes after its lookahead. Startup, byte/symbol alignment and actual pilot positions remain in the measured one-sample reference. These estimates are not subtracted from the latency assertion.");
     out.fields["modem_delay_estimates"]=modem_delay.str();
     out.text("source_to_framer_scope","Message creation to first-byte framer consumption; sample-clock observations have audio-block resolution; host observer timestamps are exact steady-clock call times.");

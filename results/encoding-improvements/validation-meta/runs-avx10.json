@@ -1,0 +1,113 @@
+{
+  "report_header": "simulated channel campaign runtimes",
+  "runs": [
+    {
+      "campaign": "encoding_quick",
+      "tier": "quick",
+      "command": [
+        "python3",
+        "/tmp/goblin-cannon-encoding.nUyo0L/tests/simulated_channel/run.py",
+        "--probe",
+        "/tmp/goblin-cannon-encoding.nUyo0L/build/goblin_cannon_simulated_channel_probe",
+        "--tier",
+        "quick",
+        "--campaign",
+        "encoding_quick",
+        "--results",
+        "/tmp/goblin-cannon-encoding.nUyo0L/results",
+        "--jobs",
+        "8",
+        "--git-commit",
+        "a63d2ae69b1ab72a9f0a7b377a46f4c15bed8ef7",
+        "--source-digest",
+        "b7baad72a3bb8c5ea6e6d1c2f68b103b384b8c799306ca7ce635afb0f2a8f339",
+        "--seeds",
+        "7446529"
+      ],
+      "wall_seconds": 3.4085990162566304,
+      "exit_code": 0
+    },
+    {
+      "campaign": "encoding_screen",
+      "tier": "full",
+      "command": [
+        "python3",
+        "/tmp/goblin-cannon-encoding.nUyo0L/tests/simulated_channel/run.py",
+        "--probe",
+        "/tmp/goblin-cannon-encoding.nUyo0L/build/goblin_cannon_simulated_channel_probe",
+        "--tier",
+        "full",
+        "--campaign",
+        "encoding_screen",
+        "--results",
+        "/tmp/goblin-cannon-encoding.nUyo0L/results",
+        "--jobs",
+        "8",
+        "--git-commit",
+        "a63d2ae69b1ab72a9f0a7b377a46f4c15bed8ef7",
+        "--source-digest",
+        "b7baad72a3bb8c5ea6e6d1c2f68b103b384b8c799306ca7ce635afb0f2a8f339",
+        "--seeds",
+        "7446529",
+        "7446530",
+        "7446531"
+      ],
+      "wall_seconds": 211.56645162589848,
+      "exit_code": 0
+    },
+    {
+      "campaign": "encoding_snr",
+      "tier": "full",
+      "command": [
+        "python3",
+        "/tmp/goblin-cannon-encoding.nUyo0L/tests/simulated_channel/run.py",
+        "--probe",
+        "/tmp/goblin-cannon-encoding.nUyo0L/build/goblin_cannon_simulated_channel_probe",
+        "--tier",
+        "full",
+        "--campaign",
+        "encoding_snr",
+        "--results",
+        "/tmp/goblin-cannon-encoding.nUyo0L/results",
+        "--jobs",
+        "8",
+        "--git-commit",
+        "a63d2ae69b1ab72a9f0a7b377a46f4c15bed8ef7",
+        "--source-digest",
+        "b7baad72a3bb8c5ea6e6d1c2f68b103b384b8c799306ca7ce635afb0f2a8f339",
+        "--seeds",
+        "7446529"
+      ],
+      "wall_seconds": 81.43218619935215,
+      "exit_code": 0
+    },
+    {
+      "campaign": "encoding_followup",
+      "tier": "full",
+      "command": [
+        "python3",
+        "/tmp/goblin-cannon-encoding.nUyo0L/tests/simulated_channel/run.py",
+        "--probe",
+        "/tmp/goblin-cannon-encoding.nUyo0L/build/goblin_cannon_simulated_channel_probe",
+        "--tier",
+        "full",
+        "--campaign",
+        "encoding_followup",
+        "--results",
+        "/tmp/goblin-cannon-encoding.nUyo0L/results",
+        "--jobs",
+        "8",
+        "--git-commit",
+        "a63d2ae69b1ab72a9f0a7b377a46f4c15bed8ef7",
+        "--source-digest",
+        "b7baad72a3bb8c5ea6e6d1c2f68b103b384b8c799306ca7ce635afb0f2a8f339",
+        "--seeds",
+        "7446529",
+        "7446530",
+        "7446531"
+      ],
+      "wall_seconds": 2125.6831829091534,
+      "exit_code": 0
+    }
+  ]
+}

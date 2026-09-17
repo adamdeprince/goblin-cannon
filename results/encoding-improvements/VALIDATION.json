@@ -1,0 +1,46 @@
+{
+  "campaign_counts": {
+    "encoding_followup": 378,
+    "encoding_quick": 84,
+    "encoding_screen": 756,
+    "encoding_snr": 672
+  },
+  "campaign_status": "complete",
+  "ctest": {
+    "avx10": "20/20",
+    "naamah": "20/20"
+  },
+  "deterministic_repeats": 3,
+  "expected_failures_sha256": "367705791c6f0b5621d85d2ee651f65f36e5069c4c9c8722aee45071e8bc30fa",
+  "git_commit": "a63d2ae69b1ab72a9f0a7b377a46f4c15bed8ef7",
+  "host_build_evidence_sha256": "5c7f88f5449c870f802c246bab0c0fcf3a3b52c1f4a2ec498eb6d6d00771e45a",
+  "host_latency_statuses": {
+    "pass": 36,
+    "xfail": 6
+  },
+  "host_measurements_sha256": "6f383f92f0c01833d9fbf6e0912eaddac9ce2b27f5e09d4f15e09fb69b00da54",
+  "latency_cases": 42,
+  "latency_statuses": {
+    "pass": 36,
+    "xfail": 6
+  },
+  "main_cases": 1890,
+  "main_statuses": {
+    "characterized": 1806,
+    "pass": 84
+  },
+  "measurements_sha256": "ca5e7a31f341d886fc556d42ac71d3f5cd18b473696adefb22f263e3e9df2b51",
+  "python_cli_serialization_cases": 12,
+  "python_harness_tests": 13,
+  "report_header": "simulated channel conventional encoding validation",
+  "scope": "Fixed-power simulated channels, conventional algorithms; public-record patent screen, no worldwide patent clearance or route-availability forecast.",
+  "seeds": [
+    7446529,
+    7446530,
+    7446531
+  ],
+  "simulated_followup_hours": 24.5,
+  "source_archive_sha256": "196a72e967a88528ebb202f7fc9170a47e6cd5a5b5302d606219fb0f5cf58fa1",
+  "source_tree_sha256": "b7baad72a3bb8c5ea6e6d1c2f68b103b384b8c799306ca7ce635afb0f2a8f339",
+  "unchanged_prior_campaign_comparisons": 72
+}

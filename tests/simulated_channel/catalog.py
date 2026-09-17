@@ -29,6 +29,9 @@ STAGE_ORDER = ("channel", "interferers", "impulsive_noise", "dropout", "agc",
 DEFAULTS = dict(
     mode="rf", modulation="qpsk", bandwidth_hz=24000, sample_rate_hz=48000,
     duration_s=2.0, chunk_samples=256, frame_symbols=64, training_symbols=64,
+    soft_demapping=0,bch_payload=0,walsh_bits=0,interleaver_rows=0,interleaver_columns=0,
+    audio_waveform="single_carrier",fsk_useful_ms=4.0,fsk_guard_ms=8.0,diversity_wait_ms=1.0,
+    symbol_rate_fraction=1.0,tx_gain_multiplier=1.0,
     fec="none", carrier_correction=0, seed=SEED, require_avx512=1,
     sample_clock_recovery=1, adaptive_equalization=1, recursive_equalization=1, equalizer_feedforward_taps=3, equalizer_feedback_taps=4, pilot_interval_symbols=32,
     channel_model="null", snr_db=None, delay_spread_ms=0.0, doppler_spread_hz=1.0,
@@ -210,7 +213,7 @@ def matrix():
     add(case("C4", "empty_maximum_frames", "assert", "quick", mode="capability",
              unavailable="Empty RF frames are invalid; RF symbol count is configurable. The 65,535-byte application-message limit is covered separately by the data_path regression."))
     add(case("C5", "mode_change", "assert", "quick", mode="capability",
-             unavailable="No mid-stream rate/interleaver change: matched parameters change by out-of-band epoch restart; interleaver absent."))
+             unavailable="No mid-stream rate/interleaver change: matched parameters change by out-of-band epoch restart; interleaver settings also require an epoch restart."))
     for overload in (1.5, 3, 10):
         add(case("D1", f"overload_{overload}", "assert", "full", mode="scheduler", duration_s=60,
                  overload=overload, checks=("no_superseded_transmissions", "bounded_scheduler_queue"), thresholds=("D1.newest_latency_ms",)))
@@ -248,6 +251,7 @@ def matrix():
              unavailable="Awaiting receive-only recordings and provenance manifest; no synthetic substitute is labeled a recording."))
     cases.extend(polar_campaign())
     cases.extend(psk_campaign())
+    cases.extend(encoding_campaign())
     return cases
 
 
@@ -350,15 +354,86 @@ def psk_campaign():
     return cases
 
 
+ENCODING_VARIANTS = {
+    "qpsk_reference": dict(modulation="qpsk"),
+    "bpsk_reference": dict(modulation="bpsk"),
+    "bpsk_bpsk_header_reference": dict(modulation="bpsk",header_modulation="bpsk"),
+    "bpsk_soft_bpsk_header": dict(modulation="bpsk",header_modulation="bpsk",soft_demapping=1),
+    "16qam_reference": dict(modulation="16qam"),
+    "qpsk_soft": dict(modulation="qpsk",soft_demapping=1),
+    "bpsk_soft": dict(modulation="bpsk",soft_demapping=1),
+    "16qam_soft": dict(modulation="16qam",soft_demapping=1),
+    "bpsk_k9_half": dict(modulation="bpsk",soft_demapping=1,fec="k9-1/2"),
+    "bpsk_k9_third": dict(modulation="bpsk",soft_demapping=1,fec="k9-1/3"),
+    "bpsk_walsh8": dict(modulation="bpsk",soft_demapping=1,walsh_bits=3),
+    "bpsk_bch": dict(modulation="bpsk",soft_demapping=1,bch_payload=1),
+    "bpsk_interleave32": dict(modulation="bpsk",soft_demapping=1,interleaver_rows=4,interleaver_columns=8),
+    "bpsk_interleave256": dict(modulation="bpsk",soft_demapping=1,interleaver_rows=8,interleaver_columns=32),
+    "bpsk_interleave2048": dict(modulation="bpsk",soft_demapping=1,interleaver_rows=16,interleaver_columns=128),
+    "bpsk_diversity": dict(modulation="bpsk",soft_demapping=1,audio_waveform="bpsk_frequency_diversity"),
+    "bpsk_halfband_control": dict(modulation="bpsk",soft_demapping=1,symbol_rate_fraction=.5,tx_gain_multiplier=2**.5),
+    "fsk4_guard8": dict(modulation="qpsk",audio_waveform="fsk4",fsk_guard_ms=8.0),
+    "fsk8_guard8": dict(modulation="8psk",audio_waveform="fsk8",fsk_guard_ms=8.0),
+    "fsk4_guard4": dict(modulation="qpsk",audio_waveform="fsk4",fsk_guard_ms=4.0),
+    "fsk8_guard4": dict(modulation="8psk",audio_waveform="fsk8",fsk_guard_ms=4.0),
+}
+
+def encoding_campaign():
+    cases=[]
+    for bw,(variant,settings) in product(PROFILES,ENCODING_VARIANTS.items()):
+        common=dict(bandwidth_hz=bw,fec="1/2",rf_profile="encoding",encoding_variant=variant,
+                    **RECOVERY_PROFILE)
+        common.update(settings)
+        fsk=common.get("audio_waveform","").startswith("fsk")
+        if fsk:
+            common.update(recovery_interval_frames=1,adaptive_equalization=0,recursive_equalization=0,
+                          fractionally_spaced_equalization=0,sample_clock_recovery=0)
+        cases.append(case("C4",f"encoding_{bw}_{variant}_null","assert","quick",**common,
+            mode="rf",duration_s=3,campaign="encoding_quick",checks=("sync_held","no_frame_boundary_loss","zero_bit_errors")))
+        cases.append(case("D4",f"encoding_{bw}_{variant}_messages","assert","quick",**common,
+            mode="messages",duration_s=30 if fsk else 3,chunk_samples=48,
+            auction_intake=1,campaign="encoding_quick",checks=("messages_observed","no_corrupt_messages","no_duplicates")))
+        cases.append(case("B5",f"encoding_{bw}_{variant}_latency","assert","full",**common,
+            mode="messages",duration_s=30 if fsk else 12,chunk_samples=48,host_timing=1,
+            auction_intake=1,campaign="encoding_latency",checks=("latency_2_1ms","source_events_on_tick"),
+            notes=["Quiet-host paced loopback; interleaver buffering is charged against 2.1 ms by disabling it in the paired intrinsic reference.",
+                   "FSK uses a longer declared duration to observe deliveries across complete headers and payload frames; no duration reduction for runtime."]))
+        for channel in ("high_lat_quiet","high_lat_moderate","high_lat_disturbed"):
+            # The two subbands each use half the symbol rate; equalizer spans
+            # cover the same physical delay instead of retaining twice the taps.
+            scale=.5 if common.get("audio_waveform")=="bpsk_frequency_diversity" else common.get("symbol_rate_fraction",1)
+            echo=ceil(PRESETS[channel][0]/1000*bw*.8*scale)
+            span=dict(equalizer_feedforward_taps=2*echo+3,equalizer_feedback_taps=echo+4,
+                      equalizer_delay_symbols=echo,training_symbols=max(256,2*(2*echo+3)))
+            for group,mode in (("A2","rf"),("E2","messages")):
+                cases.append(case(group,f"encoding_screen_{bw}_{variant}_{channel}","characterize","full",
+                    **common,**span,**preset(channel),snr_db=30,mode=mode,
+                    duration_s=30 if fsk else 10,chunk_samples=48 if mode=="messages" else 256,
+                    auction_intake=int(mode=="messages"),campaign="encoding_screen"))
+            cases.append(case("E2",f"encoding_followup_{bw}_{variant}_{channel}","characterize","full",
+                **common,**span,**preset(channel),snr_db=30,mode="messages",chunk_samples=48,
+                duration_s=100 if channel=="high_lat_disturbed" else 300,
+                aggregate_metrics=1,auction_intake=1,campaign="encoding_followup",
+                notes=["Matched-seed simulated channel comparison; all delivered messages counted.",
+                       "No physical route availability forecast; 24 kHz Watterson is a bandwidth extrapolation."]))
+        for snr in SNR_GRID:
+            cases.append(case("C1",f"encoding_snr_{bw}_{variant}_{snr}dB","characterize","full",
+                **common,mode="rf",snr_db=snr,duration_s=30 if fsk else 10,campaign="encoding_snr"))
+    return cases
+
+
 def full_parameters(c, revision, source_digest):
     p=c.parameters.copy()
     bits=BITS[p["modulation"]]
-    symbol_rate=p["bandwidth_hz"]/1.25
-    p |= dict(stage_order=list(STAGE_ORDER), interleaver="none (not implemented)",
+    fsk=p["audio_waveform"].startswith("fsk")
+    diversity=p["audio_waveform"]=="bpsk_frequency_diversity"
+    symbol_rate=(1000/(p["fsk_useful_ms"]+p["fsk_guard_ms"]) if fsk else
+                 p["bandwidth_hz"]/1.25*(.5 if diversity else p["symbol_rate_fraction"]))
+    p |= dict(stage_order=list(STAGE_ORDER), interleaver=(dict(kind="rectangular",rows=p["interleaver_rows"],columns=p["interleaver_columns"],order="row-write column-read") if p["interleaver_rows"] else "none"),
               measurement_layer={"rf":"RF symbols and optional post-Viterbi source bits", "messages":"production message pipeline",
                                  "scheduler":"auction submit to simulated transmitter service; downstream unmeasured",
                                  "semantics":"production framer/deframer API", "crypto":"production crypto API"}.get(p["mode"],p["mode"]),
-              waveform="Goblin Cannon single-carrier RRC; not a certified Appendix D waveform",
+              waveform="Goblin Cannon "+p["audio_waveform"]+"; not a certified Appendix D waveform",
               symbol_rate_hz=symbol_rate, raw_bit_rate_bps=symbol_rate*bits,
               snr_definition="nominal unit-mean-constellation complex-sample signal/noise power before fading; not 3 kHz SNR or Eb/N0",
               doppler_definition="2*sigma of Gaussian power spectrum; zero path carrier shifts",
@@ -367,7 +442,7 @@ def full_parameters(c, revision, source_digest):
                                rayleigh_path0=p["seed"]^0x638AD923,rayleigh_path1=p["seed"]^0xC94F216B,
                                payload=p["seed"]^0xC011AB1E,interferer=p["seed"]^0xE294183B),
               path_power_normalization="sum of mean path powers = 1", seed_policy="mt19937 Box-Muller; independent XOR-derived stage seeds; counter-based payload",
-              rrc_rolloff=0.25, shaping_span_symbols=8, tx_gain=0.65,
+              rrc_rolloff=0.25, shaping_span_symbols=8, tx_gain=0.65*p["tx_gain_multiplier"],
               constellation_profile="mil_std_188_110c_wbhf", receiver_oversampling=1,
               pilot_sequence=[0, (1<<bits)-1],
               header_repetition=3, acquisition_symbols=64, acquisition_seed=0xA5A50001,
@@ -421,4 +496,28 @@ def full_parameters(c, revision, source_digest):
               git_commit=revision, source_tree_sha256=source_digest,
               source_revision_note="git_commit is the base revision; source_tree_sha256 identifies the tested working-tree snapshot",
               modeled_propagation_delay_s=0, execution="simulated channel")
+    p.update(convolutional_constraint_length=9 if p["fec"].startswith("k9") else 7,
+             convolutional_generators_octal={"k9-1/2":["753","561"],"k9-1/3":["557","663","711"]}.get(p["fec"],["171","133"]),
+             decoded_bit_confidence_threshold=0 if (p["soft_demapping"] or p["walsh_bits"] or fsk or diversity) and p["mode"]=="messages" else .20,
+             payload_fec="shortened BCH(58,40,7), GF(64), primitive 0x43, generator 0x782cf" if p["bch_payload"] else "continuous convolutional "+p["fec"],
+             walsh_mapping="row=3 MSB-first cipher bits; chip=parity(row & chip_index); direct correlation-bank max-log" if p["walsh_bits"] else "none",
+             coding_stage_order=["FEC","AES-CTR","Walsh" if p["walsh_bits"] else "no spreading","rectangular interleaver" if p["interleaver_rows"] else "no interleaving"],
+             bit_metric="noncoherent tone energy max-log" if fsk else "fixed-constellation Euclidean max-log" if p["soft_demapping"] or diversity else "legacy symbol confidence",
+             soft_metric_parameters=dict(complex_variance_floor=1e-4,pilot_residual_ema=1/32,llr_limit=64,decoder_output="Viterbi hard decisions checked by existing message CRC"),
+             nominal_sample_power=(.65*p["tx_gain_multiplier"])**2*p["bandwidth_hz"]/1.25/p["sample_rate_hz"]*(p["symbol_rate_fraction"] if not (fsk or diversity) else 1),
+             diversity=dict(branches=2,centers_hz=[-p["bandwidth_hz"]/4,p["bandwidth_hz"]/4],branch_bandwidth_hz=p["bandwidth_hz"]/2,
+                            per_branch_power_fraction=.5,combining="sum independently estimated bit LLRs by absolute frame/symbol",combining_wait_ms=p["diversity_wait_ms"],wait_quantization_max_samples=min(48,p["chunk_samples"])) if diversity else None)
+    if fsk:
+        tones=4 if p["audio_waveform"]=="fsk4" else 8
+        spacing=floor(p["bandwidth_hz"]/(tones+2)/(1000/p["fsk_useful_ms"]))*(1000/p["fsk_useful_ms"])
+        p.update(header_format="FSK epoch32 counter64 CRC32 bound to waveform/timing; K7 rate-half + 6 zero tail bits",
+                 header_air_symbols=ceil(268/bits),header_training_modulation=p["audio_waveform"],acquisition_symbols=16,
+                 acquisition_tones=[x*(2 if tones==8 else 1) for x in [0,3,1,2,3,0,2,1,0,2,3,1,3,2,0,1]],
+                 fsk_tone_frequencies_hz=[(i-(tones-1)/2)*spacing for i in range(tones)],
+                 fsk_detection="sliding complex correlators, square-law energy, other-bin variance estimate, per-bit maximum energy difference / variance, +/-64 bound",
+                 soft_metric_parameters=dict(other_tone_variance_floor=1e-10,llr_limit=64),
+                 fsk_acquisition=dict(tick_ms=1,minimum_tone_matches=14,minimum_mean_energy_fraction=.65),
+                 fsk_clock="fixed sample timing within a frame; timing reacquired on each noncoherent preamble; no Gardner loop",
+                 pilot_sequence=[],shaping_span_symbols=0,rrc_rolloff=None,
+                 papr_scope="constant-amplitude continuous-phase tone waveform including preamble and header; no PA gain assumed")
     return p

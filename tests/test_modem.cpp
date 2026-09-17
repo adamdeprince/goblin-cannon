@@ -1621,6 +1621,7 @@ pb::RestartRequest make_restart_request(const ReceiverRestartConfig& restart) {
   fec->set_constraint_length(pipeline.convolutional.constraint_length);
   fec->set_generator0(pipeline.convolutional.generator0);
   fec->set_generator1(pipeline.convolutional.generator1);
+  fec->set_generator2(pipeline.convolutional.generator2);
   for (const auto keep : pipeline.convolutional.puncture_pattern) {
     fec->add_puncture_pattern(keep);
   }
@@ -1641,6 +1642,11 @@ pb::RestartRequest make_restart_request(const ReceiverRestartConfig& restart) {
   request.set_compact_header(rf.compact_header);
   request.set_header_modulation(to_proto_modulation(rf.header_modulation));
   request.set_differential_mapping(static_cast<pb::DifferentialMapping>(rf.differential_mapping));
+  request.set_soft_demapping(rf.soft_demapping);
+  request.set_audio_waveform(static_cast<pb::AudioWaveform>(rf.waveform));
+  request.set_fsk_useful_ms(rf.fsk_useful_ms);request.set_fsk_guard_ms(rf.fsk_guard_ms);
+  request.set_bch_payload(pipeline.coding.bch);request.set_walsh_bits(pipeline.coding.walsh_bits);
+  request.set_interleaver_rows(pipeline.coding.interleaver_rows);request.set_interleaver_columns(pipeline.coding.interleaver_columns);
   request.set_recovery_interval_frames(rf.recovery_interval_frames);
   request.set_fractionally_spaced_equalization(rf.fractionally_spaced_equalization);
   request.set_equalizer_reselect_interval(rf.equalizer_reselect_interval);
@@ -1926,6 +1932,32 @@ void test_receiver_control_grpc_server() {
           psk_pending->pipeline.rf.header_modulation == Modulation::bpsk,
           "gRPC differential PSK configuration did not round-trip");
   }
+  for (auto waveform : {AudioWaveform::single_carrier,AudioWaveform::fsk4,AudioWaveform::fsk8,AudioWaveform::bpsk_frequency_diversity}) {
+    auto configured = restart;
+    configured.pipeline.rf.waveform = waveform;
+    configured.pipeline.rf.modem.symbol_rate_hz.reset();
+    configured.pipeline.rf.modem.bandwidth_hz = 24000;
+    configured.pipeline.rf.modem.modulation = waveform==AudioWaveform::fsk4 ? Modulation::qpsk : waveform==AudioWaveform::fsk8 ? Modulation::psk8 : Modulation::bpsk;
+    configured.pipeline.rf.pilot_sequence = {0,1};
+    configured.pipeline.rf.soft_demapping = true;
+    configured.pipeline.coding = {true,3,4,8};
+    configured.pipeline.convolutional = PuncturedConvolutionalCodeConfig::k9_rate_1_3();
+    auto request = make_restart_request(configured);
+    grpc::ClientContext context;
+    status = stub->Restart(&context,request,&ack);
+    check(status.ok(), "gRPC rejected conventional coding/audio configuration");
+    const auto pending_coding = control->take_pending_restart();
+    check(pending_coding && pending_coding->pipeline.rf.waveform==waveform && pending_coding->pipeline.rf.soft_demapping &&
+          pending_coding->pipeline.convolutional.generator2==0711 && pending_coding->pipeline.coding.bch &&
+          pending_coding->pipeline.coding.walsh_bits==3 && pending_coding->pipeline.coding.interleaver_rows==4 &&
+          pending_coding->pipeline.coding.interleaver_columns==8, "gRPC lost coding/audio parameters");
+  }
+  auto invalid_coding = restart_request;
+  invalid_coding.set_interleaver_rows(4);invalid_coding.set_interleaver_columns(0);
+  grpc::ClientContext coding_context;
+  status=stub->Restart(&coding_context,invalid_coding,&ack);
+  check(!status.ok() && status.error_code()==grpc::StatusCode::INVALID_ARGUMENT,"gRPC accepted incomplete interleaver dimensions");
+
   auto invalid_psk = restart_request;
   invalid_psk.set_differential_mapping(pb::DIFFERENTIAL_DBPSK);
   grpc::ClientContext invalid_psk_context;

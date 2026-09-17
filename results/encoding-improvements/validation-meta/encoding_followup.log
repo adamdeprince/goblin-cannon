@@ -1,0 +1,10 @@
+simulated channel: 378 cases, tier=full, jobs=8
+simulated channel: 50/378 E2_encoding_followup_10000_bpsk_k9_half_high_lat_quiet characterized
+simulated channel: 100/378 E2_encoding_followup_10000_fsk4_guard8_high_lat_moderate characterized
+simulated channel: 150/378 E2_encoding_followup_24000_bpsk_soft_bpsk_header_high_lat_moderate characterized
+simulated channel: 200/378 E2_encoding_followup_24000_bpsk_interleave32_high_lat_quiet characterized
+simulated channel: 250/378 E2_encoding_followup_24000_bpsk_halfband_control_high_lat_moderate characterized
+simulated channel: 300/378 E2_encoding_followup_10000_fsk4_guard8_high_lat_disturbed characterized
+simulated channel: 350/378 E2_encoding_followup_24000_bpsk_bch_high_lat_disturbed characterized
+simulated channel: 378/378 E2_encoding_followup_24000_bpsk_interleave2048_high_lat_disturbed characterized
+simulated channel: 2125.085s {'characterized': 378}; /tmp/goblin-cannon-encoding.nUyo0L/results/SUMMARY.md

@@ -1,0 +1,36 @@
+{
+  "budget_seconds": 1800,
+  "complete_tier": false,
+  "elapsed_seconds": 2.084153995849192,
+  "executed_cases": 3,
+  "git_commit": "a63d2ae69b1ab72a9f0a7b377a46f4c15bed8ef7",
+  "host": "Linux-7.0.0-1008-aws-x86_64-with-glibc2.43",
+  "jobs": 3,
+  "parameter_records": [
+    "E2_encoding_screen_10000_fsk8_guard4_high_lat_moderate/7446529.json",
+    "E2_encoding_screen_24000_qpsk_soft_high_lat_moderate/7446529.json",
+    "E2_encoding_screen_24000_bpsk_bch_high_lat_disturbed/7446529.json"
+  ],
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "report_header": "simulated channel non-canonical execution observations",
+  "selected_cases": 3,
+  "selection": {
+    "campaign": "encoding_screen",
+    "cases": [
+      "E2_encoding_screen_24000_qpsk_soft_high_lat_moderate",
+      "E2_encoding_screen_24000_bpsk_bch_high_lat_disturbed",
+      "E2_encoding_screen_10000_fsk8_guard4_high_lat_moderate"
+    ],
+    "excluded_groups": [],
+    "groups": [],
+    "profile": "legacy",
+    "resume": false,
+    "seed": 7446529,
+    "seeds": null
+  },
+  "source_tree_sha256": "b7baad72a3bb8c5ea6e6d1c2f68b103b384b8c799306ca7ce635afb0f2a8f339",
+  "statuses": {
+    "characterized": 3
+  },
+  "tier": "full"
+}

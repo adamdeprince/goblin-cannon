@@ -1,0 +1,4 @@
+[1/4] Building CXX object CMakeFiles/goblin_cannon_audio_waveform_tests.dir/tests/test_audio_waveform.cpp.o
+[2/4] Linking CXX executable goblin_cannon_audio_waveform_tests
+[3/4] Building CXX object CMakeFiles/goblin_cannon_tests.dir/tests/test_modem.cpp.o
+[4/4] Linking CXX executable goblin_cannon_tests

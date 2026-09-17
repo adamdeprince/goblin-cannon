@@ -1,0 +1,26 @@
+{
+  "report_header": "simulated channel quiet-host latency runtime",
+  "command": [
+    "python3",
+    "/tmp/goblin-cannon-encoding.pP4ZMk/tests/simulated_channel/run.py",
+    "--probe",
+    "/tmp/goblin-cannon-encoding.pP4ZMk/build/goblin_cannon_simulated_channel_probe",
+    "--tier",
+    "full",
+    "--campaign",
+    "encoding_latency",
+    "--results",
+    "/tmp/goblin-cannon-encoding.pP4ZMk/results",
+    "--jobs",
+    "1",
+    "--allow-non-avx512",
+    "--git-commit",
+    "a63d2ae69b1ab72a9f0a7b377a46f4c15bed8ef7",
+    "--source-digest",
+    "b7baad72a3bb8c5ea6e6d1c2f68b103b384b8c799306ca7ce635afb0f2a8f339",
+    "--seed",
+    "7446529"
+  ],
+  "wall_seconds": 674.5743330931291,
+  "exit_code": 1
+}

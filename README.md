@@ -9,8 +9,8 @@ Goblin Cannon targets x86-64 systems. The library uses an AVX baseline and runti
 ## Simulated channel benchmarks and results
 
 The [HTML report](html/index.html) contains recorded latency benchmarks, the
-test ledger, and an interactive explorer of recorded QPSK, 16QAM and 64QAM polar
-channels. See the [latest validation](results/recovery-improvements/REPORT.md) for results and
+test ledger, and interactive comparisons of recorded polar channels, constellations
+and coding options. See the [latest encoding comparison](results/encoding-improvements/REPORT.md) for results and
 remaining defects, and [TESTING.md](TESTING.md) for reproduction commands.
 The 2.1 ms limit applies to added processing and buffering; transmission and
 modem/FEC delays are reported separately. Acceptance tests run with carrier
@@ -75,6 +75,15 @@ Configure matching settings at both ends over gRPC. The Python control client
 accepts `--header-modulation bpsk --differential-mapping pi4_dqpsk
 --modulation qpsk --no-carrier-correction`. Existing defaults preserve the coherent wire format.
 See [PSK simulated channel results](results/psk-improvements/REPORT.md).
+
+Optional conventional coding experiments add fixed-constellation soft bit metrics,
+K9 convolutional rates 1/2 and 1/3, BCH(58,40,7), Walsh-8 spreading and rectangular
+interleaving. Alternative audio waveforms provide noncoherent 4/8-FSK and two
+half-band BPSK copies sharing fixed total transmit power. Configure these through
+the existing fiber/gRPC interface. See the [coding and waveform guide](TESTING.md#conventional-encoding-simulated-channel-comparison)
+for pipeline order, controls and latency accounting, and the
+[patent screen](results/encoding-improvements/PATENT_SCREEN.md) for implementation
+boundaries and exclusions. Existing defaults retain their wire format.
 
 ## RF stream acquisition
 

@@ -1,0 +1,61 @@
+Test project /tmp/goblin-cannon-encoding.pP4ZMk/build
+      Start  1: goblin_cannon_tests
+ 1/20 Test  #1: goblin_cannon_tests .......................   Passed    6.45 sec
+      Start  2: goblin_cannon_channel_acquisition
+ 2/20 Test  #2: goblin_cannon_channel_acquisition .........   Passed    0.02 sec
+      Start  3: goblin_cannon_channel_noise
+ 3/20 Test  #3: goblin_cannon_channel_noise ...............   Passed    0.12 sec
+      Start  4: goblin_cannon_channel_phase
+ 4/20 Test  #4: goblin_cannon_channel_phase ...............   Passed    0.36 sec
+      Start  5: goblin_cannon_channel_fading
+ 5/20 Test  #5: goblin_cannon_channel_fading ..............   Passed    0.06 sec
+      Start  6: goblin_cannon_channel_combined
+ 6/20 Test  #6: goblin_cannon_channel_combined ............   Passed    0.07 sec
+      Start  7: goblin_cannon_channel_recovery
+ 7/20 Test  #7: goblin_cannon_channel_recovery ............   Passed    0.06 sec
+      Start  8: goblin_cannon_channel_equalization
+ 8/20 Test  #8: goblin_cannon_channel_equalization ........   Passed    0.37 sec
+      Start  9: goblin_cannon_channel_streaming
+ 9/20 Test  #9: goblin_cannon_channel_streaming ...........   Passed    0.05 sec
+      Start 10: goblin_cannon_channel_config
+10/20 Test #10: goblin_cannon_channel_config ..............   Passed    0.01 sec
+      Start 11: goblin_cannon_channel_sample_support
+11/20 Test #11: goblin_cannon_channel_sample_support ......   Passed    0.01 sec
+      Start 12: goblin_cannon_channel_profiles
+12/20 Test #12: goblin_cannon_channel_profiles ............   Passed    0.04 sec
+      Start 13: goblin_cannon_channel_decision_delay
+13/20 Test #13: goblin_cannon_channel_decision_delay ......   Passed    0.05 sec
+      Start 14: goblin_cannon_channel_transmit_chunks
+14/20 Test #14: goblin_cannon_channel_transmit_chunks .....   Passed    0.03 sec
+      Start 15: goblin_cannon_audio_waveform
+15/20 Test #15: goblin_cannon_audio_waveform ..............   Passed    0.66 sec
+      Start 16: goblin_cannon_channel_coding
+16/20 Test #16: goblin_cannon_channel_coding ..............   Passed    6.55 sec
+      Start 17: goblin_cannon_psk
+17/20 Test #17: goblin_cannon_psk .........................   Passed    1.89 sec
+      Start 18: goblin_cannon_recovery
+18/20 Test #18: goblin_cannon_recovery ....................   Passed    1.63 sec
+      Start 19: goblin_cannon_data_path
+19/20 Test #19: goblin_cannon_data_path ...................   Passed    0.02 sec
+      Start 20: goblin_cannon_simulated_channel_harness
+20/20 Test #20: goblin_cannon_simulated_channel_harness ...   Passed    1.65 sec
+
+100% tests passed, 0 tests failed out of 20
+
+Label Time Summary:
+A2                   =   1.89 sec*proc (1 test)
+A9                   =   2.29 sec*proc (2 tests)
+B4                   =   0.02 sec*proc (1 test)
+C3                   =   1.63 sec*proc (1 test)
+C4                   =   9.10 sec*proc (3 tests)
+D1                   =   0.02 sec*proc (1 test)
+D3                   =   0.02 sec*proc (1 test)
+D4                   =   0.02 sec*proc (1 test)
+E1                   =   1.65 sec*proc (1 test)
+assert               =  20.10 sec*proc (20 tests)
+channel              =   1.24 sec*proc (13 tests)
+legacy               =   7.56 sec*proc (10 tests)
+quick                =  20.10 sec*proc (20 tests)
+simulated_channel    =  12.53 sec*proc (10 tests)
+
+Total Test time (real) =  20.10 sec

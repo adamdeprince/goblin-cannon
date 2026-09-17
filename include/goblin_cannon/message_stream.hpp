@@ -1,6 +1,7 @@
 #pragma once
 
 #include "goblin_cannon/convolutional.hpp"
+#include "goblin_cannon/channel_coding.hpp"
 #include "goblin_cannon/crypto.hpp"
 #include "goblin_cannon/rf_stream.hpp"
 #include "goblin_cannon/ring_buffer.hpp"
@@ -261,6 +262,7 @@ struct SyncTimestampConfig {
 struct RealtimePipelineConfig {
   RfStreamConfig rf = {};
   PuncturedConvolutionalCodeConfig convolutional = PuncturedConvolutionalCodeConfig::rate_1_2();
+  PayloadCodingConfig coding = {};
   Aes128Key aes_key = {};
   Aes128CtrCounter ctr_counter = {};
   SyncTimestampConfig sync_timestamp = {};
@@ -308,8 +310,7 @@ private:
   RealtimePipelineConfig config_;
   QueueSource<DelimitedMessage>& input_;
   MessageStreamFramer framer_;
-  PuncturedConvolutionalEncoder convolutional_;
-  Aes128CtrBitXor bit_xor_;
+  ChannelCodingEncoder coding_;
   RfStreamEncoder rf_;
   Constellation constellation_;
   std::vector<std::uint8_t> pending_bits_;
@@ -349,8 +350,7 @@ private:
   RealtimePipelineConfig config_;
   SpscRingBuffer<DelimitedMessage>& output_;
   MessageStreamDeframer deframer_;
-  StreamingSoftViterbiDecoder viterbi_;
-  Aes128CtrBitXor bit_xor_;
+  ChannelCodingDecoder coding_;
   RfStreamReceiver rf_;
   Constellation constellation_;
   std::array<std::uint8_t, 8> sync_timestamp_bytes_{};
@@ -362,6 +362,7 @@ private:
   bool coded_gap_ = false;
   std::optional<std::uint64_t> next_audio_sample_;
   // Persistent per-chunk buffers reused across push_samples calls.
+  std::array<RfStreamSymbol, 512> symbol_buffer_{};
   std::vector<SoftBit> coded_bits_buffer_;
   std::vector<Token> message_tokens_buffer_;
 };

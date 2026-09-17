@@ -1,4 +1,5 @@
 #include "goblin_cannon/rf_stream.hpp"
+#include "audio_waveform.hpp"
 
 #include "rf_equalizer.hpp"
 #include "differential_psk.hpp"
@@ -350,11 +351,25 @@ std::vector<std::uint32_t> make_default_qpsk_sequence(std::size_t symbols, std::
   return sequence;
 }
 
+double rf_symbol_rate_hz(const RfStreamConfig& config) {
+  if (config.waveform == AudioWaveform::fsk4 || config.waveform == AudioWaveform::fsk8)
+    return 1000.0 / (config.fsk_useful_ms + config.fsk_guard_ms);
+  if (config.waveform == AudioWaveform::bpsk_frequency_diversity)
+    return config.modem.bandwidth_hz / 2.0 / 1.25;
+  return derived_symbol_rate_hz(config.modem);
+}
+
 void validate(const RfStreamConfig& config) {
   validate(config.modem);
+  detail::validate_audio_waveform(config);
+  if (config.waveform != AudioWaveform::single_carrier && config.modem.symbol_rate_hz &&
+      std::abs(*config.modem.symbol_rate_hz - rf_symbol_rate_hz(config)) > 1.0e-6)
+    throw std::invalid_argument("alternative waveform symbol rate must match its configured audio timing");
   if (config.header_modulation != Modulation::bpsk && config.header_modulation != Modulation::qpsk)
     throw std::invalid_argument("header modulation must be BPSK or QPSK");
   (void)detail::DifferentialPsk(config);
+  if (config.soft_demapping && config.differential_mapping != DifferentialMapping::none)
+    throw std::invalid_argument("Euclidean soft demapping requires coherent payload mapping");
   if (config.acquisition_sequence.empty()) {
     throw std::invalid_argument("acquisition_sequence must not be empty");
   }
@@ -684,20 +699,23 @@ private:
   std::size_t drain_padding_remaining_ = 0;
 };
 
-RfStreamEncoder::RfStreamEncoder(RfStreamConfig config) : impl_(std::make_unique<Impl>(std::move(config))) {}
+RfStreamEncoder::RfStreamEncoder(RfStreamConfig config) {
+  if (config.waveform == AudioWaveform::single_carrier) impl_ = std::make_unique<Impl>(std::move(config));
+  else audio_ = detail::make_audio_encoder(std::move(config));
+}
 RfStreamEncoder::~RfStreamEncoder() = default;
 RfStreamEncoder::RfStreamEncoder(RfStreamEncoder&&) noexcept = default;
 RfStreamEncoder& RfStreamEncoder::operator=(RfStreamEncoder&&) noexcept = default;
-const RfStreamConfig& RfStreamEncoder::config() const noexcept { return impl_->config(); }
-bool RfStreamEncoder::active() const noexcept { return impl_->active(); }
-RfStreamState RfStreamEncoder::state() const noexcept { return impl_->state(); }
-RfStreamHeader RfStreamEncoder::current_header() const noexcept { return impl_->current_header(); }
-void RfStreamEncoder::start_epoch(std::uint64_t frame_counter_start) { impl_->start_epoch(frame_counter_start); }
+const RfStreamConfig& RfStreamEncoder::config() const noexcept { return audio_ ? audio_->config() : impl_->config(); }
+bool RfStreamEncoder::active() const noexcept { return audio_ ? audio_->active() : impl_->active(); }
+RfStreamState RfStreamEncoder::state() const noexcept { return audio_ ? audio_->state() : impl_->state(); }
+RfStreamHeader RfStreamEncoder::current_header() const noexcept { return audio_ ? audio_->current_header() : impl_->current_header(); }
+void RfStreamEncoder::start_epoch(std::uint64_t frame_counter_start) { if (audio_) audio_->start_epoch(frame_counter_start); else impl_->start_epoch(frame_counter_start); }
 RfStreamEncodeResult RfStreamEncoder::push_symbols(std::span<const std::uint32_t> symbols, std::span<Complex> out) {
-  return impl_->push_symbols(symbols, out);
+  return audio_ ? audio_->push_symbols(symbols, out) : impl_->push_symbols(symbols, out);
 }
-RfStreamEncodeResult RfStreamEncoder::drain(std::span<Complex> out) { return impl_->drain(out); }
-void RfStreamEncoder::reset() { impl_->reset(); }
+RfStreamEncodeResult RfStreamEncoder::drain(std::span<Complex> out) { return audio_ ? audio_->drain(out) : impl_->drain(out); }
+void RfStreamEncoder::reset() { if (audio_) audio_->reset(); else impl_->reset(); }
 
 class RfStreamReceiver::Impl {
 public:
@@ -758,6 +776,7 @@ public:
     data_decoder_.reset();
     differential_.reset();
     bad_pilots_ = 0;
+    noise_variance_ = 1.0F;
     pilot_group_bad_ = false;
     equalizer_.reset();
     header_ = std::nullopt;
@@ -922,6 +941,7 @@ private:
       }
     }
     sync_.training_evm = static_cast<float>(std::sqrt(error_power / std::max<std::size_t>(error_count, 1U)));
+    noise_variance_ = std::max(1.0e-4F, sync_.training_evm * sync_.training_evm);
     if (!std::isfinite(sync_.training_evm) || sync_.training_evm > 0.45F) {
       lose_lock(result);
       return true;
@@ -947,7 +967,13 @@ private:
       const auto decoded_bits = std::span(bits).first(header_constellation.bits_per_symbol());
       header_constellation.symbol_to_bits(decision.symbol, decoded_bits);
       repeated_bits.insert(repeated_bits.end(), decoded_bits.begin(), decoded_bits.end());
-      for (const auto bit : decoded_bits) coded_header.push_back({bit, decision.confidence >= tracking_confidence, decision.confidence});
+      if (config_.soft_demapping) {
+        std::array<SoftBit, 2> soft{};
+        header_constellation.soft_bits(observed, noise_variance_, soft);
+        coded_header.insert(coded_header.end(), soft.begin(), soft.begin() + decoded_bits.size());
+      } else {
+        for (const auto bit : decoded_bits) coded_header.push_back({bit, decision.confidence >= tracking_confidence, decision.confidence});
+      }
       equalizer_.update(header_constellation.map_symbol(decision.symbol), observed, equalizer_step,
                         decision.confidence >= tracking_confidence);
       ++header_data_index;
@@ -1078,6 +1104,11 @@ private:
 
     if (symbols_until_pilot_ == 0) {
       const auto expected = config_.pilot_sequence[pilot_index_];
+      // One-pole mean squared known-pilot residual (32-pilot time constant).
+      // It measures receiver residual error, without channel-model truth.
+      const auto residual = std::norm(observed - data_constellation_.map_symbol(expected));
+      if (std::isfinite(residual))
+        noise_variance_ = std::max(1.0e-4F, noise_variance_ + (residual - noise_variance_) / 32.0F);
       differential_.observe_pilot(observed);
       if (symbol != expected || confidence < config_.pilot_confidence_threshold) {
         pilot_group_bad_ = true;
@@ -1116,6 +1147,11 @@ private:
                                       .frame_symbol_offset = frame_symbol_offset_,
                                       .certain = confidence >= config_.symbol_confidence_threshold,
                                       .confidence = confidence};
+    if (config_.soft_demapping) {
+      auto& decoded = out[result.produced_symbols - 1];
+      decoded.has_soft_bits = true;
+      data_constellation_.soft_bits(observed, noise_variance_, decoded.soft_bits);
+    }
     ++frame_symbol_offset_;
     --symbols_until_pilot_;
     if (frame_symbol_offset_ == config_.symbols_per_frame) {
@@ -1174,6 +1210,7 @@ private:
   Constellation data_constellation_;
   detail::DifferentialPsk differential_;
   detail::RfEqualizer equalizer_;
+  float noise_variance_ = 1.0F;
   std::size_t bad_pilots_ = 0;
   bool pilot_group_bad_ = false;
   std::size_t startup_discard_symbols_ = 0;
@@ -1196,17 +1233,20 @@ private:
   std::size_t pilot_index_ = 0;
 };
 
-RfStreamReceiver::RfStreamReceiver(RfStreamConfig config) : impl_(std::make_unique<Impl>(std::move(config))) {}
+RfStreamReceiver::RfStreamReceiver(RfStreamConfig config) {
+  if (config.waveform == AudioWaveform::single_carrier) impl_ = std::make_unique<Impl>(std::move(config));
+  else audio_ = detail::make_audio_receiver(std::move(config));
+}
 RfStreamReceiver::~RfStreamReceiver() = default;
 RfStreamReceiver::RfStreamReceiver(RfStreamReceiver&&) noexcept = default;
 RfStreamReceiver& RfStreamReceiver::operator=(RfStreamReceiver&&) noexcept = default;
-const RfStreamConfig& RfStreamReceiver::config() const noexcept { return impl_->config(); }
-RfStreamState RfStreamReceiver::state() const noexcept { return impl_->state(); }
-std::optional<RfStreamHeader> RfStreamReceiver::header() const noexcept { return impl_->header(); }
-RfSyncEstimate RfStreamReceiver::sync_estimate() const noexcept { return impl_->sync_estimate(); }
+const RfStreamConfig& RfStreamReceiver::config() const noexcept { return audio_ ? audio_->config() : impl_->config(); }
+RfStreamState RfStreamReceiver::state() const noexcept { return audio_ ? audio_->state() : impl_->state(); }
+std::optional<RfStreamHeader> RfStreamReceiver::header() const noexcept { return audio_ ? audio_->header() : impl_->header(); }
+RfSyncEstimate RfStreamReceiver::sync_estimate() const noexcept { return audio_ ? audio_->sync_estimate() : impl_->sync_estimate(); }
 RfStreamReceiveResult RfStreamReceiver::push_samples(std::span<const Complex> samples, std::span<RfStreamSymbol> out) {
-  return impl_->push_samples(samples, out);
+  return audio_ ? audio_->push_samples(samples, out) : impl_->push_samples(samples, out);
 }
-void RfStreamReceiver::reset() { impl_->reset(); }
+void RfStreamReceiver::reset() { if (audio_) audio_->reset(); else impl_->reset(); }
 
 } // namespace goblin_cannon

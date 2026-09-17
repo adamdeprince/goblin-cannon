@@ -126,6 +126,30 @@ class SimulatedChannelHarness(unittest.TestCase):
             # Unknown assertion names must fail here, before expensive runs.
             evaluate(c,{},summarize({}),{})
 
+    def test_encoding_campaign_has_real_parameters_and_fixed_power(self):
+        cases=[c for c in matrix() if c.parameters.get("rf_profile")=="encoding"]
+        self.assertEqual(sum(c.parameters["campaign"]=="encoding_quick" for c in cases),84)
+        self.assertEqual(sum(c.parameters["campaign"]=="encoding_followup" for c in cases),126)
+        for c in cases:
+            p=full_parameters(c,"commit","digest")
+            self.assertEqual(p["carrier_correction"],0)
+            if p["campaign"]=="encoding_followup" and not p["audio_waveform"].startswith("fsk"):
+                from math import ceil
+                echo=ceil(p["delay_spread_ms"]*p["symbol_rate_hz"]/1000)
+                self.assertEqual(p["equalizer_feedforward_taps"],2*echo+3)
+                self.assertEqual(p["equalizer_feedback_taps"],echo+4)
+                self.assertEqual(p["training_symbols"],max(256,2*(2*echo+3)))
+            self.assertAlmostEqual(p["nominal_sample_power"],.65**2*p["bandwidth_hz"]/1.25/48000)
+            if p["campaign"]=="encoding_followup":
+                self.assertEqual(p["duration_s"],100 if "disturbed" in c.name else 300)
+            if p["audio_waveform"].startswith("fsk"):
+                self.assertEqual(p["shaping_span_symbols"],0)
+                self.assertEqual(p["symbol_rate_hz"],1000/(p["fsk_useful_ms"]+p["fsk_guard_ms"]))
+                self.assertFalse(p["equalizer"]["enabled"])
+            if p["fec"]=="k9-1/3":
+                self.assertEqual(p["convolutional_generators_octal"],["557","663","711"])
+            evaluate(c,{},summarize({}),{})
+
 
 if __name__=="__main__":
     unittest.main()

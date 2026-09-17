@@ -3,6 +3,7 @@
 #include "goblin_cannon/modem.hpp"
 
 #include <complex>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -12,7 +13,10 @@
 
 namespace goblin_cannon {
 
+namespace detail { class AudioWaveformEncoder; class AudioWaveformReceiver; }
+
 enum class DifferentialMapping : std::uint8_t { none, dbpsk, dqpsk, pi4_dqpsk };
+enum class AudioWaveform : std::uint8_t { single_carrier, fsk4, fsk8, bpsk_frequency_diversity };
 
 enum class RfStreamState {
   search,
@@ -101,6 +105,14 @@ struct RfStreamConfig {
   // Revisit sparse RLS support after this many reliable updates; zero freezes
   // the initial selection. Inactive taps receive shadow NLMS updates.
   std::uint32_t equalizer_reselect_interval = 0;
+  // Conventional per-bit Euclidean metrics; receiver-only, no wire change.
+  bool soft_demapping = false;
+  AudioWaveform waveform = AudioWaveform::single_carrier;
+  // Noncoherent orthogonal tones; repeat the tone during a multipath guard,
+  // then integrate for fsk_useful_ms. Acquisition and headers also use FSK.
+  double fsk_useful_ms = 4.0;
+  double fsk_guard_ms = 8.0;
+  double diversity_wait_ms = 1.0; // Receiver combining wait; charged as buffering.
 };
 
 struct RfStreamEncodeResult {
@@ -116,6 +128,8 @@ struct RfStreamSymbol {
   std::uint32_t frame_symbol_offset = 0;
   bool certain = true;
   float confidence = 1.0F;
+  bool has_soft_bits = false;
+  std::array<SoftBit, max_bits_per_symbol> soft_bits{};
 };
 
 struct RfStreamReceiveResult {
@@ -133,6 +147,7 @@ struct RfStreamReceiveResult {
 std::vector<std::uint32_t> make_default_qpsk_sequence(std::size_t symbols, std::uint32_t seed = 0x13579BDFU);
 
 void validate(const RfStreamConfig& config);
+[[nodiscard]] double rf_symbol_rate_hz(const RfStreamConfig& config);
 std::uint32_t stream_header_crc32(const RfStreamHeader& header);
 
 class AcquisitionCorrelator {
@@ -176,6 +191,7 @@ public:
 private:
   class Impl;
   std::unique_ptr<Impl> impl_;
+  std::unique_ptr<detail::AudioWaveformEncoder> audio_;
 };
 
 class RfStreamReceiver {
@@ -199,6 +215,7 @@ public:
 private:
   class Impl;
   std::unique_ptr<Impl> impl_;
+  std::unique_ptr<detail::AudioWaveformReceiver> audio_;
 };
 
 } // namespace goblin_cannon

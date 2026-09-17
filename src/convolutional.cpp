@@ -55,22 +55,29 @@ std::vector<Token> pack_soft_bits_to_tokens(std::span<const SoftBit> bits, float
 }
 
 float branch_metric(std::span<const Observation> observations,
-                    std::uint8_t expected0,
-                    std::uint8_t expected1,
+                    std::span<const std::uint8_t> expected,
                     float& confidence) {
   float metric = 0.0F;
   float confidence_sum = 0.0F;
   std::size_t confidence_count = 0;
 
   for (const auto& observation : observations) {
-    const auto expected = observation.mother_index == 0U ? expected0 : expected1;
+    const auto wanted = expected[observation.mother_index];
+    if (std::isfinite(observation.bit.log_likelihood_ratio)) {
+      const auto llr = observation.bit.log_likelihood_ratio;
+      // A bitwise log-likelihood branch cost, up to a branch-independent constant.
+      metric += ((llr < 0) != (wanted != 0)) ? std::abs(llr) : 0.0F;
+      confidence_sum += std::tanh(std::abs(llr) * 0.5F);
+      ++confidence_count;
+      continue;
+    }
     if (!observation.bit.certain || observation.bit.confidence <= 0.0F) {
       continue;
     }
     const auto clamped = std::clamp(observation.bit.confidence, 0.0F, 1.0F);
     confidence_sum += clamped;
     ++confidence_count;
-    if ((observation.bit.value & 1U) != expected) {
+    if ((observation.bit.value & 1U) != wanted) {
       metric += clamped;
     }
   }
@@ -84,15 +91,13 @@ std::size_t default_traceback_bits(const PuncturedConvolutionalCodeConfig& confi
 }
 
 void validate_streaming_puncture_pattern(const PuncturedConvolutionalCodeConfig& config) {
-  const auto period = config.puncture_pattern.size() / std::gcd<std::size_t>(config.puncture_pattern.size(), 2U);
-  std::size_t mother_index = 0;
+  const auto outputs = config.mother_outputs();
+  const auto period = config.puncture_pattern.size() / std::gcd(config.puncture_pattern.size(), outputs);
   for (std::size_t step = 0; step < period; ++step) {
-    const auto keep0 = config.puncture_pattern[mother_index % config.puncture_pattern.size()] != 0U;
-    const auto keep1 = config.puncture_pattern[(mother_index + 1U) % config.puncture_pattern.size()] != 0U;
-    if (!keep0 && !keep1) {
-      throw std::invalid_argument("streaming Viterbi requires each input bit to retain at least one coded bit");
-    }
-    mother_index = (mother_index + 2U) % config.puncture_pattern.size();
+    bool kept = false;
+    for (std::size_t i = 0; i < outputs; ++i)
+      kept = kept || config.puncture_pattern[(step * outputs + i) % config.puncture_pattern.size()] != 0;
+    if (!kept) throw std::invalid_argument("streaming Viterbi requires each input bit to retain at least one coded bit");
   }
 }
 
@@ -122,6 +127,23 @@ PuncturedConvolutionalCodeConfig PuncturedConvolutionalCodeConfig::rate_3_4() {
           .decoded_bit_confidence_threshold = 0.20F};
 }
 
+PuncturedConvolutionalCodeConfig PuncturedConvolutionalCodeConfig::k9_rate_1_2() {
+  auto config = rate_1_2();
+  config.constraint_length = 9;
+  config.generator0 = 0753;
+  config.generator1 = 0561;
+  return config;
+}
+
+PuncturedConvolutionalCodeConfig PuncturedConvolutionalCodeConfig::k9_rate_1_3() {
+  auto config = k9_rate_1_2();
+  config.generator0 = 0557;
+  config.generator1 = 0663;
+  config.generator2 = 0711;
+  config.puncture_pattern = {1, 1, 1};
+  return config;
+}
+
 void validate(const PuncturedConvolutionalCodeConfig& config) {
   if (config.constraint_length < 3U || config.constraint_length > 12U) {
     throw std::invalid_argument("constraint_length must be in [3, 12]");
@@ -129,6 +151,9 @@ void validate(const PuncturedConvolutionalCodeConfig& config) {
   if (config.generator0 == 0U || config.generator1 == 0U) {
     throw std::invalid_argument("convolutional generators must be non-zero");
   }
+  const auto mask = (1U << config.constraint_length) - 1U;
+  if ((config.generator0 | config.generator1 | config.generator2) & ~mask)
+    throw std::invalid_argument("convolutional generator exceeds constraint length");
   if (config.puncture_pattern.empty()) {
     throw std::invalid_argument("puncture_pattern must not be empty");
   }
@@ -152,23 +177,17 @@ PuncturedConvolutionalEncoder::PuncturedConvolutionalEncoder(PuncturedConvolutio
 void PuncturedConvolutionalEncoder::push_bit_append(std::uint8_t bit, std::vector<std::uint8_t>& out) {
   const auto full_mask = (1U << config_.constraint_length) - 1U;
   shift_register_ = ((shift_register_ << 1U) | (bit & 1U)) & full_mask;
-  const std::uint8_t m0 = parity(shift_register_ & config_.generator0);
-  const std::uint8_t m1 = parity(shift_register_ & config_.generator1);
-  const auto& pattern = config_.puncture_pattern;
-  const auto pattern_size = pattern.size();
-  if (pattern[mother_bit_index_ % pattern_size] != 0U) {
-    out.push_back(m0);
+  const std::array generators{config_.generator0, config_.generator1, config_.generator2};
+  for (std::size_t i = 0; i < config_.mother_outputs(); ++i) {
+    if (config_.puncture_pattern[mother_bit_index_ % config_.puncture_pattern.size()])
+      out.push_back(parity(shift_register_ & generators[i]));
+    ++mother_bit_index_;
   }
-  ++mother_bit_index_;
-  if (pattern[mother_bit_index_ % pattern_size] != 0U) {
-    out.push_back(m1);
-  }
-  ++mother_bit_index_;
 }
 
 void PuncturedConvolutionalEncoder::push_bytes_append(std::span<const std::uint8_t> bytes,
                                                       std::vector<std::uint8_t>& out) {
-  out.reserve(out.size() + bytes.size() * 2U * 8U);
+  out.reserve(out.size() + bytes.size() * config_.mother_outputs() * 8U);
   for (const auto byte : bytes) {
     for (int bit_index = 7; bit_index >= 0; --bit_index) {
       push_bit_append(static_cast<std::uint8_t>((byte >> bit_index) & 1U), out);
@@ -178,7 +197,7 @@ void PuncturedConvolutionalEncoder::push_bytes_append(std::span<const std::uint8
 
 std::vector<std::uint8_t> PuncturedConvolutionalEncoder::push_bit(std::uint8_t bit) {
   std::vector<std::uint8_t> out;
-  out.reserve(2);
+  out.reserve(config_.mother_outputs());
   push_bit_append(bit, out);
   return out;
 }
@@ -214,9 +233,9 @@ ViterbiDecodeResult SoftViterbiDecoder::decode(std::span<const SoftBit> coded_bi
   std::size_t coded_offset = 0;
   std::size_t mother_bit_index = 0;
   for (std::size_t step = 0; step < output_bits; ++step) {
-    std::array<Observation, 2> observation_storage{};
+    std::array<Observation, 3> observation_storage{};
     std::size_t observation_count = 0;
-    for (std::uint8_t mother = 0; mother < 2U; ++mother) {
+    for (std::uint8_t mother = 0; mother < config_.mother_outputs(); ++mother) {
       if (config_.puncture_pattern[mother_bit_index % config_.puncture_pattern.size()] != 0U) {
         if (coded_offset >= coded_bits.size()) {
           throw std::invalid_argument("not enough coded soft bits for requested Viterbi output length");
@@ -239,10 +258,9 @@ ViterbiDecodeResult SoftViterbiDecoder::decode(std::span<const SoftBit> coded_bi
       for (std::uint8_t bit = 0; bit < 2U; ++bit) {
         const auto reg = ((previous << 1U) | bit) & full_mask;
         const auto next_state = reg & state_mask;
-        const auto expected0 = parity(reg & config_.generator0);
-        const auto expected1 = parity(reg & config_.generator1);
+        const std::array expected{parity(reg & config_.generator0), parity(reg & config_.generator1), parity(reg & config_.generator2)};
         float confidence = 0.0F;
-        const auto metric = branch_metric(observations, expected0, expected1, confidence);
+        const auto metric = branch_metric(observations, expected, confidence);
         const auto candidate = metrics[previous] + metric;
         if (candidate < next_metrics[next_state]) {
           next_metrics[next_state] = candidate;
@@ -321,14 +339,14 @@ void StreamingSoftViterbiDecoder::reset() {
 
 std::size_t StreamingSoftViterbiDecoder::resume_at_coded_bit(std::uint64_t offset) {
   reset();
-  const auto period = std::lcm<std::uint64_t>(16U, config_.puncture_pattern.size());
+  const auto period = std::lcm<std::uint64_t>(8U * config_.mother_outputs(), config_.puncture_pattern.size());
   const auto kept = std::count_if(config_.puncture_pattern.begin(), config_.puncture_pattern.end(),
                                   [](auto bit) { return bit != 0; });
   const auto coded_period = period / config_.puncture_pattern.size() * kept;
   const auto remainder = offset % coded_period;
   std::size_t mother = 0, coded = 0;
   while (coded < remainder) {
-    for (std::size_t i = 0; i < 16; ++i, ++mother)
+    for (std::size_t i = 0; i < 8U * config_.mother_outputs(); ++i, ++mother)
       coded += config_.puncture_pattern[mother % config_.puncture_pattern.size()] != 0;
   }
   mother_bit_index_ = mother % config_.puncture_pattern.size();
@@ -339,7 +357,7 @@ std::size_t StreamingSoftViterbiDecoder::resume_at_coded_bit(std::uint64_t offse
 
 std::size_t StreamingSoftViterbiDecoder::observations_required_for_next_bit() const noexcept {
   std::size_t required = 0;
-  for (std::uint8_t mother = 0; mother < 2U; ++mother) {
+  for (std::uint8_t mother = 0; mother < config_.mother_outputs(); ++mother) {
     required += config_.puncture_pattern[(mother_bit_index_ + mother) % config_.puncture_pattern.size()] != 0U
                     ? 1U
                     : 0U;
@@ -348,15 +366,13 @@ std::size_t StreamingSoftViterbiDecoder::observations_required_for_next_bit() co
 }
 
 void StreamingSoftViterbiDecoder::process_bit(std::span<const SoftBit> observations_in) {
-  std::array<Observation, 2> observation_storage{};
-  for (std::size_t i = 0; i < observations_in.size(); ++i) {
-    observation_storage[i] = {.mother_index = static_cast<std::uint8_t>(i),
-                              .bit = observations_in[i]};
-  }
-
-  if (observations_in.size() == 1U) {
-    const auto keep0 = config_.puncture_pattern[mother_bit_index_ % config_.puncture_pattern.size()] != 0U;
-    observation_storage[0].mother_index = keep0 ? 0U : 1U;
+  std::array<Observation, 3> observation_storage{};
+  std::size_t index = 0;
+  for (std::size_t mother = 0; mother < config_.mother_outputs(); ++mother) {
+    if (config_.puncture_pattern[(mother_bit_index_ + mother) % config_.puncture_pattern.size()]) {
+      observation_storage[index] = {.mother_index = static_cast<std::uint8_t>(mother), .bit = observations_in[index]};
+      ++index;
+    }
   }
 
   constexpr float inf = std::numeric_limits<float>::infinity();
@@ -377,10 +393,9 @@ void StreamingSoftViterbiDecoder::process_bit(std::span<const SoftBit> observati
     for (std::uint8_t bit = 0; bit < 2U; ++bit) {
       const auto reg = ((previous << 1U) | bit) & full_mask_;
       const auto next_state = reg & state_mask_;
-      const auto expected0 = parity(reg & config_.generator0);
-      const auto expected1 = parity(reg & config_.generator1);
+      const std::array expected{parity(reg & config_.generator0), parity(reg & config_.generator1), parity(reg & config_.generator2)};
       float confidence = 0.0F;
-      const auto metric = branch_metric(observations, expected0, expected1, confidence);
+      const auto metric = branch_metric(observations, expected, confidence);
       const auto candidate = metrics_[previous] + metric;
       if (candidate < next_metrics_[next_state]) {
         next_metrics_[next_state] = candidate;
@@ -403,7 +418,7 @@ void StreamingSoftViterbiDecoder::process_bit(std::span<const SoftBit> observati
     }
   }
   ++history_step_count_;
-  mother_bit_index_ += 2U;
+  mother_bit_index_ += config_.mother_outputs();
 }
 
 void StreamingSoftViterbiDecoder::emit_ready_bytes(std::vector<Token>& out) {
@@ -484,7 +499,7 @@ std::size_t convolutional_coded_bits_for_input_bits(std::size_t input_bits,
                                                    const PuncturedConvolutionalCodeConfig& config) {
   validate(config);
   std::size_t coded_bits = 0;
-  for (std::size_t i = 0; i < input_bits * 2U; ++i) {
+  for (std::size_t i = 0; i < input_bits * config.mother_outputs(); ++i) {
     coded_bits += config.puncture_pattern[i % config.puncture_pattern.size()] != 0U ? 1U : 0U;
   }
   return coded_bits;
@@ -533,7 +548,9 @@ std::uint8_t Aes128CtrBitXor::xor_bit(std::uint8_t bit) {
 }
 
 SoftBit Aes128CtrBitXor::xor_soft_bit(SoftBit bit) {
-  bit.value = xor_bit(bit.value);
+  const auto mask = next_keystream_bit();
+  bit.value = (bit.value & 1U) ^ mask;
+  if (mask) bit.log_likelihood_ratio = -bit.log_likelihood_ratio;
   return bit;
 }
 

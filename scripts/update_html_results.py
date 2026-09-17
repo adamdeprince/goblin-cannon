@@ -51,6 +51,11 @@ def build():
             psk_section, psk_js = build_psk()
             sections = sections.replace(START, START + psk_section, 1)
             js += psk_js
+        if (ROOT / "results/encoding-improvements/VALIDATION.json").exists():
+            from encoding_html import build as build_encoding
+            encoding_section, encoding_js = build_encoding()
+            sections = sections.replace(START, START + encoding_section, 1)
+            js += encoding_js
         return sections, js
     manifest = read(RESULTS / "VALIDATION.json")
     main = records(RESULTS)
@@ -322,6 +327,7 @@ def main():
     for name, content in (("simulated-channel.js", js.encode()),
                           ("rf-explorer.js", (WEB/"rf-explorer.js").read_bytes()),
                           ("psk-explorer.js", (WEB/"psk-explorer.js").read_bytes()),
+                          ("encoding-explorer.js", (WEB/"encoding-explorer.js").read_bytes()),
                           ("evidence.css", (WEB/"evidence.css").read_bytes())):
         version = hashlib.sha256(content).hexdigest()[:16]
         document = re.sub(r'((?:src|href)=")'+re.escape(name)+r'(?:\?[^" ]*)?"',

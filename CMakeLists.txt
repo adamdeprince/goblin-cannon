@@ -17,6 +17,8 @@ add_library(goblin_cannon
   src/constellation.cpp
   src/client_udp.cpp
   src/convolutional.cpp
+  src/channel_coding.cpp
+  src/audio_waveform.cpp
   src/crypto.cpp
   src/demapper.cpp
   src/frame.cpp
@@ -190,6 +192,14 @@ if(GOBLIN_CANNON_BUILD_TESTS)
     endforeach()
     find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
     add_executable(goblin_cannon_recovery_tests tests/test_recovery.cpp)
+    add_executable(goblin_cannon_audio_waveform_tests tests/test_audio_waveform.cpp)
+    target_link_libraries(goblin_cannon_audio_waveform_tests PRIVATE goblin_cannon::goblin_cannon)
+    add_test(NAME goblin_cannon_audio_waveform COMMAND goblin_cannon_audio_waveform_tests)
+    set_tests_properties(goblin_cannon_audio_waveform PROPERTIES LABELS "simulated_channel;quick;assert;A9;C4" TIMEOUT 120)
+    add_executable(goblin_cannon_channel_coding_tests tests/test_channel_coding.cpp)
+    target_link_libraries(goblin_cannon_channel_coding_tests PRIVATE goblin_cannon::goblin_cannon)
+    add_test(NAME goblin_cannon_channel_coding COMMAND goblin_cannon_channel_coding_tests)
+    set_tests_properties(goblin_cannon_channel_coding PROPERTIES LABELS "simulated_channel;quick;assert;C4" TIMEOUT 120)
     add_executable(goblin_cannon_psk_tests tests/test_psk.cpp)
     target_link_libraries(goblin_cannon_psk_tests PRIVATE goblin_cannon::goblin_cannon)
     target_include_directories(goblin_cannon_psk_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")

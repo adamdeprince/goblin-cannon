@@ -207,6 +207,7 @@ std::optional<BidMessageLogRecord> reserve_sent_bid(BidMessageLogRecord sent_log
 void validate_realtime_config(const RealtimePipelineConfig& config) {
   validate(config.rf);
   validate(config.convolutional);
+  validate(config.coding);
   if (config.sync_timestamp.enabled &&
       (!std::isfinite(config.sync_timestamp.max_clock_skew_seconds) ||
        config.sync_timestamp.max_clock_skew_seconds <= 0.0)) {
@@ -566,8 +567,7 @@ void MessageStreamDeframer::reset() {
 RealtimeTransmitter::RealtimeTransmitter(RealtimePipelineConfig config, QueueSource<DelimitedMessage>& input)
     : config_(std::move(config)),
       input_(input),
-      convolutional_(config_.convolutional),
-      bit_xor_(config_.aes_key, config_.ctr_counter),
+      coding_(config_.convolutional, config_.coding, config_.aes_key, config_.ctr_counter),
       rf_(config_.rf),
       constellation_(config_.rf.modem.modulation, config_.rf.modem.constellation_profile) {
   validate_realtime_config(config_);
@@ -586,40 +586,40 @@ void RealtimeTransmitter::ensure_symbol_block(RealtimeTransmitResult& result) {
 
   symbols_.clear();
   symbol_offset_ = 0;
-  std::array<std::uint8_t, 1> byte{};
-  if (sync_timestamp_offset_ < sync_timestamp_bytes_.size()) {
-    if (!sync_timestamp_initialized_) {
-      sync_timestamp_bytes_ = encode_native_double(current_epoch_seconds());
-      sync_timestamp_initialized_ = true;
+  do {
+    std::array<std::uint8_t, 1> byte{};
+    if (sync_timestamp_offset_ < sync_timestamp_bytes_.size()) {
+      if (!sync_timestamp_initialized_) {
+        sync_timestamp_bytes_ = encode_native_double(current_epoch_seconds());
+        sync_timestamp_initialized_ = true;
+      }
+      byte[0] = sync_timestamp_bytes_[sync_timestamp_offset_++];
+    } else {
+      const auto framed = framer_.next_payload_frame(input_, byte);
+      result.consumed_messages += framed.consumed_messages;
     }
-    byte[0] = sync_timestamp_bytes_[sync_timestamp_offset_++];
-  } else {
-    const auto framed = framer_.next_payload_frame(input_, byte);
-    result.consumed_messages += framed.consumed_messages;
-  }
-  ++result.emitted_bytes;
+    ++result.emitted_bytes;
 
-  // Append coded bits straight into pending_bits_ — no intermediate vectors.
-  const auto before = pending_bits_.size();
-  convolutional_.push_bytes_append(byte, pending_bits_);
-  // Scramble the newly appended bits in place.
-  bit_xor_.xor_bits_in_place(std::span<std::uint8_t>(pending_bits_).subspan(before));
-  result.emitted_coded_bits += pending_bits_.size() - before;
+    // Append coded bits straight into pending_bits_ — no intermediate vectors.
+    const auto before = pending_bits_.size();
+    coding_.push_bytes_append(byte, pending_bits_);
+    result.emitted_coded_bits += pending_bits_.size() - before;
 
-  // Pack bits into QAM symbols using a head index instead of erase()ing the
-  // front, then amortize compaction when over half the buffer is consumed.
-  const auto qam_bits = constellation_.bits_per_symbol();
-  while (pending_bits_.size() - pending_bits_head_ >= qam_bits) {
-    const auto symbol = constellation_.bits_to_symbol(
-        std::span<const std::uint8_t>(pending_bits_).subspan(pending_bits_head_, qam_bits));
-    symbols_.push_back(symbol);
-    pending_bits_head_ += qam_bits;
-  }
-  if (pending_bits_head_ > 0U && pending_bits_head_ * 2U >= pending_bits_.size()) {
-    pending_bits_.erase(pending_bits_.begin(),
-                        pending_bits_.begin() + static_cast<std::ptrdiff_t>(pending_bits_head_));
-    pending_bits_head_ = 0U;
-  }
+    // Pack bits into QAM symbols using a head index instead of erase()ing the
+    // front, then amortize compaction when over half the buffer is consumed.
+    const auto qam_bits = constellation_.bits_per_symbol();
+    while (pending_bits_.size() - pending_bits_head_ >= qam_bits) {
+      const auto symbol = constellation_.bits_to_symbol(
+          std::span<const std::uint8_t>(pending_bits_).subspan(pending_bits_head_, qam_bits));
+      symbols_.push_back(symbol);
+      pending_bits_head_ += qam_bits;
+    }
+    if (pending_bits_head_ > 0U && pending_bits_head_ * 2U >= pending_bits_.size()) {
+      pending_bits_.erase(pending_bits_.begin(),
+                          pending_bits_.begin() + static_cast<std::ptrdiff_t>(pending_bits_head_));
+      pending_bits_head_ = 0U;
+    }
+  } while (symbols_.empty());
 }
 
 RealtimeTransmitResult RealtimeTransmitter::push_samples(std::span<Complex> out) {
@@ -668,8 +668,7 @@ void RealtimeTransmitter::set_consumed_message_observer(DelimitedMessageObserver
 RealtimeReceiver::RealtimeReceiver(RealtimePipelineConfig config, SpscRingBuffer<DelimitedMessage>& output)
     : config_(std::move(config)),
       output_(output),
-      viterbi_(config_.convolutional),
-      bit_xor_(config_.aes_key, config_.ctr_counter),
+      coding_(config_.convolutional, config_.coding, config_.aes_key, config_.ctr_counter),
       rf_(config_.rf),
       constellation_(config_.rf.modem.modulation, config_.rf.modem.constellation_profile) {
   validate_realtime_config(config_);
@@ -679,8 +678,7 @@ RealtimeReceiver::RealtimeReceiver(RealtimePipelineConfig config, SpscRingBuffer
 
 void RealtimeReceiver::reset_coded_stream() {
   deframer_.reset();
-  viterbi_.reset();
-  bit_xor_ = Aes128CtrBitXor(config_.aes_key, config_.ctr_counter);
+  coding_.reset();
   sync_timestamp_bytes_ = {};
   sync_timestamp_offset_ = 0;
   sync_timestamp_validated_ = !config_.sync_timestamp.enabled;
@@ -694,11 +692,11 @@ void RealtimeReceiver::reject_stream(RealtimeReceiveResult& result) {
   result.replay_rejected = true;
   stream_aborted_ = true;
   deframer_.reset();
-  viterbi_.reset();
+  coding_.reset();
   sync_timestamp_bytes_ = {};
   sync_timestamp_offset_ = 0;
   sync_timestamp_validated_ = false;
-  bit_xor_ = Aes128CtrBitXor(config_.aes_key, config_.ctr_counter);
+
   rf_.reset();
 }
 
@@ -751,7 +749,7 @@ bool RealtimeReceiver::process_decoded_tokens(std::span<const Token> tokens, Rea
 RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> samples) {
   RealtimeReceiveResult result;
   const auto gaps_before = deframer_.gap_count();
-  std::array<RfStreamSymbol, 512> symbols{};
+  auto& symbols = symbol_buffer_;
   std::size_t offset = 0;
   while (offset < samples.size()) {
     const auto n = std::min<std::size_t>(samples.size() - offset, 512U);
@@ -773,7 +771,7 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
     const auto flush_coded = [&] {
       if (!stream_aborted_ && !coded_bits_buffer_.empty()) {
         message_tokens_buffer_.clear();
-        viterbi_.push_append(coded_bits_buffer_, message_tokens_buffer_);
+        coding_.push_append(coded_bits_buffer_, message_tokens_buffer_);
         result.decoded_bytes += message_tokens_buffer_.size();
         if (!message_tokens_buffer_.empty()) (void)process_decoded_tokens(message_tokens_buffer_, result);
       }
@@ -797,9 +795,7 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
             reject_stream(result);
             break;
           }
-          bit_xor_ = Aes128CtrBitXor(config_.aes_key, config_.ctr_counter, position);
-          recovery_skip_bits_ = position == 0 ? 0 : viterbi_.resume_at_coded_bit(position);
-          if (position == 0) viterbi_.reset();
+          recovery_skip_bits_ = coding_.resume_at_wire_bit(position);
           coded_bit_position_ = position;
           coded_gap_ = false;
         }
@@ -807,13 +803,12 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
       constellation_.symbol_to_bits(symbols[i].value,
                                     std::span<std::uint8_t>(bits).first(constellation_.bits_per_symbol()));
       for (std::size_t bit = 0; bit < constellation_.bits_per_symbol(); ++bit) {
-        const SoftBit soft{.value = bits[bit],
+        const SoftBit soft = symbols[i].has_soft_bits ? symbols[i].soft_bits[bit] : SoftBit{.value = bits[bit],
                            .certain = symbols[i].certain,
                            .confidence = symbols[i].confidence};
-        const auto clear = bit_xor_.xor_soft_bit(soft);
         ++coded_bit_position_;
         if (recovery_skip_bits_) --recovery_skip_bits_;
-        else coded_bits_buffer_.push_back(clear);
+        else coded_bits_buffer_.push_back(soft);
       }
     }
     if (stream_aborted_) {

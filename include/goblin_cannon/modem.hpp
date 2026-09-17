@@ -3,6 +3,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -77,6 +78,9 @@ struct SoftBit {
   std::uint8_t value = 0;
   bool certain = true;
   float confidence = 1.0F;
+  // Optional log(P(bit=0)/P(bit=1)). NaN retains the legacy confidence metric.
+  // A finite zero is an erasure; low reliability is not discarded by a slicer.
+  float log_likelihood_ratio = std::numeric_limits<float>::quiet_NaN();
 };
 
 struct Token {
@@ -113,6 +117,8 @@ public:
   [[nodiscard]] std::uint32_t bits_to_symbol(std::span<const std::uint8_t> bits) const;
   [[nodiscard]] std::uint32_t nearest_symbol(Complex sample) const;
   [[nodiscard]] SymbolDecision decide(Complex sample) const;
+  // Exhaustive max-log Euclidean bit metrics, complex noise variance E|n|^2.
+  void soft_bits(Complex sample, float noise_variance, std::span<SoftBit> out) const;
   void symbol_to_bits(std::uint32_t symbol, std::span<std::uint8_t> out) const;
 
 private:

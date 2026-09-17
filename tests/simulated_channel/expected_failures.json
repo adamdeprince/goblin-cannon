@@ -1,4 +1,10 @@
 {
+  "encoding::B5_encoding_10000_bpsk_interleave32_latency.latency_2_1ms": "The 32-bit block interleaver at 10 kHz exceeds the 2.1 ms added-buffering allowance; measured host p99.9 is 4.248 ms.",
+  "encoding::B5_encoding_10000_bpsk_interleave256_latency.latency_2_1ms": "The 256-bit block interleaver at 10 kHz exceeds the 2.1 ms added-buffering allowance; measured host p99.9 is 79.520 ms.",
+  "encoding::B5_encoding_10000_bpsk_interleave2048_latency.latency_2_1ms": "The 2048-bit block interleaver at 10 kHz exceeds the 2.1 ms added-buffering allowance; measured host p99.9 is 276.762 ms.",
+  "encoding::B5_encoding_24000_bpsk_interleave32_latency.latency_2_1ms": "The 32-bit block interleaver at 24 kHz exceeds the 2.1 ms added-buffering allowance; measured host p99.9 is 2.376 ms.",
+  "encoding::B5_encoding_24000_bpsk_interleave256_latency.latency_2_1ms": "The 256-bit block interleaver at 24 kHz exceeds the 2.1 ms added-buffering allowance; measured host p99.9 is 37.627 ms.",
+  "encoding::B5_encoding_24000_bpsk_interleave2048_latency.latency_2_1ms": "The 2048-bit block interleaver at 24 kHz exceeds the 2.1 ms added-buffering allowance; measured host p99.9 is 183.309 ms.",
   "A8_cochannel_-10dB.authenticated_delivery": "Production provides AES-CTR plus CRC, with no AEAD authentication or authentication-failure counter.",
   "A8_cochannel_-10dB.no_corrupt_messages": "With a co-channel interferer at -10 dB SIR, the message sink receives payloads outside the expected source stream; authenticated delivery is not implemented.",
   "A8_cochannel_0dB.authenticated_delivery": "Production provides AES-CTR plus CRC, with no AEAD authentication or authentication-failure counter.",

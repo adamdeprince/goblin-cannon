@@ -142,7 +142,11 @@ def execute(c, args, known):
                 # block-size-dependent auction choose a different source stream.
                 reference_params=params|dict(chunk_samples=1,host_timing=0,auction_intake=0,
                     selected_messages=",".join(str(int(i)) for i in raw["consumed_ids"]))
+                if params.get("campaign")=="encoding_latency":
+                    reference_params.update(interleaver_rows=0,interleaver_columns=0,diversity_wait_ms=0)
                 reference=probe(args.probe,reference_params)
+                if params.get("campaign")=="encoding_latency":
+                    raw["added_buffering_scope"]="Interleaving and diversity combining wait are disabled only in the intrinsic reference, so their waiting time is included in the 2.1 ms assertion. Coding and RF serialization remain enabled."
                 reference_case=Case(c.name,c.group,c.kind,c.tier,reference_params)
                 record["latency_reference"]=dict(
                     parameters=full_parameters(reference_case,args.git_commit,args.source_digest),
@@ -151,6 +155,8 @@ def execute(c, args, known):
                 if "host_latency_ms" in raw:
                     raw["host_added_software_latency_ms"]=latency_above_reference(raw,reference,"host_latency_ms")
                     raw["host_added_latency_scope"]="Per-message measured total minus one-sample simulated-clock replay of the selected message stream, available at original source times; includes added batching, queueing, CPU and OS scheduling. Intrinsic serialization, modem/FEC and startup remain in the separately reported reference. No physical audio device."
+                    if params.get("campaign")=="encoding_latency":
+                        raw["host_added_latency_scope"] += " Interleaver and diversity combining waits are disabled in the intrinsic reference and are charged as added buffering."
             if c.group=="D1":
                 pipeline=params|dict(mode="messages",bandwidth_hz=10000,modulation="qpsk",fec="1/2",chunk_samples=48,
                                      auction_intake=1,source_load_factor=params["overload"])
@@ -513,7 +519,7 @@ def main():
     parser.add_argument("--seed",type=int,default=None)
     parser.add_argument("--seeds",type=int,nargs="+",help="independent seeds; full declared duration for each")
     parser.add_argument("--profile",choices=("legacy","recovery"),default="legacy")
-    parser.add_argument("--campaign",choices=("matrix","polar_screen","polar_long","psk_quick","psk_screen","psk_followup","psk_snr","psk_latency"))
+    parser.add_argument("--campaign",choices=("matrix","polar_screen","polar_long","psk_quick","psk_screen","psk_followup","psk_snr","psk_latency","encoding_quick","encoding_screen","encoding_followup","encoding_snr","encoding_latency"))
     parser.add_argument("--git-commit")
     parser.add_argument("--source-digest")
     parser.add_argument("--resume",action="store_true",help="reuse only parameter-identical records")

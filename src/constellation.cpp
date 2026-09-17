@@ -349,6 +349,24 @@ SymbolDecision Constellation::decide(Complex sample) const {
           .confidence = confidence};
 }
 
+void Constellation::soft_bits(Complex sample, float noise_variance, std::span<SoftBit> out) const {
+  if (out.size() < bits_per_symbol_ || !std::isfinite(noise_variance) || noise_variance <= 0)
+    throw std::invalid_argument("soft demapping requires a positive finite noise variance and enough output bits");
+  for (std::size_t bit = 0; bit < bits_per_symbol_; ++bit) {
+    float distance[2] = {INFINITY, INFINITY};
+    for (std::uint32_t symbol = 0; symbol < size(); ++symbol) {
+      const auto value = (symbol >> (bits_per_symbol_ - bit - 1U)) & 1U;
+      distance[value] = std::min(distance[value], std::norm(sample - map_symbol(symbol)));
+    }
+    // Bounding prevents numeric overflow; it is not a fitted constellation or
+    // a learned noise model. Nonfinite samples are explicit zero-information bits.
+    const auto raw = (distance[1] - distance[0]) / noise_variance;
+    const auto llr = std::isfinite(raw) ? std::clamp(raw, -64.0F, 64.0F) : 0.0F;
+    out[bit] = {.value = static_cast<std::uint8_t>(llr < 0), .certain = llr != 0,
+                .confidence = std::tanh(std::abs(llr) * 0.5F), .log_likelihood_ratio = llr};
+  }
+}
+
 void Constellation::symbol_to_bits(std::uint32_t symbol, std::span<std::uint8_t> out) const {
   if (out.size() < bits_per_symbol_) {
     throw std::invalid_argument("output span too small for symbol bits");
