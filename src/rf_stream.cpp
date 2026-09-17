@@ -1,6 +1,7 @@
 #include "goblin_cannon/rf_stream.hpp"
 
 #include "rf_equalizer.hpp"
+#include "goblin_cannon/convolutional.hpp"
 
 #include <algorithm>
 #include <array>
@@ -215,17 +216,50 @@ std::vector<Complex> build_reference_preamble(const RfStreamConfig& config) {
   return encode_qpsk_symbols(config.modem, config.acquisition_sequence);
 }
 
+constexpr std::size_t compact_header_bytes = 16;
+constexpr std::size_t compact_coded_symbols = compact_header_bytes * 8U + 6U;
+constexpr std::size_t header_probe_interval = 16;
+constexpr std::size_t header_probe_length = 4;
+
+std::vector<std::uint8_t> header_wire_bits(const RfStreamConfig& config, const RfStreamHeader& header) {
+  if (!config.compact_header) return bytes_to_repeated_bits(serialize_header(header), config.header_repetition);
+  // Mode, pilot cadence and frame size already come from the control link.
+  // The CRC binds them too, so mismatched configuration cannot validate.
+  std::array<std::uint8_t, serialized_header_bytes> storage{};
+  std::size_t offset = 0;
+  append_u32_be(storage, offset, header.schedule_epoch_low);
+  append_u64_be(storage, offset, header.frame_counter_start);
+  append_u32_be(storage, offset, stream_header_crc32(header));
+  PuncturedConvolutionalEncoder encoder;
+  auto coded = encoder.push_bytes(std::span(storage).first(compact_header_bytes));
+  for (std::size_t i = 0; i < 6; ++i) encoder.push_bit_append(0, coded);
+  std::vector<std::uint8_t> bits;
+  Constellation qpsk(Modulation::qpsk);
+  std::array<std::uint8_t, 2> probe{};
+  for (std::size_t i = 0; i < compact_coded_symbols; ++i) {
+    if (i != 0 && i % header_probe_interval == 0) {
+      for (std::size_t j = 0; j < header_probe_length; ++j) {
+        qpsk.symbol_to_bits(config.equalizer_training_sequence[(i+j) % config.equalizer_training_sequence.size()], probe);
+        bits.insert(bits.end(), probe.begin(), probe.end());
+      }
+    }
+    bits.insert(bits.end(), coded.begin()+static_cast<std::ptrdiff_t>(2*i), coded.begin()+static_cast<std::ptrdiff_t>(2*i+2));
+  }
+  return bits;
+}
+
 std::vector<Complex> build_training_header_samples(const RfStreamConfig& config, const RfStreamHeader& header) {
   auto bits = qpsk_symbols_to_bits(config.equalizer_training_sequence);
-  const auto header_bytes = serialize_header(header);
-  auto repeated = bytes_to_repeated_bits(header_bytes, config.header_repetition);
+  auto repeated = header_wire_bits(config, header);
   bits.insert(bits.end(), repeated.begin(), repeated.end());
   return encode_bits(config.modem, Modulation::qpsk, bits);
 }
 
 std::size_t expected_training_header_bits(const RfStreamConfig& config) {
   return config.equalizer_training_sequence.size() * 2U +
-         serialized_header_bytes * 8U * config.header_repetition;
+         (config.compact_header ? 2U * (compact_coded_symbols +
+              (compact_coded_symbols-1U)/header_probe_interval*header_probe_length)
+                               : serialized_header_bytes * 8U * config.header_repetition);
 }
 
 std::vector<std::uint8_t> majority_header_bytes(std::span<const std::uint8_t> repeated_bits,
@@ -515,6 +549,25 @@ public:
         continue;
       }
 
+      if (!finalizing_ && config_.recovery_interval_frames && segment_payload_symbols_ ==
+          static_cast<std::uint64_t>(config_.recovery_interval_frames) * config_.symbols_per_frame) {
+        if (segment_padding_ < config_.equalizer_delay_symbols) {
+          push_modulation_symbol(config_.pilot_sequence[segment_padding_ % config_.pilot_sequence.size()],
+                                 out.subspan(result.produced_samples), result);
+          ++segment_padding_;
+          continue;
+        }
+        const auto tail = data_encoder_.drain(out.subspan(result.produced_samples));
+        result.produced_samples += tail.produced;
+        if (tail.produced != 0) continue;
+        const auto next_frame = header_.frame_counter_start + config_.recovery_interval_frames;
+        start_epoch(next_frame);
+        periodic_transition_ = true;
+        continue;
+      }
+
+      periodic_transition_ = false;
+
       if (input_offset >= symbols.size()) {
         break;
       }
@@ -525,6 +578,7 @@ public:
       push_modulation_symbol(symbol, out.subspan(result.produced_samples), result);
       --symbols_until_pilot_;
       ++result.consumed_symbols;
+      ++segment_payload_symbols_;
     }
 
     result.state = state_;
@@ -532,6 +586,12 @@ public:
   }
 
   RfStreamEncodeResult drain(std::span<Complex> out) {
+    if (!finalizing_ && config_.recovery_interval_frames && (periodic_transition_ || segment_payload_symbols_ ==
+        static_cast<std::uint64_t>(config_.recovery_interval_frames) * config_.symbols_per_frame)) {
+      auto result = push_symbols({}, out);
+      if (result.produced_samples != 0) return result;
+    }
+    finalizing_ = true;
     if (!closing_ && drain_padding_remaining_ != 0) {
       std::array<std::uint32_t, 512> padding{};
       auto result = push_symbols(std::span(padding).first(drain_padding_remaining_), out);
@@ -559,6 +619,10 @@ public:
     drain_padding_remaining_ = config_.equalizer_delay_symbols;
     pilot_index_ = 0;
     closing_ = false;
+    finalizing_ = false;
+    periodic_transition_ = false;
+    segment_payload_symbols_ = 0;
+    segment_padding_ = 0;
     header_ = {};
   }
 
@@ -582,6 +646,10 @@ private:
   std::uint32_t startup_pilots_remaining_ = 0;
   std::size_t pilot_index_ = 0;
   bool closing_ = false;
+  bool finalizing_ = false;
+  bool periodic_transition_ = false;
+  std::uint64_t segment_payload_symbols_ = 0;
+  std::size_t segment_padding_ = 0;
   std::size_t drain_padding_remaining_ = 0;
 };
 
@@ -627,7 +695,7 @@ public:
     bool progressed = true;
     while (progressed) {
       progressed = false;
-      if (state_ == RfStreamState::search && buffer_.size() >= reference_.size()) {
+      if ((state_ == RfStreamState::search || state_ == RfStreamState::recovering) && buffer_.size() >= reference_.size()) {
         progressed = try_acquire(result);
         continue;
       }
@@ -638,6 +706,8 @@ public:
       }
       if (state_ == RfStreamState::locked && result.produced_symbols < out.size()) {
         progressed = decode_payload_symbols(out, result);
+        // Return the old segment's symbols before publishing a later header.
+        if (state_ == RfStreamState::recovering) break;
       }
     }
 
@@ -650,6 +720,7 @@ public:
   void reset() {
     state_ = RfStreamState::search;
     buffer_.clear();
+    recent_audio_.clear();
     first_sample_index_ = 0;
     qpsk_decoder_.reset();
     data_decoder_.reset();
@@ -703,10 +774,12 @@ private:
       return false;
     }
 
-    // The peak may still be rising if its window ends at the last available
-    // sample. Retain it until the next sample can confirm the peak; otherwise
-    // a chunk ending just before the true preamble end can acquire early.
-    if (scan.sample_index + reference_.size() == buffer_.size()) {
+    // A partially observed preamble can have a local maximum before its true
+    // correlation peak. This matters when joining a running stream: preceding
+    // payload supplies candidates that do not exist at sample zero. Observe
+    // one full symbol beyond the candidate before committing its timing.
+    const auto confirmation = static_cast<std::size_t>(std::ceil(describe(config_.modem).samples_per_symbol));
+    if (scan.sample_index + reference_.size() + confirmation > buffer_.size()) {
       return false;
     }
 
@@ -783,9 +856,10 @@ private:
     const auto delay = config_.equalizer_delay_symbols;
     const auto expected_symbols = expected_training_header_bits(config_) / 2U + delay;
     std::vector<Complex> symbols(expected_symbols + 8U);
+    std::vector<Complex> halves(config_.fractionally_spaced_equalization ? symbols.size() : 0);
     qpsk_decoder_.reset();
     const auto decoded = qpsk_decoder_.push_samples_matched(
-        correct_samples(std::span<const Complex>(buffer_).first(training_header_input_size())), symbols);
+        correct_samples(std::span<const Complex>(buffer_).first(training_header_input_size())), symbols, halves);
     if (decoded.produced_symbols < expected_symbols) {
       return false;
     }
@@ -802,7 +876,7 @@ private:
       equalizer_.restart_training_pass();
       if (pass == 12 && config_.recursive_equalization) equalizer_.start_recursive_tracking();
       for (std::size_t i = 0; i < training_count + delay; ++i) {
-        const auto observed = equalizer_.filter(symbols[i]);
+        const auto observed = equalizer_.filter(symbols[i], halves.empty() ? Complex{} : halves[i]);
         const auto desired = i >= delay ? qpsk.map_symbol(config_.equalizer_training_sequence[i-delay]) : Complex{};
         if (pass + 1 == passes && i >= guard) {
           error_power += std::norm(desired - observed);
@@ -818,18 +892,43 @@ private:
     }
 
     std::vector<std::uint8_t> repeated_bits;
+    std::vector<SoftBit> coded_header;
     repeated_bits.reserve(serialized_header_bytes * 8U * config_.header_repetition);
+    std::size_t header_data_index = 0, header_probe_index = 0;
     for (std::size_t i = training_count + delay; i < expected_symbols; ++i) {
-      const auto observed = equalizer_.filter(symbols[i]);
+      auto observed = equalizer_.filter(symbols[i], halves.empty() ? Complex{} : halves[i]);
+      if (config_.compact_header && header_data_index != 0 && header_data_index % header_probe_interval == 0 &&
+          header_probe_index < header_probe_length) {
+        const auto known = config_.equalizer_training_sequence[(header_data_index+header_probe_index) %
+            config_.equalizer_training_sequence.size()];
+        observed = equalizer_.track_pilot_gain(qpsk.map_symbol(known), observed);
+        equalizer_.update(qpsk.map_symbol(known), observed, equalizer_step, true, true);
+        ++header_probe_index;
+        continue;
+      }
       const auto decision = qpsk.decide(observed);
       std::array<std::uint8_t, 2> bits{};
       qpsk.symbol_to_bits(decision.symbol, bits);
       repeated_bits.insert(repeated_bits.end(), bits.begin(), bits.end());
+      for (const auto bit : bits) coded_header.push_back({bit, decision.confidence >= tracking_confidence, decision.confidence});
       equalizer_.update(qpsk.map_symbol(decision.symbol), observed, equalizer_step,
                         decision.confidence >= tracking_confidence);
+      ++header_data_index;
+      header_probe_index = 0;
     }
-    const auto header_bytes = majority_header_bytes(repeated_bits, config_.header_repetition);
-    auto parsed = parse_header(header_bytes);
+    std::optional<RfStreamHeader> parsed;
+    if (config_.compact_header) {
+      const auto decoded_header = SoftViterbiDecoder().decode(coded_header, compact_coded_symbols);
+      std::array<std::uint8_t, compact_header_bytes> bytes{};
+      for (std::size_t i = 0; i < bytes.size(); ++i) bytes[i] = decoded_header.bytes[i].value;
+      auto candidate = placeholder_header();
+      candidate.schedule_epoch_low = read_u32_be(bytes, 0);
+      candidate.frame_counter_start = read_u64_be(bytes, 4);
+      candidate.crc32 = read_u32_be(bytes, 12);
+      if (candidate.crc32 == stream_header_crc32(candidate)) parsed = candidate;
+    } else {
+      parsed = parse_header(majority_header_bytes(repeated_bits, config_.header_repetition));
+    }
     if (!parsed.has_value()) {
       lose_lock(result);
       return true;
@@ -845,6 +944,7 @@ private:
     }
 
     header_ = *parsed;
+    recent_audio_.clear();
     frame_counter_ = parsed->frame_counter_start;
     frame_symbol_offset_ = 0;
     symbols_until_pilot_ = config_.pilot_interval_symbols;
@@ -870,9 +970,17 @@ private:
   bool decode_payload_symbols(std::span<RfStreamSymbol> out, RfStreamReceiveResult& result) {
     if (pending_symbol_offset_ == pending_symbols_.size()) {
       pending_symbols_.resize(256);
-      const auto decoded = data_decoder_.push_samples_matched(correct_samples(buffer_), pending_symbols_);
+      pending_halves_.resize(config_.fractionally_spaced_equalization ? pending_symbols_.size() : 0);
+      const auto count = config_.recovery_interval_frames ? std::min<std::size_t>(buffer_.size(), 256) : buffer_.size();
+      const auto audio = std::span<const Complex>(buffer_).first(count);
+      const auto decoded = data_decoder_.push_samples_matched(correct_samples(audio), pending_symbols_, pending_halves_);
+      if (config_.recovery_interval_frames) {
+        recent_audio_.insert(recent_audio_.end(), audio.begin(), audio.end());
+        const auto keep = reference_.size() * 2U + 256U;
+        if (recent_audio_.size() > keep) recent_audio_.erase(recent_audio_.begin(), recent_audio_.end()-static_cast<std::ptrdiff_t>(keep));
+      }
       sync_.sample_clock_error_ppm = data_decoder_.recovered_clock_ppm();
-      erase_prefix(buffer_, buffer_.size(), first_sample_index_);
+      erase_prefix(buffer_, count, first_sample_index_);
       pending_symbols_.resize(decoded.produced_symbols);
       pending_symbol_offset_ = 0;
       if (pending_symbols_.empty()) {
@@ -880,7 +988,8 @@ private:
       }
     }
     while (pending_symbol_offset_ < pending_symbols_.size() && result.produced_symbols < out.size()) {
-      auto observed = equalizer_.filter(pending_symbols_[pending_symbol_offset_++]);
+      const auto index = pending_symbol_offset_++;
+      auto observed = equalizer_.filter(pending_symbols_[index], pending_halves_.empty() ? Complex{} : pending_halves_[index]);
       if (!std::isfinite(observed.real()) || !std::isfinite(observed.imag())) {
         lose_lock(result);
         return true;
@@ -888,6 +997,11 @@ private:
       if (startup_pilots_remaining_ == 0 && symbols_until_pilot_ == 0) {
         observed = equalizer_.track_pilot_gain(
             data_constellation_.map_symbol(config_.pilot_sequence[pilot_index_]), observed);
+      } else if (config_.compact_header && startup_discard_symbols_ == 0 && startup_pilots_remaining_ != 0) {
+        const auto elapsed = startup_pilot_symbols(config_) - startup_pilots_remaining_;
+        if (elapsed >= equalizer_.memory_symbols())
+          observed = equalizer_.track_pilot_gain(data_constellation_.map_symbol(
+              config_.pilot_sequence[elapsed % config_.pilot_sequence.size()]), observed);
       }
       const auto decision = data_constellation_.decide(observed);
       if (!consume_modulation_symbol(decision, observed, out, result)) {
@@ -957,13 +1071,17 @@ private:
     if (frame_symbol_offset_ == config_.symbols_per_frame) {
       frame_symbol_offset_ = 0;
       ++frame_counter_;
+      if (config_.recovery_interval_frames && frame_counter_ - header_->frame_counter_start == config_.recovery_interval_frames) {
+        enter_recovery();
+        return false;
+      }
     }
     return true;
   }
 
   void lose_lock(RfStreamReceiveResult& result) {
     result.lock_lost = true;
-    state_ = RfStreamState::search;
+    state_ = config_.recovery_interval_frames ? RfStreamState::recovering : RfStreamState::search;
     qpsk_decoder_.reset();
     data_decoder_.reset();
     bad_pilots_ = 0;
@@ -975,8 +1093,28 @@ private:
     symbols_until_pilot_ = config_.pilot_interval_symbols;
     startup_pilots_remaining_ = 0;
     pilot_index_ = 0;
-    erase_prefix(buffer_, buffer_.size(), first_sample_index_);
+    if (config_.recovery_interval_frames) {
+      restore_recent_audio();
+    } else {
+      erase_prefix(buffer_, buffer_.size(), first_sample_index_);
+    }
     result.state = RfStreamState::lock_lost;
+  }
+
+  void restore_recent_audio() {
+    first_sample_index_ -= recent_audio_.size();
+    buffer_.insert(buffer_.begin(), recent_audio_.begin(), recent_audio_.end());
+    recent_audio_.clear();
+  }
+
+  void enter_recovery() {
+    // The receive filter may have read ahead into the next preamble. Retain
+    // that raw audio when leaving the old segment; never search sliced data.
+    restore_recent_audio();
+    state_ = RfStreamState::recovering;
+    data_decoder_.reset();
+    pending_symbols_.clear();
+    pending_symbol_offset_ = 0;
   }
 
   RfStreamConfig config_;
@@ -998,6 +1136,7 @@ private:
   std::uint64_t carrier_origin_sample_ = 0;
   std::vector<Complex> corrected_samples_;
   std::vector<Complex> pending_symbols_;
+  std::vector<Complex> pending_halves_, recent_audio_;
   std::size_t pending_symbol_offset_ = 0;
   std::uint64_t frame_counter_ = 0;
   std::uint32_t frame_symbol_offset_ = 0;

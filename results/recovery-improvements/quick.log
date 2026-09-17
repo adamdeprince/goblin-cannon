@@ -1,0 +1,15 @@
+simulated channel: 237 cases, tier=quick, jobs=4
+simulated channel: 16/237 A4_10000_64qam_drift_10min fail
+simulated channel: 50/237 A4_10000_64qam_offset_3 THRESHOLD_TBD
+simulated channel: 52/237 A4_10000_64qam_offset_5 fail
+simulated channel: 75/237 B1_10000_64qam_-20dB_1_100 fail
+simulated channel: 82/237 B1_10000_64qam_-20dB_10_100 fail
+simulated channel: 100/237 B1_24000_64qam_-20dB_1_100 fail
+simulated channel: 118/237 B1_24000_64qam_20dB_10_100 fail
+simulated channel: 121/237 B1_24000_64qam_20dB_10_1000 fail
+simulated channel: 150/237 B2_24000_16qam_soft_5pct characterized
+simulated channel: 184/237 C2_24000_acquire_0dB fail
+simulated channel: 185/237 C2_24000_acquire_3dB fail
+simulated channel: 200/237 C4_10000_qpsk_random THRESHOLD_TBD
+simulated channel: 237/237 A4_24000_64qam_200ppm_10min characterized
+simulated channel: 258.128s {'pass': 67, 'characterized': 66, 'THRESHOLD_TBD': 91, 'fail': 9, 'xfail': 1, 'unavailable': 3}; results-final/SUMMARY.md

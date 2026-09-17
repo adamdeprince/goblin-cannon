@@ -82,6 +82,10 @@ def make_restart_request(pb2: object, args: argparse.Namespace) -> object:
     request.equalizer_delay_symbols = args.equalizer_delay_symbols
     request.equalizer_feedforward_taps = args.equalizer_feedforward_taps
     request.equalizer_feedback_taps = args.equalizer_feedback_taps
+    request.compact_header = args.compact_header
+    request.recovery_interval_frames = args.recovery_interval_frames
+    request.fractionally_spaced_equalization = args.fractionally_spaced_equalization
+    request.equalizer_reselect_interval = args.equalizer_reselect_interval
     request.pilot_sequence.extend([0, 1, 2, 3])
     request.fec.constraint_length = 7
     request.fec.generator0 = 0o171
@@ -234,6 +238,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--equalizer-delay-symbols", type=int, default=0)
     parser.add_argument("--equalizer-feedforward-taps", type=int, default=3)
     parser.add_argument("--equalizer-feedback-taps", type=int, default=4)
+    parser.add_argument("--compact-header", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--recovery-interval-frames", type=int, default=0)
+    parser.add_argument("--fractionally-spaced-equalization", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--equalizer-reselect-interval", type=int, default=0)
     parser.add_argument("--sync-timestamp", action="store_true")
     parser.add_argument("--sync-timestamp-max-skew-seconds", type=float, default=0.1)
     parser.add_argument("--active-bank", type=int, choices=(0, 1), default=0)

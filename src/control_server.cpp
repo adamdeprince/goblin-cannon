@@ -175,6 +175,12 @@ ReceiverRestartConfig parse_restart_request(const pb::RestartRequest& request) {
   if (request.has_equalizer_delay_symbols()) {
     config.pipeline.rf.equalizer_delay_symbols = request.equalizer_delay_symbols();
   }
+  if (request.has_compact_header()) config.pipeline.rf.compact_header = request.compact_header();
+  if (request.has_recovery_interval_frames()) config.pipeline.rf.recovery_interval_frames = request.recovery_interval_frames();
+  if (request.has_fractionally_spaced_equalization())
+    config.pipeline.rf.fractionally_spaced_equalization = request.fractionally_spaced_equalization();
+  if (request.has_equalizer_reselect_interval())
+    config.pipeline.rf.equalizer_reselect_interval = request.equalizer_reselect_interval();
   if (request.has_equalizer_feedforward_taps()) {
     config.pipeline.rf.equalizer_feedforward_taps = request.equalizer_feedforward_taps();
   }

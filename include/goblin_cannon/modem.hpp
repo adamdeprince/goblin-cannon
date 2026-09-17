@@ -190,7 +190,8 @@ public:
   // Matched-filter output before AGC or decisions, for RF carrier recovery and
   // equalization. Shares streaming state with the other decode entry points.
   DecodeSymbolsResult push_samples_matched(std::span<const Complex> samples,
-                                          std::span<Complex> out_symbols);
+                                          std::span<Complex> out_symbols,
+                                          std::span<Complex> half_symbols = {});
   void reset();
 
 private:
@@ -198,6 +199,7 @@ private:
   [[nodiscard]] Complex matched_filter_symbol(std::int64_t symbol_index) const;
   [[nodiscard]] Complex matched_filter_at(double symbol_time) const;
   void advance_symbol(Complex matched);
+  void prepare_fractional_filter();
   void append_sample(Complex sample);
   void prune_samples(std::int64_t decoded_symbol);
   Complex apply_agc(Complex sample, std::uint32_t decided_symbol);

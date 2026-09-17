@@ -1,0 +1,4 @@
+simulated channel: 54 cases, tier=full, jobs=4
+simulated channel: 50/54 E2_polar_long_24000_64qam_high_lat_quiet characterized
+simulated channel: 54/54 E2_polar_long_24000_64qam_high_lat_quiet characterized
+simulated channel: 3152.074s {'characterized': 54}; results-final/SUMMARY.md

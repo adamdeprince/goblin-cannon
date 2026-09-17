@@ -2,9 +2,22 @@
 
 All results use simulated channels. No transmission or RF equipment measurement is represented.
 
+## Simulated channel follow-up: continuous recovery
+
+The latest follow-up adds recurring acquisition/training markers, a protected
+compact header, periodic sparse tap reselection and two matched samples per
+symbol. It reports production-message delivery, freshness and recovery alongside
+raw RF frames, with three independent seeds and longer polar runs. The complete
+quick/full matrix was rerun on `avx10`; the requested quiet-host rerun awaits
+source-copy approval for `naamah`. Added-processing latency and transmission/modem
+delay remain separate. Runtime overruns and remaining failures are explicit.
+
+[Changes, comparisons and remaining limits](recovery-improvements/REPORT.md) ·
+[All group tables and open thresholds](recovery-improvements/SUMMARY.md).
+
 ## Simulated channel follow-up: fixes #2–5
 
-The latest follow-up covers clock/gain tracking, delayed adaptive equalization,
+This earlier follow-up covers clock/gain tracking, delayed adaptive equalization,
 the added-processing latency budget, source freshness, receiver sequencing and
 explicit gaps. It includes AVX-512 validation on `avx10`, quiet-host timing on
 `naamah`, and an independent seed. Polar reception and other remaining findings
@@ -25,7 +38,7 @@ additional co-channel source-integrity failure, retained as `xfail`.
 
 [Fix, regression evidence, updated defects and quiet-host results](24khz-header-fix/FIX.md).
 The original campaign tables below are historical and retain their original
-source hashes. The full characterization sweep has not been rerun after this fix.
+source hashes. This follow-up did not rerun the full characterization sweep.
 
 ## Simulated channel quiet-host latency retest before the header fix
 

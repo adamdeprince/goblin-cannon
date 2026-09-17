@@ -20,6 +20,7 @@ enum class RfStreamState {
   locked,
   lock_lost,
   protocol_error,
+  recovering,
 };
 
 struct AcquisitionResult {
@@ -58,6 +59,13 @@ struct RfStreamConfig {
   std::uint32_t symbols_per_frame = 1024;
   std::uint32_t pilot_interval_symbols = 128;
   std::uint8_t header_repetition = 3;
+  // Configured over fiber at both ends. Compact headers carry only epoch,
+  // absolute frame counter and CRC, with rate-1/2 FEC and embedded training.
+  bool compact_header = false;
+  // Zero retains continuous legacy framing. Nonzero inserts a fresh preamble
+  // and training block after this many payload frames, without restarting FEC
+  // or the encryption keystream.
+  std::uint32_t recovery_interval_frames = 0;
   // Minimum normalized correlation and relative peak prominence for acquisition.
   float acquisition_confidence_threshold = 0.35F;
   float pilot_confidence_threshold = 0.20F;
@@ -78,6 +86,11 @@ struct RfStreamConfig {
   // stronger delayed path without forcing an unstable minimum-phase inverse.
   // Adds this many symbols of modem delay; must match at both ends.
   std::uint32_t equalizer_delay_symbols = 0;
+  // Preserve the configured feedforward span, sampling it at T/2 (2*N-1 taps).
+  bool fractionally_spaced_equalization = false;
+  // Revisit sparse RLS support after this many reliable updates; zero freezes
+  // the initial selection. Inactive taps receive shadow NLMS updates.
+  std::uint32_t equalizer_reselect_interval = 0;
 };
 
 struct RfStreamEncodeResult {

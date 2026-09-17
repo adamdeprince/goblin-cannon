@@ -393,13 +393,22 @@ DecodeSymbolsResult Decoder::push_samples_symbols(std::span<const Complex> sampl
 }
 
 DecodeSymbolsResult Decoder::push_samples_matched(std::span<const Complex> samples,
-                                                  std::span<Complex> out_symbols) {
+                                                  std::span<Complex> out_symbols,
+                                                  std::span<Complex> half_symbols) {
+  if (!half_symbols.empty()) {
+    if (half_symbols.size() < out_symbols.size()) throw std::invalid_argument("half-symbol output too small");
+    prepare_fractional_filter();
+  }
   for (const auto sample : samples) {
     append_sample(sample);
   }
   DecodeSymbolsResult result{.consumed_samples = samples.size()};
   while (result.produced_symbols < out_symbols.size() && can_decode_next_symbol()) {
     const auto sample = matched_filter_symbol(next_symbol_index_);
+    if (!half_symbols.empty()) {
+      const auto time = sample_clock_recovery_ ? next_symbol_time_ : next_symbol_index_ + timing_offset_symbols_;
+      half_symbols[result.produced_symbols] = matched_filter_at(time - 0.5);
+    }
     out_symbols[result.produced_symbols++] = sample;
     advance_symbol(sample);
     prune_samples(next_symbol_index_);
@@ -412,7 +421,11 @@ void Decoder::set_sample_clock_recovery(bool enabled) {
     throw std::logic_error("configure sample clock recovery before feeding audio");
   }
   sample_clock_recovery_ = enabled;
-  if (enabled && fractional_rrc_.empty()) {
+  if (enabled) prepare_fractional_filter();
+}
+
+void Decoder::prepare_fractional_filter() {
+  if (fractional_rrc_.empty()) {
     // Interpolate the pulse, not the received symbols. The table avoids
     // trigonometric work in both the symbol and midpoint matched filters.
     fractional_rrc_.resize(config_.filter_span_symbols * 1024U + 1U);
@@ -534,7 +547,7 @@ void Decoder::append_sample(Complex sample) {
 void Decoder::prune_samples(std::int64_t decoded_symbol) {
   const double half_span = static_cast<double>(config_.filter_span_symbols) / 2.0;
   const double symbol_time = sample_clock_recovery_ ? next_symbol_time_ - 1.0
-      : static_cast<double>(decoded_symbol) + timing_offset_symbols_;
+      : static_cast<double>(decoded_symbol) + timing_offset_symbols_ - (fractional_rrc_.empty() ? 0.0 : 1.0);
   const auto keep_from = static_cast<std::int64_t>(
       std::floor((symbol_time - half_span) * info_.samples_per_symbol)) - 1;
   if (keep_from <= first_sample_index_) {

@@ -16,7 +16,7 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from catalog import (Case, DEFAULTS, OPEN_THRESHOLDS, PRESETS, full_parameters, matrix)
+from catalog import (Case, DEFAULTS, OPEN_THRESHOLDS, PRESETS, RECOVERY_PROFILE, full_parameters, matrix)
 from metrics import METRIC_DEFINITIONS, check, percentiles, summarize, latency_above_reference
 
 REPO=Path(__file__).resolve().parents[2]
@@ -66,7 +66,7 @@ def evaluate(c, raw, metrics, known):
     checks=[]
     for name in c.checks:
         failure=check(name, raw, metrics)
-        reason=known.get(c.name+"."+name)
+        reason=expected_reason(c,name,known)
         status=("xpass" if reason else "pass") if failure is None else "xfail" if reason else "fail"
         checks.append(dict(assertion=name, status=status, reason=reason if status=="xfail" else failure))
     if any(x["status"] in ("fail","xpass") for x in checks):
@@ -78,6 +78,11 @@ def evaluate(c, raw, metrics, known):
     else:
         status="characterized" if c.kind=="characterize" else "pass"
     return status, checks
+
+
+def expected_reason(c, name, known):
+    key=c.name+"."+name
+    return known.get(c.parameters.get("rf_profile","legacy")+"::"+key,known.get(key))
 
 
 def execute(c, args, known):
@@ -177,7 +182,7 @@ def execute(c, args, known):
             if "host_added_software_latency_ms" in host:
                 p999=host["host_added_software_latency_ms_percentiles"]["p99_9"]
                 failure=p999 is None or p999>2.1
-                reason=known.get(c.name+".latency_2_1ms")
+                reason=expected_reason(c,"latency_2_1ms",known)
                 host["added_software_latency_assertion"]={"threshold_ms":2.1,"percentile":"p99.9",
                     "status":("xfail" if reason else "fail") if failure else "pass",
                     "reason":reason if failure else None,"observed_ms":p999,"scope":host["host_added_latency_scope"]}
@@ -506,6 +511,9 @@ def main():
     parser.add_argument("--results",type=Path,default=REPO/"results")
     parser.add_argument("--jobs",type=int,default=4)
     parser.add_argument("--seed",type=int,default=None)
+    parser.add_argument("--seeds",type=int,nargs="+",help="independent seeds; full declared duration for each")
+    parser.add_argument("--profile",choices=("legacy","recovery"),default="legacy")
+    parser.add_argument("--campaign",choices=("matrix","polar_screen","polar_long"))
     parser.add_argument("--git-commit")
     parser.add_argument("--source-digest")
     parser.add_argument("--resume",action="store_true",help="reuse only parameter-identical records")
@@ -516,7 +524,15 @@ def main():
     args=parser.parse_args()
     if args.jobs<1:parser.error("--jobs must be positive")
     if args.seed is not None and not 0<=args.seed<2**32:parser.error("--seed must be an unsigned 32-bit integer")
+    if args.seed is not None and args.seeds:parser.error("choose --seed or --seeds")
+    if args.seeds and (len(args.seeds)!=len(set(args.seeds)) or any(not 0<=s<2**32 for s in args.seeds)):
+        parser.error("--seeds must be distinct unsigned 32-bit integers")
     all_cases=matrix()
+    if args.profile=="recovery":
+        for c in all_cases:
+            if c.parameters.get("campaign","matrix")=="matrix":
+                c.parameters.update(RECOVERY_PROFILE)
+                c.parameters["rf_profile"]="recovery"
     if args.recordings:
         manifest=json.loads(args.recordings.read_text())
         all_cases=[c for c in all_cases if c.group!="E4"]
@@ -534,7 +550,11 @@ def main():
             all_cases.append(case("E4",f"recording_{index}","characterize","full",noise_file=str(path),
                                   bandwidth_hz=10000,snr_db=20,duration_s=duration,recording_provenance=entry,
                                   notes=["Receive-only recorded noise bed; no looping; simulated channel only."]))
-    cases=[c for c in all_cases if c.tier==args.tier and c.group not in args.exclude_group and (not args.group or c.group in args.group) and (not args.case or c.name in args.case)]
+    cases=[c for c in all_cases if c.tier==args.tier and c.group not in args.exclude_group and (not args.group or c.group in args.group) and (not args.case or c.name in args.case)
+           and (not args.campaign or c.parameters.get("campaign","matrix")==args.campaign)]
+    if args.seeds:
+        cases=[copy.deepcopy(c) for c in cases for _ in args.seeds]
+        for i,c in enumerate(cases):c.parameters["seed"]=args.seeds[i%len(args.seeds)]
     if args.list:
         print(canonical({"report_header":"simulated channel manifest","tier":args.tier,"count":len(cases),
                          "cases":[dict(name=c.name,kind=c.kind,tier=c.tier,parameters=c.parameters,unavailable=c.unavailable) for c in cases]}),end="")
@@ -580,8 +600,8 @@ def main():
     execution=dict(report_header="simulated channel non-canonical execution observations",tier=args.tier,
                    elapsed_seconds=elapsed,budget_seconds={"quick":120,"full":1800,"soak":43200}[args.tier],
                    jobs=args.jobs,host=platform.platform(),python=sys.version,selected_cases=len(cases),executed_cases=len(planned),statuses=dict(statuses),
-                   complete_tier=not args.group and not args.exclude_group and not args.case and not args.resume,
-                   selection=dict(groups=args.group,excluded_groups=args.exclude_group,cases=args.case,seed=args.seed,resume=args.resume),
+                   complete_tier=not args.group and not args.exclude_group and not args.case and not args.resume and not args.campaign,
+                   selection=dict(groups=args.group,excluded_groups=args.exclude_group,cases=args.case,seed=args.seed,seeds=args.seeds,profile=args.profile,campaign=args.campaign,resume=args.resume),
                    git_commit=args.git_commit,source_tree_sha256=args.source_digest,
                    parameter_records=[f"{c.name}/{c.parameters['seed']}.json" for c in cases])
     serialized=json.dumps(execution,indent=2,sort_keys=True)+"\n"

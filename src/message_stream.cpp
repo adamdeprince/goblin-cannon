@@ -685,6 +685,9 @@ void RealtimeReceiver::reset_coded_stream() {
   sync_timestamp_offset_ = 0;
   sync_timestamp_validated_ = !config_.sync_timestamp.enabled;
   stream_aborted_ = false;
+  coded_bit_position_ = 0;
+  recovery_skip_bits_ = 0;
+  coded_gap_ = false;
 }
 
 void RealtimeReceiver::reject_stream(RealtimeReceiveResult& result) {
@@ -759,7 +762,7 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
     result.header_valid = result.header_valid || decoded.header_valid;
     result.lock_lost = result.lock_lost || decoded.lock_lost;
 
-    if (decoded.header_valid || decoded.lock_lost) {
+    if (!config_.rf.recovery_interval_frames && (decoded.header_valid || decoded.lock_lost)) {
       if (decoded.lock_lost) deframer_.report_gap({MessageGapReason::rf_lock_lost});
       reset_coded_stream();
     }
@@ -767,25 +770,59 @@ RealtimeReceiveResult RealtimeReceiver::push_samples(std::span<const Complex> sa
     std::array<std::uint8_t, max_bits_per_symbol> bits{};
     coded_bits_buffer_.clear();
     coded_bits_buffer_.reserve(decoded.produced_symbols * constellation_.bits_per_symbol());
+    const auto flush_coded = [&] {
+      if (!stream_aborted_ && !coded_bits_buffer_.empty()) {
+        message_tokens_buffer_.clear();
+        viterbi_.push_append(coded_bits_buffer_, message_tokens_buffer_);
+        result.decoded_bytes += message_tokens_buffer_.size();
+        if (!message_tokens_buffer_.empty()) (void)process_decoded_tokens(message_tokens_buffer_, result);
+      }
+      coded_bits_buffer_.clear();
+    };
     for (std::size_t i = 0; i < decoded.produced_symbols; ++i) {
+      if (config_.rf.recovery_interval_frames) {
+        if (symbols[i].frame_counter < config_.frame_counter_start) continue;
+        const auto frame = symbols[i].frame_counter - config_.frame_counter_start;
+        const auto width = static_cast<std::uint64_t>(config_.rf.symbols_per_frame) * constellation_.bits_per_symbol();
+        if (frame > (std::numeric_limits<std::uint64_t>::max() - width) / width) continue;
+        const auto position = frame * width + static_cast<std::uint64_t>(symbols[i].frame_symbol_offset) * constellation_.bits_per_symbol();
+        if (position < coded_bit_position_) continue; // an old marker cannot rewind the stream
+        if (position != coded_bit_position_ || coded_gap_) {
+          flush_coded();
+          deframer_.report_gap({MessageGapReason::rf_lock_lost});
+          deframer_.reset();
+          // A session that has never validated its timestamp must still do so
+          // at the start. Recovery does not turn a CRC into authentication.
+          if (!sync_timestamp_validated_ && position != 0) {
+            reject_stream(result);
+            break;
+          }
+          bit_xor_ = Aes128CtrBitXor(config_.aes_key, config_.ctr_counter, position);
+          recovery_skip_bits_ = position == 0 ? 0 : viterbi_.resume_at_coded_bit(position);
+          if (position == 0) viterbi_.reset();
+          coded_bit_position_ = position;
+          coded_gap_ = false;
+        }
+      }
       constellation_.symbol_to_bits(symbols[i].value,
                                     std::span<std::uint8_t>(bits).first(constellation_.bits_per_symbol()));
       for (std::size_t bit = 0; bit < constellation_.bits_per_symbol(); ++bit) {
         const SoftBit soft{.value = bits[bit],
                            .certain = symbols[i].certain,
                            .confidence = symbols[i].confidence};
-        coded_bits_buffer_.push_back(bit_xor_.xor_soft_bit(soft));
+        const auto clear = bit_xor_.xor_soft_bit(soft);
+        ++coded_bit_position_;
+        if (recovery_skip_bits_) --recovery_skip_bits_;
+        else coded_bits_buffer_.push_back(clear);
       }
     }
     if (stream_aborted_) {
       result.replay_rejected = true;
-    } else if (!coded_bits_buffer_.empty()) {
-      message_tokens_buffer_.clear();
-      viterbi_.push_append(coded_bits_buffer_, message_tokens_buffer_);
-      result.decoded_bytes += message_tokens_buffer_.size();
-      if (!message_tokens_buffer_.empty()) {
-        (void)process_decoded_tokens(message_tokens_buffer_, result);
-      }
+    } else flush_coded();
+    if (config_.rf.recovery_interval_frames && decoded.lock_lost) {
+      deframer_.report_gap({MessageGapReason::rf_lock_lost});
+      deframer_.reset();
+      coded_gap_ = true;
     }
     if (result.output_backpressure || result.replay_rejected || decoded.consumed_samples == 0U) {
       break;
@@ -803,7 +840,10 @@ RealtimeReceiveResult RealtimeReceiver::push_audio_block(std::span<const Complex
         ? first_sample - *next_audio_sample_ : samples.size();
     deframer_.report_gap({MessageGapReason::audio_discontinuity, missing});
     rf_.reset();
-    reset_coded_stream();
+    if (config_.rf.recovery_interval_frames) {
+      deframer_.reset();
+      coded_gap_ = true;
+    } else reset_coded_stream();
   }
   next_audio_sample_ = first_sample + samples.size();
   auto result = valid ? push_samples(samples) : RealtimeReceiveResult{.consumed_samples = samples.size()};

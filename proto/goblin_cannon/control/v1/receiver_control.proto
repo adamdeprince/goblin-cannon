@@ -88,6 +88,10 @@ message RestartRequest {
   optional bool message_sequence_numbers = 28;
   optional bool recursive_equalization = 29;
   optional uint32 equalizer_delay_symbols = 30;
+  optional bool compact_header = 31;
+  optional uint32 recovery_interval_frames = 32;
+  optional bool fractionally_spaced_equalization = 33;
+  optional uint32 equalizer_reselect_interval = 34;
 }
 
 message BankUpdate {

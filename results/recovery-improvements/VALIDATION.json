@@ -1,0 +1,41 @@
+{
+  "report_header": "simulated channel recovery validation",
+  "campaign_status": "complete",
+  "git_commit": "39b4fe468c4bea566d5698151eb47bb8b999d91c",
+  "source_revision_note": "Base revision; the source digest and archive identify the tested working-tree changes.",
+  "source_tree_sha256": "ed6bc5eaa2c79850c88b9cb33e76e741c0df7f227c7b5d469d48a878796a1072",
+  "source_archive_sha256": "c0d1a8eb7a72568370d921a154dc4469f3680acba75fa1e2a8d200605aa49940",
+  "seeds": [
+    7446529,
+    7446530,
+    7446531
+  ],
+  "main_cases": 9920,
+  "main_statuses": {
+    "characterized": 9721,
+    "pass": 82,
+    "THRESHOLD_TBD": 99,
+    "xfail": 13,
+    "unavailable": 5
+  },
+  "latency_host": "avx10",
+  "quiet_latency_status": "awaiting_copy_permission",
+  "ctest_passed": 17,
+  "ctest_total": 17,
+  "python_tests_passed": 11,
+  "ctest_wall_seconds": 6.46,
+  "quick_matrix_runtime_seconds": 336.0521813239902,
+  "campaign_counts": {
+    "matrix": 9326,
+    "polar_screen": 540,
+    "polar_long": 54
+  },
+  "combined_tier_runtime_seconds": {
+    "quick": 336.0521813239902,
+    "full": 4479.784354434349
+  },
+  "soak_status": "not_run: manual four-hour tier",
+  "recordings_status": "unavailable: no recordings supplied",
+  "measurements_sha256": "9b4fff69a6020eba56997b095c2410ea50e63e663d144e7d7ee724623f5aa7e2",
+  "expected_failure_registry_sha256": "4d20929afe69242c0f6061dfbe84170614e67435ab8bd9247c605389552d77e8"
+}

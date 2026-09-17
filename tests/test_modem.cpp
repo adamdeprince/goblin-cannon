@@ -1636,6 +1636,10 @@ pb::RestartRequest make_restart_request(const ReceiverRestartConfig& restart) {
   request.set_sample_clock_recovery(rf.sample_clock_recovery);
   request.set_recursive_equalization(rf.recursive_equalization);
   request.set_equalizer_delay_symbols(rf.equalizer_delay_symbols);
+  request.set_compact_header(rf.compact_header);
+  request.set_recovery_interval_frames(rf.recovery_interval_frames);
+  request.set_fractionally_spaced_equalization(rf.fractionally_spaced_equalization);
+  request.set_equalizer_reselect_interval(rf.equalizer_reselect_interval);
   request.set_message_sequence_numbers(pipeline.sequence_numbers);
   request.set_equalizer_feedforward_taps(rf.equalizer_feedforward_taps);
   request.set_equalizer_feedback_taps(rf.equalizer_feedback_taps);
@@ -1815,6 +1819,10 @@ void test_receiver_control_grpc_server() {
   restart.pipeline.rf.sample_clock_recovery = false;
   restart.pipeline.rf.recursive_equalization = false;
   restart.pipeline.rf.equalizer_delay_symbols = 2;
+  restart.pipeline.rf.compact_header = true;
+  restart.pipeline.rf.recovery_interval_frames = 16;
+  restart.pipeline.rf.fractionally_spaced_equalization = true;
+  restart.pipeline.rf.equalizer_reselect_interval = 256;
   restart.pipeline.sequence_numbers = false;
   restart.pipeline.rf.equalizer_feedforward_taps = 5;
   restart.pipeline.rf.equalizer_feedback_taps = 0;
@@ -1826,6 +1834,9 @@ void test_receiver_control_grpc_server() {
   check(ack.ok() && ack.generation() == 1U, "gRPC restart ack mismatch");
   const auto pending = control->take_pending_restart();
   check(pending.has_value(), "gRPC restart did not schedule pending receiver");
+  check(pending->pipeline.rf.compact_header && pending->pipeline.rf.recovery_interval_frames == 16 &&
+        pending->pipeline.rf.fractionally_spaced_equalization && pending->pipeline.rf.equalizer_reselect_interval == 256,
+        "gRPC restart lost the recovery/equalizer configuration");
   check(pending->center_frequency_hz == restart.center_frequency_hz, "gRPC restart frequency mismatch");
   check(pending->pipeline.rf.modem.modulation == restart.pipeline.rf.modem.modulation,
         "gRPC restart modulation mismatch");
@@ -1865,6 +1876,10 @@ void test_receiver_control_grpc_server() {
   legacy_restart.clear_sample_clock_recovery();
   legacy_restart.clear_recursive_equalization();
   legacy_restart.clear_equalizer_delay_symbols();
+  legacy_restart.clear_compact_header();
+  legacy_restart.clear_recovery_interval_frames();
+  legacy_restart.clear_fractionally_spaced_equalization();
+  legacy_restart.clear_equalizer_reselect_interval();
   legacy_restart.clear_message_sequence_numbers();
   legacy_restart.clear_equalizer_feedforward_taps();
   legacy_restart.clear_equalizer_feedback_taps();
@@ -1873,6 +1888,10 @@ void test_receiver_control_grpc_server() {
   status = stub->Restart(&legacy_restart_context, legacy_restart, &ack);
   check(status.ok(), "gRPC restart rejected a client without tracking fields");
   const auto legacy_pending = control->take_pending_restart();
+  check(legacy_pending.has_value() && !legacy_pending->pipeline.rf.compact_header &&
+        legacy_pending->pipeline.rf.recovery_interval_frames == 0 &&
+        !legacy_pending->pipeline.rf.fractionally_spaced_equalization && legacy_pending->pipeline.rf.equalizer_reselect_interval == 0,
+        "omitted recovery fields changed the legacy wire configuration");
   check(legacy_pending.has_value() && legacy_pending->pipeline.rf.carrier_correction &&
             legacy_pending->pipeline.rf.adaptive_equalization &&
             legacy_pending->pipeline.rf.sample_clock_recovery &&

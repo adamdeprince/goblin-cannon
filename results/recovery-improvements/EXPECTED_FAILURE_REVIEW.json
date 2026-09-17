@@ -1,0 +1,250 @@
+{
+  "report_header": "simulated channel expected-failure review",
+  "source_tree_sha256": "ed6bc5eaa2c79850c88b9cb33e76e741c0df7f227c7b5d469d48a878796a1072",
+  "measurements_sha256_before_and_after": "9b4fff69a6020eba56997b095c2410ea50e63e663d144e7d7ee724623f5aa7e2",
+  "original_expected_failure_registry": "expected-failures-at-execution.json",
+  "measurements_hash_definition": "SHA-256 of sorted relative record path + NUL + run.canonical(record excluding status, assertions and expected_failure_registry_sha256), concatenated for every canonical case.",
+  "procedure": "Only exact-case reviewed expectations changed. Observations, metrics, parameters and thresholds were hash-checked unchanged. Original execution logs retain their initial statuses and exit codes.",
+  "changes": [
+    {
+      "record": "A4_10000_64qam_drift_10min/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "xfail",
+      "before_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "Receiver did not hold sync for the complete payload.",
+          "status": "fail"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "With the recovery profile and carrier correction off, the 10 kHz 64-QAM ten-minute drift trace loses lock 1113 times; first loss occurs at 247.808 seconds.",
+          "status": "xfail"
+        }
+      ]
+    },
+    {
+      "record": "A4_10000_64qam_offset_5/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "xfail",
+      "before_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "Receiver did not hold sync for the complete payload.",
+          "status": "fail"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "With the recovery profile and carrier correction off, 10 kHz 64-QAM loses lock once at +5 Hz residual offset.",
+          "status": "xfail"
+        }
+      ]
+    },
+    {
+      "record": "A9_dropout_2s/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "pass",
+      "before_assertions": [
+        {
+          "assertion": "no_stale_messages",
+          "reason": null,
+          "status": "xpass"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "no_stale_messages",
+          "reason": null,
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "record": "A9_dropout_300s/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "pass",
+      "before_assertions": [
+        {
+          "assertion": "no_stale_messages",
+          "reason": null,
+          "status": "xpass"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "no_stale_messages",
+          "reason": null,
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "record": "A9_dropout_30s/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "pass",
+      "before_assertions": [
+        {
+          "assertion": "no_stale_messages",
+          "reason": null,
+          "status": "xpass"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "no_stale_messages",
+          "reason": null,
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "record": "B1_10000_64qam_-20dB_10_100/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "xfail",
+      "before_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "Receiver did not hold sync for the complete payload.",
+          "status": "fail"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "The recovery profile loses lock once during this 10 kHz 64-QAM -20 dB gain excursion.",
+          "status": "xfail"
+        }
+      ]
+    },
+    {
+      "record": "B1_10000_64qam_-20dB_1_100/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "xfail",
+      "before_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "Receiver did not hold sync for the complete payload.",
+          "status": "fail"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "The recovery profile loses lock once during this 10 kHz 64-QAM -20 dB gain excursion.",
+          "status": "xfail"
+        }
+      ]
+    },
+    {
+      "record": "B1_24000_64qam_-20dB_1_100/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "xfail",
+      "before_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "Receiver did not hold sync for the complete payload.",
+          "status": "fail"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "The recovery profile loses lock once during this 24 kHz 64-QAM -20 dB gain excursion.",
+          "status": "xfail"
+        }
+      ]
+    },
+    {
+      "record": "B1_24000_64qam_20dB_10_100/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "xfail",
+      "before_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "Receiver did not hold sync for the complete payload.",
+          "status": "fail"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "The recovery profile loses lock twice during this 24 kHz 64-QAM +20 dB gain excursion.",
+          "status": "xfail"
+        }
+      ]
+    },
+    {
+      "record": "B1_24000_64qam_20dB_10_1000/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "xfail",
+      "before_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "Receiver did not hold sync for the complete payload.",
+          "status": "fail"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "sync_held",
+          "reason": "The recovery profile loses lock once during this 24 kHz 64-QAM +20 dB gain excursion.",
+          "status": "xfail"
+        }
+      ]
+    },
+    {
+      "record": "C2_24000_acquire_0dB/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "THRESHOLD_TBD",
+      "before_assertions": [
+        {
+          "assertion": "acquired",
+          "reason": null,
+          "status": "xpass"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "acquired",
+          "reason": null,
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "record": "C2_24000_acquire_3dB/7446529.json",
+      "seed": 7446529,
+      "before_status": "fail",
+      "after_status": "THRESHOLD_TBD",
+      "before_assertions": [
+        {
+          "assertion": "acquired",
+          "reason": null,
+          "status": "xpass"
+        }
+      ],
+      "after_assertions": [
+        {
+          "assertion": "acquired",
+          "reason": null,
+          "status": "pass"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "report_header": "simulated channel cached-page verification",
+  "previous_html_commit": "39b4fe468c4bea566d5698151eb47bb8b999d91c",
+  "new_source_tree_sha256": "ed6bc5eaa2c79850c88b9cb33e76e741c0df7f227c7b5d469d48a878796a1072",
+  "static_evidence_rows": 6,
+  "missing_control_guard": true,
+  "page_errors": []
+}

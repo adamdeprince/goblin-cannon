@@ -4,6 +4,9 @@ These tests exercise the production C++ library in simulation. No result is a
 radio-equipment measurement. The original audit preserved production behavior;
 Adam subsequently authorized fixes #1–5. Follow-up results retain their own
 source hashes and are stored separately from the original audit. See the
+[continuous recovery campaign](results/recovery-improvements/REPORT.md) for the
+protected header, recurring markers, tap reselection, half-symbol input and
+three-seed production-message measurements. See the
 [fixes #2–5 validation](results/fixes-2-5/FIXES.md) for tracking, equalization,
 latency, freshness and receiver results, and the earlier
 [24 kHz fix validation](results/24khz-header-fix/FIX.md).
@@ -194,6 +197,65 @@ configuration, including carrier correction enabled. Their pass does not satisfy
 the new brief's radio/software boundary; the new matrix records that distinction.
 
 ## Configure the simulated channel fixes
+
+### Simulated channel recovery campaign
+
+The optional recovery profile adds a protected 16-byte header, recurring
+acquisition/training blocks, half-symbol-spaced equalization and periodic sparse
+RLS tap reselection. Both endpoints configure these over fiber. No mode changes
+or frequency tracker are carried in the waveform. Legacy wire settings remain
+available for A/B measurements.
+
+```sh
+# Acceptance matrix with the new profile (B5 separately on a quiet host).
+python3 tests/simulated_channel/run.py --tier quick --profile recovery --exclude-group B5 --results results/recovery-improvements
+python3 tests/simulated_channel/run.py --tier full --profile recovery --campaign matrix --exclude-group B5 --results results/recovery-improvements
+
+# Each change separately, raw RF and production post-FEC message measurements.
+python3 tests/simulated_channel/run.py --tier full --campaign polar_screen --results results/recovery-improvements
+
+# Full-duration independent replicates: 6000 / 300 / 100 simulated seconds
+# for high-latitude quiet / moderate / disturbed, at both bandwidths and all
+# three primary modulations. No duration is reduced for a runtime budget.
+python3 tests/simulated_channel/run.py --tier full --campaign polar_long --seeds 7446529 7446530 7446531 --results results/recovery-improvements
+```
+
+The long campaign meets both F.1487 Annex 3 duration terms **for the declared
+BER 1e-3 planning target** and records them per result. It measures application
+delivery, not certified BER performance or a BER 1e-5 operating envelope. The
+24 kHz channel model remains a bandwidth extrapolation. Long runs retain exact
+sample-clock histograms of every delivery instead of per-message JSON vectors;
+the 6000-second observations are not decimated. Seeds are separate files.
+
+Results include first lock loss, completed RF recovery intervals, any unfinished
+RF outage, message delivery relative to both created and framed messages,
+freshness and delivery-silence intervals. Silence includes startup and the
+right-censored end of a run; no new outage acceptance threshold is assumed.
+An RF probe budgets its payload using the complete waveform duty cycle, including
+marker airtime, then completes that finite payload. Partial-segment startup and
+pulse tails are included in its recorded actual duration. A message probe runs
+for the declared duration. Audio durations are never reduced to meet a runtime budget.
+
+Set `--compact-header --recovery-interval-frames 16
+--fractionally-spaced-equalization --equalizer-reselect-interval 256` in
+`scripts/configure_local_radios.py`, together with `--no-carrier-correction`
+and the existing adaptive/recursive equalization settings. The tap count is a
+symbol span: half-symbol sampling uses `2*N-1` feedforward coefficients with the
+same decision delay. More frequent markers spend more airtime on recovery and
+can reduce goodput on an already stable channel. The A/B campaign records that
+cost instead of assuming every option improves every channel.
+To reproduce a particular measurement, also match its bandwidth, symbol rate,
+frame size, pilot cadence, training length and equalizer span from the saved
+parameters; the four recovery flags alone do not select those values.
+
+Recovery seeks the existing continuous CTR keystream and aligns the punctured
+Viterbi decoder at the next source-byte boundary; it never resets the transmitter
+counter to zero. Uncertain recovery bytes and partial messages are discarded
+with downstream gaps. With timestamp validation enabled, the initial session
+timestamp must first have been validated; a later CRC-protected header does not
+bypass that check. Mid-stream joining in the simulation uses its explicitly
+declared disabled timestamp check. AEAD and restart nonce safety remain separate
+open defects.
 
 The two endpoints must receive matching settings over the fiber gRPC control
 path. `RestartRequest` and `scripts/configure_local_radios.py` expose

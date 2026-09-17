@@ -37,10 +37,12 @@ identifies its tested working-tree snapshot; historical observations are retaine
    restart-safe nonce allocation and coordinated key-retirement contract should
    replace it? The new message serial numbers are not authentication and do not
    solve same-key/default-counter reuse on restart. This is outside fixes #2–5.
-4. **Polar acceptance:** the new span/delay sweep is a 10-second screening
-   characterization. Which measured BER/frame-survival/goodput and outage targets
-   should govern the high-latitude route? Moderate/disturbed channels remain
-   difficult. Reacquisition still needs a fresh transmitter epoch/preamble.
+4. **Polar acceptance:** which BER, useful-message goodput, freshness and outage
+   targets should govern the route? The recovery campaign includes ten-second
+   A/B screens and three independent long runs per primary configuration.
+   Recurring markers remove the need to restart a transmitter after ordinary
+   lock loss, but moderate/disturbed channels remain difficult. Marker cadence
+   trades recovery opportunities against useful airtime; it is fiber configured.
 5. **Waveform comparability:** the code has ten constellations, RRC shaping, custom
    QPSK startup/header, punctured convolutional coding and no interleaver. It does
    not implement Appendix D waveform-number/rate/interleaver mappings; 10 kHz is
@@ -52,7 +54,10 @@ identifies its tested working-tree snapshot; historical observations are retaine
 7. **Statistical duration:** F.1487 recommends
    `max(3000/spread, 100/(BER*data_rate))` seconds. At 0.1 Hz its first term alone
    is 30,000 seconds. A1 retains all grid points but its declared 10-second traces
-   cannot establish those limits. Schedule a separate standards-duration campaign?
+   cannot establish those limits. The separate polar campaign uses the complete
+   6000/300/100-second Doppler terms and checks the bit-duration term at a 1e-3
+   planning target. BER 1e-5 characterization and all other presets still need
+   their own duration planning; message-delivery results are not BER certification.
 8. **SNR convention:** retain SNR per complex baseband sample, or adopt a specified
    receiver noise bandwidth? Current results cannot be directly compared to
    standard 3 kHz SNR tables without conversion.
@@ -65,6 +70,18 @@ identifies its tested working-tree snapshot; historical observations are retaine
 11. **D2 calibration:** equal survival fractions do not imply equal burst structure.
     Select a freshness-agreement margin and target-survival tolerance before
     judging channel fading against independent direct erasures.
+12. **Initial session validation:** recurrent RF headers preserve continuous FEC
+    and CTR positions. A receiver with timestamp validation enabled must have
+    validated the initial timestamp before resuming at a later marker. It does
+    not trust an unauthenticated later header as a replacement. Should an
+    authenticated fiber session establish this context for late joining?
+13. **Overload reference with markers:** D1's existing offered-load fixture uses
+    nominal payload capacity after pilots and FEC, before periodic marker airtime.
+    Its 1.5×/3×/10× labels therefore impose a higher load relative to the recovery
+    profile's complete-waveform capacity. Retaining this fixture preserves the
+    offered stream for comparison, but it is not an exact calibration to that
+    profile's new airtime capacity. Should a separate marker-aware calibration
+    accompany the existing stress cases?
 
 ## Resolved interfaces in the simulated channel
 

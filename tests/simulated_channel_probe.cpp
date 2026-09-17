@@ -88,6 +88,10 @@ RfStreamConfig rf_config(const Arguments& a) {
   c.equalizer_feedforward_taps=number(a,"equalizer_feedforward_taps",3);
   c.equalizer_feedback_taps=number(a,"equalizer_feedback_taps",4);
   c.equalizer_delay_symbols=number(a,"equalizer_delay_symbols",0);
+  c.compact_header=number(a,"compact_header",0)!=0;
+  c.recovery_interval_frames=number(a,"recovery_interval_frames",0);
+  c.fractionally_spaced_equalization=number(a,"fractionally_spaced_equalization",0)!=0;
+  c.equalizer_reselect_interval=number(a,"equalizer_reselect_interval",0);
   return c;
 }
 Impairments impairments(const Arguments& a) {
@@ -184,6 +188,26 @@ public:
   std::uint64_t events=0,audio_events=0,fec_events=0;
 };
 
+// Exact histogram on the declared audio sample clock. Long campaigns retain
+// counts, not one JSON entry per message; no observations are subsampled.
+class SampleDistribution {
+public:
+  explicit SampleDistribution(double fs):fs_(fs) {}
+  void add(double seconds) {++counts_[std::llround(seconds*fs_)];++count_;}
+  Json summary_ms() const {
+    Json out;out.set("observations",count_);
+    for(const auto& [name,q]:std::array<std::pair<const char*,double>,4>{{{"p50",.5},{"p99",.99},{"p99_9",.999},{"max",1}}}) {
+      std::uint64_t seen=0;double value=NAN;
+      for(const auto& [tick,n]:counts_)if((seen+=n)>=std::ceil(q*count_)){value=tick/fs_*1000;break;}
+      out.set(name,value);
+    }
+    return out;
+  }
+private:
+  double fs_;std::uint64_t count_=0;
+  std::map<std::int64_t,std::uint64_t> counts_;
+};
+
 Json run_rf(const Arguments& a) {
   auto c=rf_config(a);
   const auto channel_cfg=impairments(a);
@@ -191,7 +215,19 @@ Json run_rf(const Arguments& a) {
   const auto bits=bits_per_symbol(c.modem.modulation);
   const auto rate=derived_symbol_rate_hz(c.modem);
   const auto duration=number(a,"duration_s",2);
-  const std::uint64_t count=channel_cfg.pure_noise?0:static_cast<std::uint64_t>(duration*rate*32.0/34.0);
+  double payload_symbol_rate=rate*c.pilot_interval_symbols/(c.pilot_interval_symbols+c.pilot_sequence.size());
+  if(c.recovery_interval_frames) {
+    const auto n=static_cast<std::uint64_t>(c.recovery_interval_frames)*c.symbols_per_frame;
+    const double sps=c.modem.sample_rate_hz/rate,half=c.modem.filter_span_symbols/2.0;
+    const auto pulse_samples=[&](double symbols) {return std::floor((symbols-1+half)*sps)+1;};
+    const auto startup=std::max<std::size_t>(c.modem.filter_span_symbols,c.equalizer_feedforward_taps+c.equalizer_feedback_taps);
+    const auto header_symbols=c.compact_header?166:128*c.header_repetition;
+    const auto segment=pulse_samples(c.acquisition_sequence.size())+
+        pulse_samples(c.equalizer_training_sequence.size()+header_symbols)+
+        pulse_samples(n+startup+n/c.pilot_interval_symbols*c.pilot_sequence.size()+c.equalizer_delay_symbols);
+    payload_symbol_rate=n*c.modem.sample_rate_hz/segment;
+  }
+  const std::uint64_t count=channel_cfg.pure_noise?0:static_cast<std::uint64_t>(duration*payload_symbol_rate);
   const auto name=word(a,"pattern","random");
   const bool fec=word(a,"fec","none")!="none";
   std::vector<std::uint8_t> source_bytes,coded;
@@ -228,13 +264,17 @@ Json run_rf(const Arguments& a) {
   std::uint64_t sent=0,samples=0,compared=0,errors=0,losses=0,acquisitions=0,header_count=0,locked_samples=0;
   std::uint64_t boundary_errors=0,expected_index=0,received_count=0;
   double acquisition=-1;
+  double first_loss=-1, loss_start=-1;
+  std::vector<double> recovery_times;
   std::array<RfStreamSymbol,1024> decoded{};
   Constellation constellation(c.modem.modulation,c.modem.constellation_profile);
   std::vector<double> amplitudes;
   const bool calibrate=number(a,"calibrate_clip")!=0;
   const std::uint64_t target_samples=static_cast<std::uint64_t>((duration+0.25)*c.modem.sample_rate_hz);
   std::size_t receive_tail=channel_cfg.pure_noise?0:static_cast<std::size_t>(number(a,"receive_tail_samples",2));
-  while(samples<target_samples && (encoder.active() || channel_cfg.pure_noise || receive_tail)) {
+  // Finish the declared payload, including all recurring control airtime.
+  // A wall-duration cap would label unsent tail frames as channel losses.
+  while(channel_cfg.pure_noise ? samples<target_samples : (encoder.active() || receive_tail)) {
     std::size_t produced=chunk;
     if(!channel_cfg.pure_noise) {
       const auto submitted_before=sent;
@@ -274,13 +314,17 @@ Json run_rf(const Arguments& a) {
     const auto rx=receiver.push_samples(impaired,decoded);
     if(rx.acquisition_found) {++acquisitions;if(acquisition<0)acquisition=static_cast<double>(samples)/c.modem.sample_rate_hz;}
     header_count+=rx.header_valid;losses+=rx.lock_lost;
+    const double clock=samples/c.modem.sample_rate_hz;
+    if(rx.lock_lost) {if(first_loss<0)first_loss=clock;if(loss_start<0)loss_start=clock;}
+    if(rx.header_valid && loss_start>=0) {recovery_times.push_back(clock-loss_start);loss_start=-1;}
     if(receiver.state()==RfStreamState::locked)locked_samples+=produced;
     for(std::size_t j=0;j<rx.produced_symbols;++j) {
       const auto& s=decoded[j];
       if(s.frame_counter<7000){++boundary_errors;continue;}
       const auto i=(s.frame_counter-7000)*c.symbols_per_frame+s.frame_symbol_offset;
       if(i>=payload_count)continue;
-      if(i!=expected_index++)++boundary_errors;
+      if(i!=expected_index)++boundary_errors;
+      expected_index=i+1;
       const auto bit_errors=std::popcount(s.value^expected(i));
       errors+=bit_errors;compared+=bits;++received_count;
       ++frame_seen[i/c.symbols_per_frame];frame_errors[i/c.symbols_per_frame]+=bit_errors;
@@ -312,6 +356,11 @@ Json run_rf(const Arguments& a) {
   out.set("frames_survived",survived);out.set("symbols_sent",payload_count);out.set("symbols_received",received_count);
   out.set("frame_boundary_errors",boundary_errors);out.set("lock_losses",losses);out.set("acquisitions",acquisitions);
   out.set("valid_headers",header_count);out.set("acquisition_time_s",acquisition<0?NAN:acquisition);
+  out.set("first_lock_loss_s",first_loss<0?NAN:first_loss);
+  out.array("completed_rf_recovery_s",recovery_times);
+  out.set("unrecovered_rf_outage_s",loss_start<0?NAN:samples/c.modem.sample_rate_hz-loss_start);
+  out.set("planned_payload_symbols_per_second",payload_symbol_rate);
+  out.text("duration_scope","Payload count uses the complete waveform duty cycle, including recurring markers. The finite payload is completed; actual duration includes partial-segment startup and pulse tails. No audio-duration reduction for runtime.");
   out.set("locked_seconds",locked_samples/c.modem.sample_rate_hz);
   out.set("useful_bits_delivered",survived_bits);
   out.set("terminal_receiver_state",static_cast<int>(receiver.state()));
@@ -365,6 +414,12 @@ Json run_messages(const Arguments& a) {
   const auto period=number(a,"message_interval_s",0.01);
   const bool soak=number(a,"soak")!=0;
   const bool host_timing=number(a,"host_timing")!=0;
+  const bool aggregate=number(a,"aggregate_metrics")!=0;
+  if(aggregate && (host_timing || number(a,"source_load_factor")!=0 || soak))
+    throw std::invalid_argument("aggregate metrics require a fixed-rate, simulated-time message campaign");
+  SampleDistribution delivery_latency(fs),delivery_silence(fs),rf_recovery(fs);
+  std::set<std::uint64_t> usable_windows;
+  double previous_delivery=0,first_delivery=-1,first_loss=-1,loss_start=-1;
   std::set<std::uint64_t> selected_messages;
   const auto selected_text=word(a,"selected_messages");
   std::istringstream selected_stream(selected_text);
@@ -397,7 +452,7 @@ Json run_messages(const Arguments& a) {
   std::vector<double> source_to_framer,host_source_to_framer,consumed_ids;
   std::vector<double> serialization_estimates;
   double tx_audio_clock=0;
-  if(!soak)consumption.on_consumed=[&](std::uint64_t id) {
+  if(!soak && !aggregate)consumption.on_consumed=[&](std::uint64_t id) {
     if(id>=created.size())throw std::runtime_error("unknown consumed message");
     consumed_ids.push_back(id);
     const auto message=encode_bank_symbol_integer(0,static_cast<std::uint8_t>(id%16+2),id);
@@ -451,7 +506,7 @@ Json run_messages(const Arguments& a) {
       // trailer. Offer wire bits at the declared multiple of steady payload
       // capacity, including pilot and puncturing overhead, excluding startup.
       const double interval=source_load>0 ? (message.bytes.size()+9)*8/(capacity_bps*source_load) : period;
-      if(!soak)created.push_back(next_creation);
+      if(!soak && !aggregate)created.push_back(next_creation);
       if(host_timing)host_created.push_back(wall_seconds());
       newest[key]=static_cast<std::int64_t>(generated);
       if(!selected_text.empty() && !selected_messages.contains(generated)) {
@@ -519,8 +574,9 @@ Json run_messages(const Arguments& a) {
         rx.push_audio_block(impaired,audio_first,audio_valid);
     if(host_timing)host_rx.push_back((wall_seconds()-rx_begin)*1000);
     losses+=received.lock_lost;headers+=received.header_valid;
-    if(received.header_valid)locked=true;
-    if(received.lock_lost)locked=false;
+    locked=rx.rf_state()==RfStreamState::locked;
+    if(received.lock_lost) {if(first_loss<0)first_loss=delivery_clock;if(loss_start<0)loss_start=delivery_clock;}
+    if(received.header_valid && loss_start>=0) {rf_recovery.add(delivery_clock-loss_start);loss_start=-1;}
     if(locked)locked_samples+=result.produced_samples;
     if(received.acquisition_found && first_acquisition<0)first_acquisition=delivery_clock;
     if(received.header_valid && now>=dropout_end && channel_cfg.dropout_duration_s>0 && reacquisition<0)reacquisition=delivery_clock-dropout_end;
@@ -530,18 +586,23 @@ Json run_messages(const Arguments& a) {
       if(!data || data->value<0 || static_cast<std::uint64_t>(data->value)>=generated) {++corrupted;++counter_drift;continue;}
       const auto id=data->value;const auto key=static_cast<std::size_t>(data->symbol-2);
       if(key>=16 || static_cast<std::uint64_t>(id)%16!=key){++corrupted;++counter_drift;continue;}
-      if(!soak && !seen.insert(id).second)++duplicates;
+      if(aggregate ? id==last_delivered[key] : (!soak && !seen.insert(id).second))++duplicates;
       if(id<newest[key])++stale;
       if(id<last_delivered[key])++gaps;
       last_delivered[key]=id;
       ++delivered;delivered_bits+=message.bytes.size()*8;
-      latencies.push_back((delivery_clock-(soak?id*period:created[id]))*1000.0);
+      const auto message_latency=delivery_clock-((soak || aggregate)?id*period:created[id]);
+      delivery_latency.add(message_latency);
+      delivery_silence.add(delivery_clock-previous_delivery);previous_delivery=delivery_clock;
+      if(first_delivery<0)first_delivery=delivery_clock;
+      usable_windows.insert(static_cast<std::uint64_t>(delivery_clock));
+      if(!aggregate)latencies.push_back(message_latency*1000.0);
       if(source_load>0) {
         if(id==newest[key])newest_latency[key].push_back(latencies.back());
         latency_windows[std::min<std::size_t>(9,static_cast<std::size_t>(delivery_clock/duration*10))].push_back(latencies.back());
       }
       if(host_timing)host_latency.push_back((wall_seconds()-host_created[id])*1000);
-      deliveries.push_back(delivery_clock);delivered_ids.push_back(static_cast<double>(id));
+      if(!aggregate) {deliveries.push_back(delivery_clock);delivered_ids.push_back(static_cast<double>(id));}
     }
   }
   Json out;attach_isa(out,a);
@@ -555,11 +616,27 @@ Json run_messages(const Arguments& a) {
   out.set("valid_headers",headers);out.set("locked_seconds",locked_samples/fs);out.set("useful_bits_delivered",delivered_bits);
   out.set("acquisition_time_s",first_acquisition<0?NAN:first_acquisition);
   out.set("reacquisition_time_s",reacquisition<0?NAN:reacquisition);
+  const auto observation_end=std::max(duration,delivery_clock);
+  delivery_silence.add(observation_end-previous_delivery);
+  out.set("first_lock_loss_s",first_loss<0?NAN:first_loss);
+  out.set("first_message_delivery_s",first_delivery<0?NAN:first_delivery);
+  out.set("delivery_observation_end_s",observation_end);
+  out.set("terminal_delivery_silence_s",observation_end-previous_delivery);
+  out.set("unrecovered_rf_outage_s",loss_start<0?NAN:observation_end-loss_start);
+  out.fields["delivery_silence_ms"]=delivery_silence.summary_ms().str();
+  out.fields["rf_recovery_ms"]=rf_recovery.summary_ms().str();
+  out.text("delivery_silence_definition","Time between correct application deliveries, including startup and the right-censored terminal interval. No invented outage threshold; audio sample-clock resolution.");
+  if(aggregate) {
+    out.fields["latency_sample_clock_ms"]=delivery_latency.summary_ms().str();
+    double usable=0;for(const auto window:usable_windows)if(window<duration)usable+=std::min(1.,duration-window);
+    out.set("usable_window_seconds",usable);
+    out.text("aggregation","All messages counted; exact nearest-rank histograms rounded to the declared audio sample clock. Per-message JSON vectors omitted.");
+  }
   out.set("audio_gap_api",injected_audio_gaps>0 && gap_audit.audio_events==injected_audio_gaps);
   out.set("injected_audio_gaps",injected_audio_gaps);
   out.set("audio_gap_events",gap_audit.audio_events);out.set("gap_events",gap_audit.events);out.set("aead_supported",0);
   out.set("audio_block_ms",block/fs*1000);
-  if(!soak) {
+  if(!soak && !aggregate) {
     out.array("latency_ms",latencies);out.array("delivery_times_s",deliveries);out.array("delivered_ids",delivered_ids);
     out.array("source_to_framer_ms",source_to_framer);out.array("consumed_ids",consumed_ids);
     out.array("nominal_message_serialization_ms",serialization_estimates);

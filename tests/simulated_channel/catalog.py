@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from itertools import product
-from math import ceil
+from math import ceil, floor
 from pathlib import Path
 
 SEED = 0x71A001
@@ -47,6 +47,8 @@ DEFAULTS = dict(
     selected_messages="",
     receive_tail_samples=2,
     equalizer_delay_symbols=0,
+    compact_header=0, recovery_interval_frames=0, fractionally_spaced_equalization=0,
+    equalizer_reselect_interval=0, aggregate_metrics=0,
     direct_survival=1.0, soak=0, noise_file="",host_timing=0,auction_intake=0,source_load_factor=0,
 )
 OPEN_THRESHOLDS = {
@@ -242,6 +244,51 @@ def matrix():
              checks=("no_counter_drift",), thresholds=("E3.memory_growth_bytes", "E3.queue_depth", "E3.latency_change")))
     add(case("E4", "recorded_noise", "characterize", "full", mode="recording",
              unavailable="Awaiting receive-only recordings and provenance manifest; no synthetic substitute is labeled a recording."))
+    cases.extend(polar_campaign())
+    return cases
+
+
+RECOVERY_PROFILE = dict(compact_header=1, recovery_interval_frames=16,
+                        fractionally_spaced_equalization=1, equalizer_reselect_interval=256)
+
+
+def polar_campaign():
+    """Declared A/B screens plus F.1487 duration-term message campaigns."""
+    cases=[]
+    variants={"legacy":{},"compact":dict(compact_header=1),
+              "recovery":dict(compact_header=1,recovery_interval_frames=16),
+              "reselect":dict(compact_header=1,recovery_interval_frames=16,equalizer_reselect_interval=256),
+              "fractional":RECOVERY_PROFILE}
+    for bw,mod,channel in product(PROFILES,("qpsk","16qam","64qam"),
+                                  ("high_lat_quiet","high_lat_moderate","high_lat_disturbed")):
+        echo=ceil(PRESETS[channel][0]*bw*.8/1000)
+        span=dict(equalizer_feedforward_taps=2*echo+3,equalizer_feedback_taps=echo+4,
+                  equalizer_delay_symbols=echo,training_symbols=max(256,2*(2*echo+3)))
+        common=dict(bandwidth_hz=bw,modulation=mod,fec="1/2",snr_db=30,**span,**preset(channel))
+        for variant,settings in variants.items():
+            for group,mode in (("A2","rf"),("E2","messages")):
+                cases.append(case(group,f"recovery_{bw}_{mod}_{channel}_{variant}","characterize","full",
+                    **common,**settings,mode=mode,duration_s=10,chunk_samples=48 if mode=="messages" else 256,
+                    auction_intake=1 if mode=="messages" else 0,
+                    campaign="polar_screen",rf_profile=variant,
+                    notes=["Matched-seed simulated channel A/B screen; raw RF results and production post-FEC message results are separate measurements."]))
+        # This is a statistical planning target, not an acceptance threshold.
+        # Even after marker overhead, 100/(1e-3*rate) is below the Doppler term
+        # for these configurations. Report the exact two terms in the manifest.
+        n=16*64;rate=bw*.8;sps=48000/rate;half=4
+        controls=floor((64-1+half)*sps)+1+floor((span["training_symbols"]+166-1+half)*sps)+1
+        symbols=n+max(8,span["equalizer_feedforward_taps"]+span["equalizer_feedback_taps"])+n//32*2+echo
+        segment_samples=controls+floor((symbols-1+half)*sps)+1
+        planned_rate=n*BITS[mod]*.5/(segment_samples/48000)
+        duration=ceil(max(3000/PRESETS[channel][1],100/(1e-3*planned_rate)))
+        cases.append(case("E2",f"polar_long_{bw}_{mod}_{channel}","characterize","full",**common,**RECOVERY_PROFILE,
+            mode="messages",chunk_samples=48,duration_s=duration,aggregate_metrics=1,auction_intake=1,
+            campaign="polar_long",rf_profile="fractional",planning_ber=1e-3,
+            planned_user_bit_rate_bps=planned_rate,itu_doppler_duration_s=3000/PRESETS[channel][1],
+            itu_bit_duration_s=100/(1e-3*planned_rate),
+            notes=["F.1487 Annex 3 duration planning at BER 1e-3; production message delivery characterization, not a BER certification or a 1e-5-duration claim.",
+                   "Independent seeds must be reported individually; aggregation counts every delivered message.",
+                   "24 kHz Watterson is a bandwidth extrapolation beyond the Recommendation's validation scope."]))
     return cases
 
 
@@ -266,9 +313,17 @@ def full_parameters(c, revision, source_digest):
               constellation_profile="mil_std_188_110c_wbhf", receiver_oversampling=1,
               pilot_sequence=[0, (1<<bits)-1],
               header_repetition=3, acquisition_symbols=64, acquisition_seed=0xA5A50001,
+              header_format="epoch32_counter64_crc32_conv_k7_rate_half" if p["compact_header"] else "legacy_32_byte_repeated",
+              header_air_symbols=166 if p["compact_header"] else 384,
+              rf_payload_budget="requested audio seconds times complete-waveform payload duty; finite payload completed including partial-segment startup/tail",
+              header_embedded_training=dict(interval_data_symbols=16,length_symbols=4,source="equalizer training sequence") if p["compact_header"] else None,
               training_seed=0x5A5A0002,
               equalizer=dict(enabled=bool(p["adaptive_equalization"]), feedforward_taps=p["equalizer_feedforward_taps"], feedback_taps=p["equalizer_feedback_taps"],
                              recursive_tracking=bool(p["recursive_equalization"]), rls_forgetting_factor=0.985,
+                             samples_per_symbol=2 if p["fractionally_spaced_equalization"] else 1,
+                             actual_feedforward_coefficients=(2*p["equalizer_feedforward_taps"]-1) if p["fractionally_spaced_equalization"] else p["equalizer_feedforward_taps"],
+                             support_reselection_reliable_updates=p["equalizer_reselect_interval"],
+                             support_candidate_estimator="shadow NLMS on inactive coefficients; active RLS coefficients retained",
                              rls_initial_covariance_diagonal=0.1, rls_maximum_covariance_diagonal=1.0,
                              recursive_common_phase_step=0.3, recursive_common_phase_frequency_estimator=False,
                              recursive_phase_detector="imag(forward * conjugate(desired - feedback)) / max(abs(desired - feedback)^2, 0.25)",

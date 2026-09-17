@@ -1,0 +1,17 @@
+{
+  "report_header": "simulated channel HTML verification",
+  "url": "file:///Users/adam/dev/goblin-cannon/html/index.html",
+  "source_tree_sha256": "ed6bc5eaa2c79850c88b9cb33e76e741c0df7f227c7b5d469d48a878796a1072",
+  "recorded_selections": 180,
+  "long_configurations": 18,
+  "long_seed_links": 54,
+  "mobile_width": 390,
+  "no_javascript_table_rows": 6,
+  "page_errors": [],
+  "explorer_seed": 7446529,
+  "long_run_seeds": [
+    7446529,
+    7446530,
+    7446531
+  ]
+}

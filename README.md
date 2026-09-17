@@ -8,9 +8,9 @@ Goblin Cannon targets x86-64 systems. The library uses an AVX baseline and runti
 
 ## Simulated channel benchmarks and results
 
-The [HTML report](html/index.html) contains quiet-host latency benchmarks, the
+The [HTML report](html/index.html) contains recorded latency benchmarks, the
 test ledger, and an interactive explorer of recorded QPSK, 16QAM and 64QAM polar
-channels. See the [latest validation](results/fixes-2-5/FIXES.md) for results and
+channels. See the [latest validation](results/recovery-improvements/REPORT.md) for results and
 remaining defects, and [TESTING.md](TESTING.md) for reproduction commands.
 The 2.1 ms limit applies to added processing and buffering; transmission and
 modem/FEC delays are reported separately. Acceptance tests run with carrier
@@ -75,7 +75,16 @@ The library does not auto-detect modulation or bandwidth. Configure those offlin
 - After acquisition the receiver trains a configurable decision-feedback equalizer on the known QPSK sequence, decodes a repeated QPSK stream header, validates CRC-32 on that header only, and checks `schedule_epoch_low`.
 - The header carries `schedule_epoch_low`, `frame_counter_start`, frame symbol count, pilot interval, and modulation.
 - Once locked, frame boundaries are derived from decoded symbol count. Pilots and confident decisions update the equalizer and carrier loop; unreliable decisions freeze adaptation. Pilots also monitor lock.
-- If pilot confidence or value fails, the receiver reports lock loss and returns to acquisition/search so a later epoch can be reacquired.
+- Sustained pilot disagreement reports lock loss. With recurring markers configured, the receiver waits for a later marker and rebuilds confidence before resuming payload delivery.
+
+For simulated polar-channel validation, the fiber control interface also exposes
+an optional compact FEC-protected header, recurring synchronization/training
+markers, half-symbol-spaced equalization and RLS tap reselection. Recurring
+markers preserve absolute payload positions, letting the receiver resume the
+continuous coded/encrypted stream after a gap. Their airtime is measured in the
+simulation, including the cost on channels that were already stable. See
+[TESTING.md](TESTING.md#simulated-channel-recovery-campaign) for the declared
+profiles, independent seeds and long-duration campaign.
 
 The RF symbol payload has no separate block CRC; message integrity is handled at the message-stream layer so messages can still be emitted with delimiter-level latency.
 
@@ -328,4 +337,4 @@ That benchmark connects the FIFO sender/receiver pair, starts Massive websocket 
 
 ## Scope
 
-This is a baseband modem and framed stream layer with carrier correction and adaptive equalization. It assumes matching protocol parameters and sample-clock/symbol timing close enough for acquisition; it does not yet track sample-clock drift. The causal equalizer covers the configured delay span and has finite convergence and tracking limits. The channel regression tests establish specific operating points; polar-link availability still needs measured channels and longer propagation tests. Interleaving and retransmission are not part of the low-latency RF path.
+This is a baseband modem and framed stream layer with adaptive equalization and sample-clock recovery. The acceptance profile leaves carrier-frequency correction to the radio. It assumes matching protocol parameters and timing close enough for acquisition. The equalizer has finite convergence and tracking limits. Simulated channel results establish specific observations; polar-link availability still needs measured channel statistics. Interleaving and retransmission are not part of the low-latency RF path.

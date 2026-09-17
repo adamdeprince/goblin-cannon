@@ -1,0 +1,13 @@
+simulated channel: 540 cases, tier=full, jobs=4
+simulated channel: 50/540 A2_recovery_10000_qpsk_high_lat_moderate_reselect characterized
+simulated channel: 100/540 E2_recovery_10000_16qam_high_lat_quiet_compact characterized
+simulated channel: 150/540 A2_recovery_10000_16qam_high_lat_disturbed_legacy characterized
+simulated channel: 200/540 A2_recovery_10000_64qam_high_lat_quiet_reselect characterized
+simulated channel: 250/540 E2_recovery_10000_64qam_high_lat_disturbed_compact characterized
+simulated channel: 300/540 A2_recovery_24000_qpsk_high_lat_moderate_legacy characterized
+simulated channel: 350/540 A2_recovery_24000_qpsk_high_lat_disturbed_reselect characterized
+simulated channel: 400/540 E2_recovery_24000_16qam_high_lat_moderate_compact characterized
+simulated channel: 450/540 A2_recovery_24000_64qam_high_lat_quiet_legacy characterized
+simulated channel: 500/540 A2_recovery_24000_64qam_high_lat_moderate_reselect characterized
+simulated channel: 540/540 E2_recovery_24000_64qam_high_lat_disturbed_fractional characterized
+simulated channel: 119.554s {'characterized': 540}; results-final/SUMMARY.md

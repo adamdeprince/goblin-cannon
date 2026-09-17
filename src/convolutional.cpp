@@ -308,6 +308,7 @@ StreamingSoftViterbiDecoder::StreamingSoftViterbiDecoder(PuncturedConvolutionalC
 void StreamingSoftViterbiDecoder::reset() {
   constexpr float inf = std::numeric_limits<float>::infinity();
   mother_bit_index_ = 0;
+  resume_discard_bytes_ = 0;
   pending_.clear();
   pending_head_ = 0;
   metrics_.assign(states_, inf);
@@ -316,6 +317,24 @@ void StreamingSoftViterbiDecoder::reset() {
   // Reset history bookkeeping but keep the preallocated storage.
   history_step_count_ = 0;
   history_emitted_count_ = 0;
+}
+
+std::size_t StreamingSoftViterbiDecoder::resume_at_coded_bit(std::uint64_t offset) {
+  reset();
+  const auto period = std::lcm<std::uint64_t>(16U, config_.puncture_pattern.size());
+  const auto kept = std::count_if(config_.puncture_pattern.begin(), config_.puncture_pattern.end(),
+                                  [](auto bit) { return bit != 0; });
+  const auto coded_period = period / config_.puncture_pattern.size() * kept;
+  const auto remainder = offset % coded_period;
+  std::size_t mother = 0, coded = 0;
+  while (coded < remainder) {
+    for (std::size_t i = 0; i < 16; ++i, ++mother)
+      coded += config_.puncture_pattern[mother % config_.puncture_pattern.size()] != 0;
+  }
+  mother_bit_index_ = mother % config_.puncture_pattern.size();
+  std::fill(metrics_.begin(), metrics_.end(), 0.0F); // unknown encoder history
+  resume_discard_bytes_ = (config_.constraint_length - 1U + 7U) / 8U;
+  return coded - remainder;
 }
 
 std::size_t StreamingSoftViterbiDecoder::observations_required_for_next_bit() const noexcept {
@@ -420,7 +439,8 @@ void StreamingSoftViterbiDecoder::emit_ready_bytes(std::vector<Token>& out) {
       confidence = std::min(confidence, soft.confidence);
       certain = certain && soft.certain && soft.confidence >= config_.decoded_bit_confidence_threshold;
     }
-    out.push_back({.value = value, .certain = certain, .confidence = confidence});
+    if (resume_discard_bytes_) --resume_discard_bytes_;
+    else out.push_back({.value = value, .certain = certain, .confidence = confidence});
     history_emitted_count_ += 8U;
   }
 }
@@ -475,8 +495,19 @@ std::size_t convolutional_coded_bits_for_input_bytes(std::size_t input_bytes,
   return convolutional_coded_bits_for_input_bits(input_bytes * 8U, config);
 }
 
-Aes128CtrBitXor::Aes128CtrBitXor(Aes128Key key, Aes128CtrCounter counter)
-    : stream_(key, counter) {}
+Aes128CtrBitXor::Aes128CtrBitXor(Aes128Key key, Aes128CtrCounter counter, std::uint64_t bit_offset)
+    : stream_(key, [&] {
+        auto blocks = bit_offset / 128U;
+        for (std::size_t i = counter.size(); i-- > 0;) {
+          const auto sum = static_cast<std::uint16_t>(counter[i]) + (blocks & 0xffU);
+          counter[i] = static_cast<std::uint8_t>(sum);
+          blocks = (blocks >> 8U) + (sum >> 8U);
+        }
+        if (blocks) throw std::overflow_error("AES counter overflow while seeking");
+        return counter;
+      }()) {
+  for (std::uint64_t i = 0; i < bit_offset % 128U; ++i) (void)next_keystream_bit();
+}
 
 void Aes128CtrBitXor::refill_keystream_byte() {
   if (keystream_buffer_pos_ >= keystream_buffer_.size()) {

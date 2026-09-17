@@ -58,7 +58,18 @@ def summarize(raw):
         added_software_latency_ms=percentiles(raw.get("added_software_latency_ms", [])),
         message_survival_fraction=ratio(raw["messages_delivered"], raw.get("messages_created", 0)) if "messages_delivered" in raw else None,
         freshness_ms=percentiles(raw.get("latency_ms", [])),
+        message_delivery_fraction_of_framed=ratio(raw.get("messages_delivered",0),raw.get("messages_consumed_by_framer",0)),
+        first_lock_loss_s=raw.get("first_lock_loss_s"),
+        first_message_delivery_s=raw.get("first_message_delivery_s"),
+        delivery_silence_ms=raw.get("delivery_silence_ms"),
+        rf_recovery_ms=raw.get("rf_recovery_ms"),
+        unrecovered_rf_outage_s=raw.get("unrecovered_rf_outage_s"),
+        terminal_delivery_silence_s=raw.get("terminal_delivery_silence_s"),
     )
+    if "latency_sample_clock_ms" in raw:
+        metrics["latency_ms"]=metrics["freshness_ms"]=raw["latency_sample_clock_ms"]
+    if "usable_window_seconds" in raw:
+        metrics["usable_time_fraction"]=ratio(raw["usable_window_seconds"],duration)
     if "delivery_times_s" in raw and duration:
         # Explicit local proxy, not an assertion of STAC definition equivalence.
         occupied={int(t) for t in raw["delivery_times_s"] if 0<=t<duration}
@@ -76,7 +87,7 @@ def summarize(raw):
     }
     if not raw.get("bits_compared"):
         metrics["missing_metric_reasons"]["ber"]="No comparable RF bits observed, or this probe does not expose bit decisions."
-    if not raw.get("latency_ms"):
+    if not raw.get("latency_ms") and not raw.get("latency_sample_clock_ms",{}).get("observations"):
         metrics["missing_metric_reasons"]["latency_ms"]="No messages delivered, or this is a symbol-level probe."
     if "useful_bits_delivered" not in raw:
         metrics["missing_metric_reasons"]["goodput_bps"]="Probe does not observe delivered application/RF bits."
@@ -130,4 +141,7 @@ METRIC_DEFINITIONS = {
     "added_software_latency_ms":"per-message source-to-sink latency minus a paired one-sample-block production-stack reference; retains signed differences; reference includes serialization, modem/FEC and epoch startup",
     "latency_percentiles":"nearest-rank p50, p99, p99.9 and max; null if no deliveries",
     "reacquisition_time_s":"first validated header after dropout end minus dropout end; null when no recovery observed",
+    "message_delivery_fraction_of_framed":"correct messages delivered / messages claimed by the production framer, including startup and terminal censoring; excludes source auction rejections",
+    "delivery_silence_ms":"correct-delivery intervals, including startup and right-censored ending, at audio sample-clock resolution; no outage threshold assumed",
+    "rf_recovery_ms":"declared RF lock loss to next validated header, excluding planned marker transitions; incomplete outage reported separately",
 }

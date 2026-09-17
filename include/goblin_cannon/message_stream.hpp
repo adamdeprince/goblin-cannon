@@ -296,6 +296,7 @@ public:
 
   [[nodiscard]] RealtimeTransmitResult push_samples(std::span<Complex> out);
   [[nodiscard]] const RealtimePipelineConfig& config() const noexcept { return config_; }
+  [[nodiscard]] RfStreamState rf_state() const noexcept { return rf_.state(); }
   void set_active_bank(std::uint8_t bank);
   void clear_active_bank_override() noexcept;
   [[nodiscard]] std::optional<std::uint8_t> active_bank_override() const noexcept;
@@ -336,6 +337,7 @@ public:
       std::uint64_t first_sample, std::uint64_t arrival_sample,
       std::size_t maximum_lateness_samples, bool valid = true);
   [[nodiscard]] const RealtimePipelineConfig& config() const noexcept { return config_; }
+  [[nodiscard]] RfStreamState rf_state() const noexcept { return rf_.state(); }
   void set_decoded_message_observer(DelimitedMessageObserver* observer) noexcept;
 
 private:
@@ -355,6 +357,9 @@ private:
   std::size_t sync_timestamp_offset_ = 0;
   bool sync_timestamp_validated_ = false;
   bool stream_aborted_ = false;
+  std::uint64_t coded_bit_position_ = 0;
+  std::size_t recovery_skip_bits_ = 0;
+  bool coded_gap_ = false;
   std::optional<std::uint64_t> next_audio_sample_;
   // Persistent per-chunk buffers reused across push_samples calls.
   std::vector<SoftBit> coded_bits_buffer_;

@@ -74,6 +74,10 @@ public:
   // Alloc-free hot-path variant: appends produced tokens to caller buffer.
   void push_append(std::span<const SoftBit> coded_bits, std::vector<Token>& out);
   void reset();
+  // Resume a continuous punctured stream after an erasure. Return the coded
+  // bits to skip to the next source-byte boundary. Unknown encoder state is
+  // acquired before emitting bytes; no transmitter reset is required.
+  [[nodiscard]] std::size_t resume_at_coded_bit(std::uint64_t coded_bit_offset);
 
 private:
   struct Decision {
@@ -102,6 +106,7 @@ private:
   std::uint32_t state_mask_ = 0;
   std::uint32_t full_mask_ = 0;
   std::size_t mother_bit_index_ = 0;
+  std::size_t resume_discard_bytes_ = 0;
   std::vector<SoftBit> pending_;
   std::size_t pending_head_ = 0;
   std::vector<float> metrics_;
@@ -117,7 +122,7 @@ private:
 
 class Aes128CtrBitXor {
 public:
-  explicit Aes128CtrBitXor(Aes128Key key, Aes128CtrCounter counter = {});
+  explicit Aes128CtrBitXor(Aes128Key key, Aes128CtrCounter counter = {}, std::uint64_t bit_offset = 0);
 
   [[nodiscard]] std::uint8_t xor_bit(std::uint8_t bit);
   [[nodiscard]] SoftBit xor_soft_bit(SoftBit bit);

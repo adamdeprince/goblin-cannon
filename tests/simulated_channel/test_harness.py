@@ -90,6 +90,27 @@ class SimulatedChannelHarness(unittest.TestCase):
         two=copy.deepcopy(one)
         self.assertEqual(canonical(one),canonical(two))
 
+    def test_polar_campaign_keeps_declared_durations(self):
+        cases=[c for c in matrix() if c.parameters.get("campaign")=="polar_long"]
+        self.assertEqual(len(cases),18)
+        for c in cases:
+            p=c.parameters
+            self.assertGreaterEqual(p["duration_s"],p["itu_doppler_duration_s"])
+            self.assertGreaterEqual(p["duration_s"],p["itu_bit_duration_s"])
+            self.assertEqual(p["carrier_correction"],0)
+            self.assertEqual(c.kind,"characterize")
+            self.assertTrue(p["aggregate_metrics"])
+
+    def test_aggregate_delivery_metrics_keep_every_observation(self):
+        p=dict(p50=1,p99=3,p99_9=3,max=3,observations=1000)
+        m=summarize(dict(simulated_seconds=10,latency_sample_clock_ms=p,
+                         messages_delivered=1000,messages_created=1200,messages_consumed_by_framer=1100,
+                         usable_window_seconds=8,delivery_silence_ms=p))
+        self.assertEqual(m["latency_ms"],p)
+        self.assertEqual(m["message_delivery_fraction_of_framed"],1000/1100)
+        self.assertEqual(m["usable_time_fraction"],.8)
+        self.assertNotIn("latency_ms",m["missing_metric_reasons"])
+
 
 if __name__=="__main__":
     unittest.main()

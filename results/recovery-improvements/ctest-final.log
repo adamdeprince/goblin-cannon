@@ -1,0 +1,55 @@
+simulated channel final CTest verification
+source_tree_sha256=ed6bc5eaa2c79850c88b9cb33e76e741c0df7f227c7b5d469d48a878796a1072
+Test project /tmp/goblin-cannon-recovery.nAXazx/build
+      Start  1: goblin_cannon_tests
+      Start 15: goblin_cannon_recovery
+      Start 17: goblin_cannon_simulated_channel_harness
+ 1/17 Test #17: goblin_cannon_simulated_channel_harness ...   Passed    1.04 sec
+      Start  8: goblin_cannon_channel_equalization
+ 2/17 Test  #8: goblin_cannon_channel_equalization ........   Passed    0.39 sec
+      Start  4: goblin_cannon_channel_phase
+ 3/17 Test  #4: goblin_cannon_channel_phase ...............   Passed    0.37 sec
+      Start  3: goblin_cannon_channel_noise
+ 4/17 Test  #3: goblin_cannon_channel_noise ...............   Passed    0.11 sec
+      Start  5: goblin_cannon_channel_fading
+ 5/17 Test  #5: goblin_cannon_channel_fading ..............   Passed    0.06 sec
+      Start  7: goblin_cannon_channel_recovery
+ 6/17 Test  #7: goblin_cannon_channel_recovery ............   Passed    0.06 sec
+      Start  6: goblin_cannon_channel_combined
+ 7/17 Test  #6: goblin_cannon_channel_combined ............   Passed    0.06 sec
+      Start 13: goblin_cannon_channel_decision_delay
+ 8/17 Test #13: goblin_cannon_channel_decision_delay ......   Passed    0.05 sec
+      Start  9: goblin_cannon_channel_streaming
+ 9/17 Test  #9: goblin_cannon_channel_streaming ...........   Passed    0.05 sec
+      Start 12: goblin_cannon_channel_profiles
+10/17 Test #15: goblin_cannon_recovery ....................   Passed    2.21 sec
+      Start 14: goblin_cannon_channel_transmit_chunks
+11/17 Test #12: goblin_cannon_channel_profiles ............   Passed    0.04 sec
+      Start 16: goblin_cannon_data_path
+12/17 Test #16: goblin_cannon_data_path ...................   Passed    0.01 sec
+      Start  2: goblin_cannon_channel_acquisition
+13/17 Test #14: goblin_cannon_channel_transmit_chunks .....   Passed    0.03 sec
+      Start 10: goblin_cannon_channel_config
+14/17 Test  #2: goblin_cannon_channel_acquisition .........   Passed    0.01 sec
+      Start 11: goblin_cannon_channel_sample_support
+15/17 Test #11: goblin_cannon_channel_sample_support ......   Passed    0.01 sec
+16/17 Test #10: goblin_cannon_channel_config ..............   Passed    0.01 sec
+17/17 Test  #1: goblin_cannon_tests .......................   Passed    6.46 sec
+
+100% tests passed, 0 tests failed out of 17
+
+Label Time Summary:
+A9                   =   2.21 sec*proc (1 test)
+B4                   =   0.01 sec*proc (1 test)
+C3                   =   2.21 sec*proc (1 test)
+D1                   =   0.01 sec*proc (1 test)
+D3                   =   0.01 sec*proc (1 test)
+D4                   =   0.01 sec*proc (1 test)
+E1                   =   1.04 sec*proc (1 test)
+assert               =  10.95 sec*proc (17 tests)
+channel              =   1.24 sec*proc (13 tests)
+legacy               =   7.58 sec*proc (10 tests)
+quick                =  10.95 sec*proc (17 tests)
+simulated_channel    =   3.38 sec*proc (7 tests)
+
+Total Test time (real) =   6.46 sec

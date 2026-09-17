@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 from collections import Counter, defaultdict
 from html import escape
+import hashlib
 import json
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +43,9 @@ def number(value):
 
 
 def build():
+    if (ROOT / "results/recovery-improvements/VALIDATION.json").exists():
+        from recovery_html import build as build_recovery
+        return build_recovery(ROOT, START, END)
     manifest = read(RESULTS / "VALIDATION.json")
     main = records(RESULTS)
     extra = records(RESULTS / "additional-seed")
@@ -307,7 +312,14 @@ def main():
     old = index.read_text()
     before, tail = old.split(START, 1)
     _, after = tail.split(END, 1)
-    outputs = {index: before + sections + after, WEB / "simulated-channel.js": js}
+    document = before + sections + after
+    for name, content in (("simulated-channel.js", js.encode()),
+                          ("rf-explorer.js", (WEB/"rf-explorer.js").read_bytes()),
+                          ("evidence.css", (WEB/"evidence.css").read_bytes())):
+        version = hashlib.sha256(content).hexdigest()[:16]
+        document = re.sub(r'((?:src|href)=")'+re.escape(name)+r'(?:\?[^" ]*)?"',
+                          lambda m: m.group(1)+name+"?v="+version+'"', document)
+    outputs = {index: document, WEB / "simulated-channel.js": js}
     stale = [path for path, value in outputs.items() if not path.exists() or path.read_text() != value]
     if args.check:
         if stale:
@@ -316,7 +328,7 @@ def main():
     else:
         for path, value in outputs.items():
             path.write_text(value)
-        print("Updated simulated channel HTML and 54 recorded RF configurations.")
+        print("Updated simulated channel HTML from recorded parameter-complete results.")
 
 
 if __name__ == "__main__":

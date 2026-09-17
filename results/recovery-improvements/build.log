@@ -1,0 +1,6 @@
+[1/2] Building CXX object CMakeFiles/goblin_cannon_simulated_channel_probe.dir/tests/simulated_channel_probe.cpp.o
+/tmp/goblin-cannon-recovery.nAXazx/tests/simulated_channel_probe.cpp: In function ‘{anonymous}::Json {anonymous}::run_rf(const Arguments&)’:
+/tmp/goblin-cannon-recovery.nAXazx/tests/simulated_channel_probe.cpp:367:58: note: the ABI of passing structure with ‘complex float’ member has changed in GCC 4.4
+  367 |   out.set("sample_clock_error_ppm",receiver.sync_estimate().sample_clock_error_ppm);
+      |                                    ~~~~~~~~~~~~~~~~~~~~~~^~
+[2/2] Linking CXX executable goblin_cannon_simulated_channel_probe

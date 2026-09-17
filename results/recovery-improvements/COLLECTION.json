@@ -1,0 +1,10 @@
+{
+  "report_header": "simulated channel collection verification",
+  "host": "avx10",
+  "source_directory": "/tmp/goblin-cannon-recovery.nAXazx/results-final",
+  "canonical_cases": 9920,
+  "source_tree_sha256": "ed6bc5eaa2c79850c88b9cb33e76e741c0df7f227c7b5d469d48a878796a1072",
+  "download_checksum_check": "rsync -rcn --itemize-changes, excluding *.tmp, exited 0 with no differences before expected-failure review. No deletion was requested.",
+  "classification_review": "EXPECTED_FAILURE_REVIEW.json",
+  "canonical_measurements_sha256": "9b4fff69a6020eba56997b095c2410ea50e63e663d144e7d7ee724623f5aa7e2"
+}

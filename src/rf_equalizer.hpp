@@ -17,7 +17,9 @@ public:
   explicit RfEqualizer(const RfStreamConfig& config)
       : carrier_enabled_(config.carrier_correction),
         adaptive_(config.adaptive_equalization),
-        delay_(config.equalizer_delay_symbols),
+        spacing_(config.fractionally_spaced_equalization ? 2U : 1U),
+        delay_(config.equalizer_delay_symbols * spacing_),
+        reselect_interval_(config.equalizer_reselect_interval),
         forward_(validated_forward_taps(config)),
         feedback_(config.equalizer_feedback_taps),
         samples_(forward_.size()), decisions_(feedback_.size()) {
@@ -26,6 +28,7 @@ public:
 
   void reset() {
     recursive_ = false;
+    selection_updates_ = 0;
     std::fill(forward_.begin(), forward_.end(), Complex{});
     std::fill(feedback_.begin(), feedback_.end(), Complex{});
     forward_[delay_] = {1.0F, 0.0F};
@@ -50,7 +53,7 @@ public:
   }
 
   [[nodiscard]] std::size_t memory_symbols() const {
-    return std::max(samples_.size() - 1U, decisions_.size());
+    return std::max((samples_.size() - 1U) / spacing_, decisions_.size());
   }
 
   // Training identifies the echo delays. Track only their strongest taps with
@@ -70,7 +73,7 @@ public:
       indices.resize(std::min(limit, indices.size()));
       for (const auto index : indices) active_.push_back(base + index);
     };
-    select(forward_, 0, delay_, 2, 12);
+    select(forward_, 0, delay_, 2 * spacing_, 12);
     select(feedback_, forward_.size(), 0, 2, 12);
     for (std::size_t i = 0; i < forward_.size() + feedback_.size(); ++i) {
       if (std::find(active_.begin(), active_.end(), i) == active_.end()) {
@@ -78,6 +81,8 @@ public:
       }
     }
     const auto n = active_.size();
+    shadow_forward_ = forward_;
+    shadow_feedback_ = feedback_;
     covariance_.resize(n*n);
     reset_covariance();
     feature_.resize(n); gain_numerator_.resize(n);
@@ -88,16 +93,22 @@ public:
     phase_ = std::remainder(phase_ + frequency_ * symbols, 2.0 * std::numbers::pi);
   }
 
-  Complex filter(Complex sample) {
+  Complex filter(Complex sample, Complex half_sample = {}) {
     const float power = std::norm(sample);
     fast_power_ += 0.125F * (power-fast_power_);
     slow_power_ += 0.002F * (power-slow_power_);
     const auto ratio = fast_power_/std::max(slow_power_,1.0e-8F);
     power_excursion_ = ratio < 0.3F || ratio > 3.0F;
     sample *= input_gain_;
+    half_sample *= input_gain_;
     advance_phase(1.0);
     if (carrier_enabled_) {
       sample *= std::polar(1.0F, static_cast<float>(-phase_));
+      half_sample *= std::polar(1.0F, static_cast<float>(-phase_ + frequency_ * 0.5));
+    }
+    if (spacing_ == 2 && samples_.size() > 1) {
+      std::move_backward(samples_.begin(), samples_.end() - 1, samples_.end());
+      samples_.front() = half_sample;
     }
     std::move_backward(samples_.begin(), samples_.end() - 1, samples_.end());
     samples_.front() = sample;
@@ -169,6 +180,27 @@ public:
       if (adaptive_) {
         if (recursive_) {
           update_recursive(error);
+          if (reselect_interval_ != 0) {
+            // Candidate taps see the same residual and history as the active
+            // filter. This lets a newly important echo enter the next support.
+            float energy = 1.0e-4F;
+            for (const auto v : samples_) energy += std::norm(v);
+            for (const auto v : decisions_) energy += std::norm(v);
+            const auto correction = error * (step / energy);
+            for (std::size_t i = 0; i < forward_.size(); ++i)
+              shadow_forward_[i] += correction * std::conj(samples_[i] * output_phase_);
+            for (std::size_t i = 0; i < feedback_.size(); ++i)
+              shadow_feedback_[i] += correction * std::conj(decisions_[i]);
+            if (++selection_updates_ >= reselect_interval_) {
+              for (const auto i : active_)
+                (i < forward_.size() ? shadow_forward_[i] : shadow_feedback_[i-forward_.size()]) =
+                    i < forward_.size() ? forward_[i] : feedback_[i-forward_.size()];
+              forward_ = shadow_forward_;
+              feedback_ = shadow_feedback_;
+              start_recursive_tracking();
+              selection_updates_ = 0;
+            }
+          }
         } else {
           float energy = 1.0e-4F;
           for (const auto value : samples_) {
@@ -252,7 +284,8 @@ private:
 
   static std::size_t validated_forward_taps(const RfStreamConfig& config) {
     validate(config);
-    return config.equalizer_feedforward_taps;
+    return config.fractionally_spaced_equalization ? 2U * config.equalizer_feedforward_taps - 1U
+                                                 : config.equalizer_feedforward_taps;
   }
 
   bool carrier_enabled_;
@@ -263,7 +296,10 @@ private:
   Complex last_forward_{};
   Complex output_phase_ = {1.0F, 0.0F};
   bool adaptive_;
+  std::size_t spacing_ = 1;
   std::size_t delay_ = 0;
+  std::size_t reselect_interval_ = 0, selection_updates_ = 0;
+  std::vector<Complex> shadow_forward_, shadow_feedback_;
   bool recursive_ = false;
   std::vector<std::size_t> active_;
   std::vector<std::complex<double>> covariance_, feature_, gain_numerator_;
