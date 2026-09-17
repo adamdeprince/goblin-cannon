@@ -1,0 +1,19 @@
+{
+  "artifact_sha256": {
+    "html/evidence.css": "26844c83810716052c769c5985819d82def290d1712971fead79d01102582ae0",
+    "html/index.html": "82f57e334cc060bdcd222550fe8c51afe3ae466726a6288a2dc58165ec7f7335",
+    "html/rf-explorer.js": "dc697be7e9a17e1bd50f1c88490cd7a8525e07b6b182b468f475022cf3b7f4c2",
+    "html/simulated-channel.js": "1340c809e1e192504d21e519b43938b2ad4cb2e371e113bcb1775a9615ee2ac6"
+  },
+  "latency_configurations": 12,
+  "latency_host": "naamah",
+  "long_configurations": 18,
+  "long_seed_links": 54,
+  "mobile_width": 390,
+  "no_javascript_table_rows": 6,
+  "page_errors": [],
+  "recorded_selections": 180,
+  "report_header": "simulated channel HTML verification",
+  "source_tree_sha256": "ed6bc5eaa2c79850c88b9cb33e76e741c0df7f227c7b5d469d48a878796a1072",
+  "url": "file:///Users/adam/dev/goblin-cannon/html/index.html"
+}

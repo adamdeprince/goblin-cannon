@@ -18,8 +18,10 @@
     "xfail": 13,
     "unavailable": 5
   },
-  "latency_host": "avx10",
-  "quiet_latency_status": "awaiting_copy_permission",
+  "main_campaign_host": "avx10",
+  "latency_host": "naamah",
+  "quiet_latency_status": "complete",
+  "latency_results_directory": "naamah-latency",
   "ctest_passed": 17,
   "ctest_total": 17,
   "python_tests_passed": 11,

@@ -17,8 +17,16 @@ python3 scripts/update_html_results.py
 python3 scripts/update_html_results.py --check
 ```
 
+After a quiet-host latency rerun, refresh its comparison and validation manifest
+with `python3 scripts/compare_recovery_latency.py` before regenerating the HTML.
+
 The exporter checks case/status totals against `VALIDATION.json`, verifies the
 tested source hash, and pairs each latency record with its host sidecar. It
+reads `latency_results_directory` in the campaign manifest for a separate
+quiet-host selection. That selection must contain the same twelve case/seed
+pairs and parameters as the AVX-512 baseline, except for the recorded revision
+and ISA requirement. Its source hash must match. The latency table links to
+the measured host sidecars; the original AVX-512 records remain in place. It
 writes the marked section of `index.html` and `simulated-channel.js`. The
 latter retains full parameters for 90 RF and 90 production-message selections
 from the first seed, plus 12 latency configurations. A separate long-run table

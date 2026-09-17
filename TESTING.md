@@ -67,17 +67,19 @@ Threadripper PRO 5995WX supports AVX2. After building and running CTest, run B5
 with one worker so validation jobs do not compete during wall-clock measurement:
 
 ```sh
-python3 tests/simulated_channel/run.py --tier quick --group B5 --jobs 1 \
-  --allow-non-avx512 --results results/latency-retest
-python3 tests/simulated_channel/run.py --tier full --group B5 --jobs 1 \
-  --allow-non-avx512 --results results/latency-polar-span-retest
+python3 tests/simulated_channel/run.py --tier quick --group B5 --profile recovery --jobs 1 \
+  --allow-non-avx512 --results results/recovery-improvements/naamah-latency
+python3 tests/simulated_channel/run.py --tier full --group B5 --profile recovery --jobs 1 \
+  --allow-non-avx512 --results results/recovery-improvements/naamah-latency
 ```
 
 Supply the revision/source-digest arguments above when using a source copy.
 Use a separate output directory for each repetition to retain host observations.
-The [naamah comparison](results/naamah/COMPARISON.md) preserves three serial
-repetitions, full parameters, host metadata, stage timings and the original
-`avx10` baseline. The current B5 assertion applies **2.1 ms to added processing and
+The [recovery-profile naamah comparison](results/recovery-improvements/naamah-latency/COMPARISON.md)
+preserves all twelve configurations, full parameters, host metadata and stage
+timings alongside the unchanged `avx10` baseline. The
+[earlier comparison](results/naamah/COMPARISON.md) retains three repetitions of
+the original profile. The current B5 assertion applies **2.1 ms to added processing and
 buffering**, as Adam specified. It pairs each delivered message with a
 one-sample production-stack reference replaying the messages selected by the
 auction at their original source creation times. Subtraction happens per message

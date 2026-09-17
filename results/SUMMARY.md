@@ -8,12 +8,15 @@ The latest follow-up adds recurring acquisition/training markers, a protected
 compact header, periodic sparse tap reselection and two matched samples per
 symbol. It reports production-message delivery, freshness and recovery alongside
 raw RF frames, with three independent seeds and longer polar runs. The complete
-quick/full matrix was rerun on `avx10`; the requested quiet-host rerun awaits
-source-copy approval for `naamah`. Added-processing latency and transmission/modem
-delay remain separate. Runtime overruns and remaining failures are explicit.
+quick/full matrix was rerun on `avx10`. The quiet-host follow-up on `naamah`
+passes all 12 latency configurations, with added p99.9 of **0.962–1.110 ms**
+against the 2.1 ms allowance; all 17 CTest entries pass there. Added-processing
+latency and transmission/modem delay remain separate. Runtime overruns and
+remaining failures are explicit.
 
 [Changes, comparisons and remaining limits](recovery-improvements/REPORT.md) ·
-[All group tables and open thresholds](recovery-improvements/SUMMARY.md).
+[All group tables and open thresholds](recovery-improvements/SUMMARY.md) ·
+[Quiet-host latency comparison](recovery-improvements/naamah-latency/COMPARISON.md).
 
 ## Simulated channel follow-up: fixes #2–5
 

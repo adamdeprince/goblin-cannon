@@ -65,22 +65,50 @@ def build(root, start, end, *, allow_incomplete=False):
                 long_rows.append(f'<tr><th scope="row">{bw//1000} kHz · {label}<br>{preset}</th><td>{next(iter(durations)):,} s</td>'
                     f'<td>{spread(values)}</td><td>{spread(survival,100,"%")}</td><td>{spread(freshness,1," ms")}</td><td>{spread(silences,.001," s")}</td><td>{sources}</td></tr>')
             screen_rows.append(f'<tr><th scope="row">{bw//1000} kHz · {label}</th>{"".join(screen_cells)}</tr>')
+    latency_records={key:value for key,value in kept.items() if value[1]["group"]=="B5"}
+    latency_manifest=manifest
+    latency_directory=directory
+    if manifest.get("latency_results_directory"):
+        latency_directory=directory/manifest["latency_results_directory"]
+        latency_manifest=read(latency_directory/"VALIDATION.json")
+        if latency_manifest["campaign_status"]!="complete":raise ValueError("Quiet-host latency validation is incomplete")
+        if manifest["quiet_latency_status"]!="complete" or latency_manifest["host"]!=manifest["latency_host"]:
+            raise ValueError("Quiet-host manifest and selected host differ")
+        quiet_records={}
+        for path in sorted(latency_directory.glob("*/[0-9]*.json")):
+            if path.name.endswith(".host.json"):continue
+            record=read(path)
+            if record["group"]!="B5":raise ValueError("Unexpected quiet-host test group")
+            p=record["parameters"]
+            if p["source_tree_sha256"]!=manifest["source_tree_sha256"] or p["git_commit"]!=latency_manifest["git_commit"]:
+                raise ValueError("Quiet-host source provenance differs")
+            quiet_records[record["test_name"],record["seed"]]=(path,record)
+        if quiet_records.keys()!=latency_records.keys():raise ValueError("Quiet-host latency selection differs from the baseline")
+        if dict(Counter(r["status"] for _,r in quiet_records.values()))!=latency_manifest["statuses"]:
+            raise ValueError("Quiet-host status counts differ from validation manifest")
+        comparable=lambda p:{k:v for k,v in p.items() if k not in ("git_commit","require_avx512")}
+        for key,(_,record) in quiet_records.items():
+            baseline=latency_records[key][1]["parameters"]
+            if comparable(record["parameters"])!=comparable(baseline):raise ValueError("Quiet-host test parameters differ from the baseline")
+            if record["observations"]["demapper"]!=latency_manifest["runtime_isa"]:
+                raise ValueError("Quiet-host ISA differs from validation manifest")
+        latency_records=quiet_records
     latency=[];latency_rows=[]
-    for (name,s),(path,record) in sorted(kept.items()):
-        if record["group"]!="B5":continue
-        host=read(path.with_name(f"{s}.host.json"))
+    for (name,s),(path,record) in sorted(latency_records.items()):
+        host_path=path.with_name(f"{s}.host.json")
+        host=read(host_path)
         if host["parameters"]!=record["parameters"]:raise ValueError("Latency sidecar parameters differ")
         observation=host["observations"];p=record["parameters"]
         added=observation["host_added_software_latency_ms_percentiles"]
         total=observation["host_latency_ms_percentiles"]
         state=observation["added_software_latency_assertion"]["status"]
         display_name=str(p["bandwidth_hz"]//1000)+" kHz · "+modes[p["modulation"]]+(" · long span" if "polar_span" in name else " · short span")
-        latency_rows.append(f'<tr><th scope="row">{link(path,display_name)}</th>'
+        latency_rows.append(f'<tr><th scope="row">{link(host_path,display_name)}</th>'
             f'<td>{number(added["p50"])}</td><td>{number(added["p99"])}</td><td>{number(added["p99_9"])}</td>'
             f'<td>{number(added["max"])}</td><td>{number(total["p99_9"])}</td>'
             f'<td>{number(record["latency_reference"]["metrics"]["latency_ms"]["p99_9"])}</td><td>{escape(state)}</td></tr>')
         latency.append(dict(parameters=p,metrics=record["metrics"],host_metrics={k:v for k,v in observation.items()
-            if k.endswith("percentiles") or k=="added_software_latency_assertion"},source=url(path)))
+            if k.endswith("percentiles") or k=="added_software_latency_assertion"},source=url(path),host_source=url(host_path)))
     status_columns=("pass","characterized","THRESHOLD_TBD","xfail","unavailable","fail","error")
     summary_rows="".join(f'<tr><th scope="row">{escape(group)}</th>'+"".join(f'<td>{counts[k]}</td>' for k in status_columns)+"</tr>"
                          for group,counts in groups.items())
@@ -90,6 +118,8 @@ def build(root, start, end, *, allow_incomplete=False):
     report=link(directory/"REPORT.md","Read the simulated channel findings →")
     host_name=manifest["latency_host"]
     quiet_note="Quiet-host validation is pending." if manifest.get("quiet_latency_status")!="complete" else "Quiet-host validation completed."
+    if latency_directory!=directory:
+        quiet_note+=f' {escape(latency_manifest["runtime_isa"])}; 12 configurations run serially from commit <code>{latency_manifest["git_commit"][:12]}</code>. '+link(latency_directory/"COMPARISON.md","Quiet-host results and AVX-512 comparison")+"."
     section=f'''{start}
     <section class="evidence-section" id="benchmarks"><div class="section-inner">
       <header class="evidence-head"><p class="section-label">Recovery campaign · recorded evidence</p>
@@ -135,5 +165,6 @@ def build(root, start, end, *, allow_incomplete=False):
     data=dict(schema_version=2,report_header="Goblin Cannon simulated channel recovery HTML evidence",
               git_commit=manifest["git_commit"],source_tree_sha256=manifest["source_tree_sha256"],
               seeds=manifest["seeds"],polar=polar,messages=messages,latency=latency,
+              latency_host=host_name,latency_validation_source=url(latency_directory/"VALIDATION.json"),
               validation_source=url(directory/"VALIDATION.json"))
     return section,"// Generated from recorded simulated channel results.\nglobalThis.GoblinChannelResults = "+json.dumps(data,separators=(",",":"),allow_nan=False)+";\n"

@@ -86,7 +86,9 @@ These long durations satisfy the two F.1487 test-length terms at the recorded **
 
 ## Simulated channel added processing and buffering
 
-**All 12 B5 configurations pass the 2.1 ms added-processing/buffering assertion on avx10.** They were run serially before other campaign jobs. No physical audio hardware is included. Host timing is non-canonical and is kept outside the seeded byte-equality check. Each measured message is paired with a one-sample simulated reference before subtracting intrinsic transmission/modem/startup time; percentiles are not subtracted from one another.
+**All 12 B5 configurations pass the 2.1 ms added-processing/buffering assertion on both hosts.** The quiet-host rerun on **naamah (AVX2)** records added p99.9 of **0.962–1.110 ms**, compared with **0.961–1.085 ms** on avx10 (AVX-512). All 17 CTest entries passed on naamah before its twelve serial timing runs. [Quiet-host measurements, comparison and build metadata](naamah-latency/COMPARISON.md).
+
+No physical audio hardware is included. Host timing is non-canonical and is kept outside the seeded byte-equality check. Each measured message is paired with a one-sample simulated reference before subtracting intrinsic transmission/modem/startup time; percentiles are not subtracted from one another. The table below preserves the original **avx10 baseline**, measured serially before other campaign jobs.
 
 | Configuration | Added p50 ms | Added p99 ms | Added p99.9 ms | Added max ms | Total p99.9 ms | Intrinsic reference p99.9 ms |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -105,7 +107,7 @@ These long durations satisfy the two F.1487 test-length terms at the recorded **
 
 Passing the added-processing allowance does not imply a 2.1 ms source-to-sink link. The long-run freshness table includes tens of milliseconds of transmission and modem/training delay even in quiet conditions. Stage-call timings and analytical modem residence estimates are in [SUMMARY.md](SUMMARY.md).
 
-The requested quiet-host rerun on **naamah** remains pending. Automatic approval review rejected copying the updated private source to that host because the explicit copy permission covered avx10. The new source was not transferred; current timing measurements are avx10 results.
+The naamah rerun uses committed source `86d72bb8ecb63343d8eb32286ed810a59163ac97`, with the same tested source digest as the avx10 campaign. All twelve canonical results match across hosts after excluding only revision and ISA metadata. Host timing observations remain separate and differ between runs. The twelve follow-up records live in `naamah-latency/`; the original 9,920-case ledger and its runtime findings remain unchanged.
 
 ## Simulated channel defects found
 

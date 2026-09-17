@@ -1,0 +1,37 @@
+{
+  "budget_seconds": 1800,
+  "complete_tier": false,
+  "elapsed_seconds": 79.22353512584232,
+  "executed_cases": 6,
+  "git_commit": "86d72bb8ecb63343d8eb32286ed810a59163ac97",
+  "host": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43",
+  "jobs": 1,
+  "parameter_records": [
+    "B5_10000_qpsk_polar_span_null/7446529.json",
+    "B5_10000_16qam_polar_span_null/7446529.json",
+    "B5_10000_64qam_polar_span_null/7446529.json",
+    "B5_24000_qpsk_polar_span_null/7446529.json",
+    "B5_24000_16qam_polar_span_null/7446529.json",
+    "B5_24000_64qam_polar_span_null/7446529.json"
+  ],
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "report_header": "simulated channel non-canonical execution observations",
+  "selected_cases": 6,
+  "selection": {
+    "campaign": null,
+    "cases": [],
+    "excluded_groups": [],
+    "groups": [
+      "B5"
+    ],
+    "profile": "recovery",
+    "resume": false,
+    "seed": null,
+    "seeds": null
+  },
+  "source_tree_sha256": "ed6bc5eaa2c79850c88b9cb33e76e741c0df7f227c7b5d469d48a878796a1072",
+  "statuses": {
+    "pass": 6
+  },
+  "tier": "full"
+}

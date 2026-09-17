@@ -1,0 +1,191 @@
+{
+  "campaign_status": "complete",
+  "canonical_comparison_exclusions": [
+    "git_commit",
+    "require_avx512",
+    "demapper"
+  ],
+  "cases": 12,
+  "comparisons": [
+    {
+      "added_p99_9_ms": 0.9927903333331045,
+      "baseline_added_p99_9_ms": 0.9889123333319816,
+      "baseline_source": "../B5_10000_16qam_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.0038780000011229276,
+      "host_source": "B5_10000_16qam_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_10000_16qam_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_10000_16qam_null"
+    },
+    {
+      "added_p99_9_ms": 0.9969440000006102,
+      "baseline_added_p99_9_ms": 0.9762689999999878,
+      "baseline_source": "../B5_10000_16qam_polar_span_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.02067500000062239,
+      "host_source": "B5_10000_16qam_polar_span_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_10000_16qam_polar_span_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_10000_16qam_polar_span_null"
+    },
+    {
+      "added_p99_9_ms": 1.0043513333333323,
+      "baseline_added_p99_9_ms": 0.9889733333333304,
+      "baseline_source": "../B5_10000_64qam_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.01537800000000189,
+      "host_source": "B5_10000_64qam_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_10000_64qam_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_10000_64qam_null"
+    },
+    {
+      "added_p99_9_ms": 1.0114419999984747,
+      "baseline_added_p99_9_ms": 0.9812049999986527,
+      "baseline_source": "../B5_10000_64qam_polar_span_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.03023699999982199,
+      "host_source": "B5_10000_64qam_polar_span_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_10000_64qam_polar_span_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_10000_64qam_polar_span_null"
+    },
+    {
+      "added_p99_9_ms": 0.9624700000010478,
+      "baseline_added_p99_9_ms": 0.9606513333331179,
+      "baseline_source": "../B5_10000_qpsk_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.0018186666679298469,
+      "host_source": "B5_10000_qpsk_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_10000_qpsk_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_10000_qpsk_null"
+    },
+    {
+      "added_p99_9_ms": 0.9909249999999759,
+      "baseline_added_p99_9_ms": 0.9676560000000407,
+      "baseline_source": "../B5_10000_qpsk_polar_span_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.023268999999935147,
+      "host_source": "B5_10000_qpsk_polar_span_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_10000_qpsk_polar_span_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_10000_qpsk_polar_span_null"
+    },
+    {
+      "added_p99_9_ms": 1.0490896666661698,
+      "baseline_added_p99_9_ms": 1.0252506666663663,
+      "baseline_source": "../B5_24000_16qam_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.023838999999803434,
+      "host_source": "B5_24000_16qam_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_24000_16qam_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_24000_16qam_null"
+    },
+    {
+      "added_p99_9_ms": 1.0953690000001792,
+      "baseline_added_p99_9_ms": 1.0848146666662117,
+      "baseline_source": "../B5_24000_16qam_polar_span_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.010554333333967492,
+      "host_source": "B5_24000_16qam_polar_span_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_24000_16qam_polar_span_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_24000_16qam_polar_span_null"
+    },
+    {
+      "added_p99_9_ms": 1.0656406666664786,
+      "baseline_added_p99_9_ms": 1.043090666666746,
+      "baseline_source": "../B5_24000_64qam_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.022549999999732506,
+      "host_source": "B5_24000_64qam_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_24000_64qam_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_24000_64qam_null"
+    },
+    {
+      "added_p99_9_ms": 1.1097213333339795,
+      "baseline_added_p99_9_ms": 1.073934666669274,
+      "baseline_source": "../B5_24000_64qam_polar_span_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.035786666664705535,
+      "host_source": "B5_24000_64qam_polar_span_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_24000_64qam_polar_span_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_24000_64qam_polar_span_null"
+    },
+    {
+      "added_p99_9_ms": 1.0242326666665136,
+      "baseline_added_p99_9_ms": 1.0091816666655262,
+      "baseline_source": "../B5_24000_qpsk_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.015051000000987358,
+      "host_source": "B5_24000_qpsk_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_24000_qpsk_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_24000_qpsk_null"
+    },
+    {
+      "added_p99_9_ms": 1.0885956666666647,
+      "baseline_added_p99_9_ms": 1.0537086666664308,
+      "baseline_source": "../B5_24000_qpsk_polar_span_null/7446529.json",
+      "canonical_equal_excluding_revision_and_isa": true,
+      "difference_ms": 0.034887000000233925,
+      "host_source": "B5_24000_qpsk_polar_span_null/7446529.host.json",
+      "host_status": "pass",
+      "metrics_identical": true,
+      "parameters_source": "B5_24000_qpsk_polar_span_null/7446529.json",
+      "seed": 7446529,
+      "test_name": "B5_24000_qpsk_polar_span_null"
+    }
+  ],
+  "ctest_passed": 17,
+  "ctest_total": 17,
+  "ctest_wall_seconds": 9.93,
+  "evidence_hash_definition": "Sorted canonical result paths, followed by their host sidecars: relative UTF-8 path, NUL, exact file bytes.",
+  "evidence_sha256": "d46bc1a11c228b1e74b7bb57f4fb7c0599f61455fa665b8ca79e18d73d875ab1",
+  "git_commit": "86d72bb8ecb63343d8eb32286ed810a59163ac97",
+  "host": "naamah",
+  "host_statuses": {
+    "pass": 12
+  },
+  "jobs": 1,
+  "report_header": "simulated channel recovery quiet-host validation",
+  "runtime_isa": "AVX2",
+  "seeds": [
+    7446529
+  ],
+  "selected_tier_runtime_seconds": {
+    "full": 79.22353512584232,
+    "quick": 77.30390448588878
+  },
+  "source_tree_sha256": "ed6bc5eaa2c79850c88b9cb33e76e741c0df7f227c7b5d469d48a878796a1072",
+  "statuses": {
+    "pass": 12
+  }
+}

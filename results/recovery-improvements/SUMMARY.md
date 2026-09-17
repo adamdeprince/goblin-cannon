@@ -2,6 +2,14 @@
 
 All results use simulated channels. No transmission or RF equipment measurement is represented.
 
+## Simulated channel quiet-host follow-up
+
+All twelve B5 configurations pass on `naamah` (AVX2), with added p99.9 of
+**0.962–1.110 ms** against the 2.1 ms allowance. All 17 CTest entries pass.
+[Quiet-host results, stage timings and AVX-512 comparison](naamah-latency/COMPARISON.md).
+The tables below preserve the original 9,920-case `avx10` campaign; the twelve
+quiet-host reruns are stored separately and do not replace its measurements.
+
 ## Simulated channel execution summary
 
 | Status | Cases |
