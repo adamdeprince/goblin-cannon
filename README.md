@@ -1,6 +1,6 @@
 # Goblin Cannon
 
-Goblin Cannon is an open-source radio stack for transmitting market data across continents by HF skywave, with an intended RF target near 13.5 MHz. It is designed to exploit near-light-speed atmospheric propagation and direct over-the-horizon paths to deliver compact market updates ahead of longer undersea-fiber routes when propagation conditions permit.
+Goblin Cannon is an open-source radio stack for transmitting market data across continents by HF skywave, with an intended RF target near 13.5 MHz. It is designed to exploit near-light-speed atmospheric propagation and direct over-the-horizon paths to deliver compact market updates ahead of longer undersea-fiber routes when propagation conditions permit. This repository contains the baseband HF modem: BPSK, QPSK and 8-PSK with convolutional or BCH coding, RLS equalization and audio-clock recovery.
 
 The `goblin_cannon` C++23 complex-baseband library supports WBHF-style links at 48 kHz and other configured sample rates. It includes QPSK, 8PSK, 16QAM, 64QAM, 256QAM, 1024QAM, 16QCI, 64QCI, 256QCI, and 1024QCI, adjustable occupied bandwidth, streaming encode/decode APIs, carrier gating, framed payload flow, RF stream acquisition, and raw IQ stream adapters suitable for SDR pipelines.
 
