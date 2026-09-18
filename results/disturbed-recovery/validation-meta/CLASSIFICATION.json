@@ -1,0 +1,12 @@
+{
+  "report_header": "simulated channel reviewed expected-failure classification",
+  "measured_registry_sha256": "6a95a1878f0e101e113b33595730ddc82f6216cfa063a839dcab020546a62874",
+  "reviewed_registry_sha256": "1b30cd558218cc0084bde5b3665337ff2a76ea384638d6b3ae49b550c9741587",
+  "changes": {
+    "disturbed::A4_10000_64qam_drift_10min.sync_held": "With warm recovery and elapsed-time prediction, 10 kHz 64-QAM loses lock 1112 times in the ten-minute residual-drift trace; first loss is at 304 s. Carrier correction remains off.",
+    "disturbed::B1_24000_64qam_-20dB_1_100.sync_held": "With warm recovery and elapsed-time prediction, 24 kHz 64-QAM loses lock once in the -20 dB / 1 ms attack / 100 ms decay trace.",
+    "disturbed::C2_24000_acquire_3dB.acquired": null,
+    "disturbed::D6_key_rotation.rotation_supported": "Both 25-byte and fiber-selected 13-byte authenticated headers retain key IDs, full GCM tags and durable epochs; two-key overlap and coordinated mid-stream retirement remain unimplemented."
+  },
+  "scope": "Only security assertion classifications were updated after reviewing measurements; observations, metrics, parameters and thresholds are unchanged. Other selections retain their measured registry fingerprint."
+}

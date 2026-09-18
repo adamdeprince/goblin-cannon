@@ -178,6 +178,9 @@ ReceiverRestartConfig parse_restart_request(const pb::RestartRequest& request) {
     config.pipeline.rf.equalizer_delay_symbols = request.equalizer_delay_symbols();
   }
   if (request.has_compact_header()) config.pipeline.rf.compact_header = request.compact_header();
+  if (request.has_warm_recovery()) config.pipeline.rf.warm_recovery = request.warm_recovery();
+  if (request.has_elapsed_time_tracking()) config.pipeline.rf.elapsed_time_tracking = request.elapsed_time_tracking();
+  if (request.has_compact_message_header()) config.pipeline.compact_message_header = request.compact_message_header();
   if (request.has_header_modulation()) config.pipeline.rf.header_modulation = from_proto_modulation(request.header_modulation());
   if (request.has_differential_mapping()) {
     switch (request.differential_mapping()) {

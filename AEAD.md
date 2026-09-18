@@ -50,6 +50,10 @@ epochs; the direct C++ receiver requires an explicitly configured nonzero epoch.
 
 ## Authenticated record
 
+Format 1 remains the default for compatibility. The disturbed-channel recipe
+selects format 2 at **both** endpoints with `--compact-message-header` on the
+fiber configuration command. There is no automatic radio-format fallback.
+
 | Offset | Bytes | Field |
 | ---: | ---: | --- |
 | 0 | 1 | Format version (1) |
@@ -80,6 +84,30 @@ as `authentication_failure` events in the receiver session stream.
 RF-header CRCs screen acquisition/framing only. Production message records have
 no CRC trailer. Legacy standalone codec fixtures still exercise the old CRC and
 CTR helper APIs, separately from the mandatory production AEAD path.
+
+### Compact authenticated record (format 2)
+
+| Offset | Bytes | Field |
+| ---: | ---: | --- |
+| 0 | 1 | Bank (0/1) |
+| 1 | 4 | Key ID |
+| 5 | 4 | Mandatory frame sequence |
+| 9 | 4 | Application sequence |
+| 13 | length | Ciphertext, excluding the bank byte |
+| 13 + length | 16 | Full GCM tag |
+
+Associated data is the entire 13-byte wire header, followed by the fixed domain
+bytes `47 43 41 02` (hex), the negotiated eight-byte epoch, the one-byte
+sequencing flag, the two-byte ciphertext length, and any timestamp context.
+Integers are big-endian. Epoch allocation and `epoch || frame_sequence` nonce
+construction are unchanged. A different epoch, format, sequencing mode or
+timestamp fails closed; no received field can silently change the negotiation.
+Old-epoch compact records fail authentication because their epoch is implicit
+context. Same-session replays still increment the separate replay counter.
+
+The header saves twelve radio bytes per message. The auction and optional
+`stream_massive_stock_quotes.py --compact-message-header` billing use the same
+format's COBS bound. Coordinated key rotation remains unimplemented.
 
 ## Remaining work
 

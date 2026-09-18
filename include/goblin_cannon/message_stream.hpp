@@ -22,7 +22,7 @@ namespace goblin_cannon {
 struct DelimitedMessage {
   std::vector<std::uint8_t> bytes;
   // Present only in the sequenced message format. The payload remains the
-  // original application bytes; sequence metadata is covered by the wire CRC.
+  // original application bytes; production sequence metadata is authenticated.
   std::optional<std::uint32_t> sequence = std::nullopt;
 };
 
@@ -33,9 +33,9 @@ struct MessageGap {
 };
 
 inline constexpr std::size_t maximum_message_bytes = 65535;
-// COBS-delimited AES-GCM record: 25-byte authenticated header, ciphertext,
+// COBS-delimited AES-GCM record: 25-byte (compact: 13-byte) authenticated header, ciphertext,
 // 16-byte tag. The application's bank byte is carried in the header.
-[[nodiscard]] std::size_t authenticated_message_wire_bytes(std::size_t application_bytes) noexcept;
+[[nodiscard]] std::size_t authenticated_message_wire_bytes(std::size_t application_bytes, bool compact = false) noexcept;
 class AuthenticatedMessageEncoder;
 class AuthenticatedMessageDecoder;
 
@@ -159,6 +159,7 @@ public:
   [[nodiscard]] std::size_t pending_bids() const;
   void clear_pending_bid();
   void set_sequence_numbers(bool enabled) { std::scoped_lock lock(mutex_); sequence_numbers_ = enabled; }
+  void set_compact_authentication(bool enabled) { std::scoped_lock lock(mutex_); compact_authentication_ = enabled; }
   // Other writers of decision logs must use the same external mutex. Callers
   // of submit/pump already hold it; the audio consumer acquires it internally.
   void set_decision_log_mutex(std::shared_ptr<std::mutex> mutex) { decision_log_mutex_ = std::move(mutex); }
@@ -178,6 +179,7 @@ private:
   std::deque<DelimitedMessage> fifo_;
   std::optional<Candidate> best_;
   bool sequence_numbers_ = true;
+  bool compact_authentication_ = false;
 };
 
 class MessageStreamFramer {
@@ -186,7 +188,7 @@ public:
   ~MessageStreamFramer();
   // Explicitly selected by every production transmitter; the default raw
   // CRC framer remains only for standalone legacy codec fixtures.
-  void authenticate(const Aes256Key&, std::uint32_t key_id, std::shared_ptr<TransmitterEpoch> epoch);
+  void authenticate(const Aes256Key&, std::uint32_t key_id, std::shared_ptr<TransmitterEpoch> epoch, bool compact = false);
   void set_authentication_context(std::span<const std::uint8_t> context);
   [[nodiscard]] MessageFrameEncodeResult next_payload_frame(
       QueueSource<DelimitedMessage>& input,
@@ -236,7 +238,7 @@ class MessageStreamDeframer {
 public:
   MessageStreamDeframer();
   ~MessageStreamDeframer();
-  void authenticate(const Aes256Key&, std::uint32_t key_id, std::uint64_t epoch);
+  void authenticate(const Aes256Key&, std::uint32_t key_id, std::uint64_t epoch, bool compact = false);
   void set_authentication_context(std::span<const std::uint8_t> context);
   [[nodiscard]] std::uint64_t authentication_failures() const noexcept;
   [[nodiscard]] std::uint64_t replay_rejections() const noexcept;
@@ -284,6 +286,9 @@ struct RealtimePipelineConfig {
   PayloadCodingConfig coding = {};
   Aes256Key aes_key = {};
   std::uint32_t key_id = 1;
+  // Explicitly negotiated over fiber. V2 carries 13 header bytes; the epoch
+  // and fixed format/sequencing context remain authenticated associated data.
+  bool compact_message_header = false;
   // Provision once using goblin_cannon_epoch. No missing-file auto-reset.
   // Empty uses GOBLIN_CANNON_EPOCH_STATE; no implicit temporary state in production.
   std::string transmitter_epoch_path;

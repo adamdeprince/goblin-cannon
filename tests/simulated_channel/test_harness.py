@@ -139,7 +139,7 @@ class SimulatedChannelHarness(unittest.TestCase):
                 self.assertEqual(p["equalizer_feedforward_taps"],2*echo+3)
                 self.assertEqual(p["equalizer_feedback_taps"],echo+4)
                 self.assertEqual(p["training_symbols"],max(256,2*(2*echo+3)))
-            self.assertAlmostEqual(p["nominal_sample_power"],.65**2*p["bandwidth_hz"]/1.25/48000)
+            self.assertAlmostEqual(p["nominal_sample_power"],(.65*p["tx_gain_multiplier"])**2)
             if p["campaign"]=="encoding_followup":
                 self.assertEqual(p["duration_s"],100 if "disturbed" in c.name else 300)
             if p["audio_waveform"].startswith("fsk"):
@@ -160,7 +160,7 @@ class SimulatedChannelHarness(unittest.TestCase):
             p=full_parameters(c,"commit","digest")
             self.assertFalse(p["carrier_correction"])
             self.assertTrue(p["adaptive_equalization"] and p["sample_clock_recovery"])
-            self.assertAlmostEqual(p["nominal_sample_power"],.65**2*p["bandwidth_hz"]/1.25/48000)
+            self.assertAlmostEqual(p["nominal_sample_power"],(.65*p["tx_gain_multiplier"])**2)
             self.assertLess(p["cadence_plan"]["payload_airtime_fraction"],1)
             if p["experiment"]=="diversity":
                 d=p["diversity"]
@@ -173,6 +173,21 @@ class SimulatedChannelHarness(unittest.TestCase):
             if p["campaign"]=="refinement_followup":
                 self.assertEqual(p["duration_s"],100 if "disturbed" in c.name else 300)
             evaluate(c,{},summarize({}),{})
+
+
+    def test_disturbed_ablation_preserves_channel_and_authentication(self):
+        cases=[c for c in matrix() if c.parameters.get("campaign")=="disturbed_followup"]
+        indexed={c.name:c for c in cases}
+        for c in cases:
+            p=full_parameters(c,"commit","digest")
+            self.assertEqual(p["aead_tag_bytes"],16)
+            self.assertFalse(p["carrier_correction"])
+            self.assertEqual(p["duration_s"],100 if p["delay_spread_ms"]==7 else 300)
+            if p["recovery_variant"]=="baseline":continue
+            base=indexed[c.name.rsplit("_",1)[0]+"_baseline"].parameters
+            for key in ("seed","snr_db","delay_spread_ms","doppler_spread_hz","path0_db","path1_db","duration_s","tx_gain_multiplier"):
+                self.assertEqual(p[key],base[key])
+            if p["compact_message_header"]:self.assertEqual(p["aead_header_bytes"],13)
 
 
 if __name__=="__main__":

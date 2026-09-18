@@ -1,42 +1,26 @@
 # Goblin Cannon simulated channel current results
 
-The production message path now uses OpenSSL AES-256-GCM. All results below use
-simulated channels; none represents transmission or RF equipment measurements.
+Warm recovery, elapsed-symbol RLS uncertainty, a 13-byte authenticated header and calibrated frequency diversity are implemented and tested. Carrier correction is off; the full 16-byte AES-GCM tag and persisted nonce epochs remain.
 
-[Current report, parameters and open thresholds](aead/SUMMARY.md) ·
-[Validation manifest](aead/VALIDATION.json) ·
-[CPU and buffering profile](aead/PROFILE.md)
+[Current report and open thresholds](disturbed-recovery/SUMMARY.md) · [Validation](disturbed-recovery/VALIDATION.json) · [Measured power](disturbed-recovery/POWER.json)
 
-## Simulated channel security
+## Simulated channel — 24 kHz disturbed fresh useful bit/s
 
-All three A8 co-channel cases pass authentication and source-integrity checks.
-At −10 dB SIR the receiver counts 359 authentication failures and delivers no
-foreign or corrupt payloads. D6 rejects 43 tampered records and 16 replays;
-two separate sender processes use 16 distinct nonces under the same key.
+Three seeds, 100 seconds each. Both columns are freshly measured at the corrected 30 dB reference; the baseline disables the new recovery/header controls.
 
-Nine expected-failing assertions across nine cases remain in the current
-recovery-profile selection: seven residual-offset/gain cases, the auction
-starvation policy conflict, and coordinated key rotation. Authenticated key IDs
-and durable epoch negotiation provide rotation groundwork; overlapping keys and
-mid-stream retirement remain unimplemented. The report reconciles this scope
-with the older brief's 13-assertion count.
+| Configuration | Calibrated baseline | Combined changes |
+| --- | --- | --- |
+| BPSK · convolutional | 2.16–3.20 | 7.92–15.60 |
+| BPSK · BCH | 1.52–3.52 | 20.64–25.20 |
+| QPSK · convolutional | 1.84–4.48 | 28.64–31.68 |
+| QPSK · BCH | 2.24–7.36 | 38.00–46.48 |
+| 8-PSK · convolutional | 0.32–1.60 | 14.56–16.64 |
+| 8-PSK · BCH | 0.64–1.12 | 17.92–24.72 |
 
-## Simulated channel latency
+## Simulated channel — latency and security
 
-The requested 12-case B5 suite passes: worst added p99.9 is **1.055 ms** against
-the unchanged **2.1 ms** allowance. The 12 current recovery-profile configurations
-also pass, with a worst of **1.118 ms**. The report includes the requested
-before/after table and separate transmission/modem reference and stage timings.
+24 of 24 measured latency configurations pass the unchanged 2.1 ms delivered-message added-processing/buffering limit; worst added p99.9 is 1.196315 ms. RX training calls still peak at 14.010 ms. Per-message passes do not establish a 1 ms audio-callback deadline; the report preserves stage timings and the fixture's source-scheduling limitation.
 
-## Simulated channel polar delivery and validation
+A8 rejects injection at all three SIR settings. At −10 dB it counts 373 authentication failures and zero corrupt deliveries. D6 verifies tampering, replay, negotiated context and restart-safe nonces. 5 expected-failing assertions across 5 cases remain in the expanded current selection; each is listed in the report.
 
-The current-format polar matrix covers BPSK, QPSK and 8-PSK, each with convolutional
-and BCH coding, in both bandwidths and all three high-latitude presets. Three
-seeds preserve 300/300/100-second quiet/moderate/disturbed durations. The site
-shows these current measurements. Configured 30 dB remains an uncalibrated noise
-reference; these finite traces do not establish route availability.
-
-The selected campaign records 424 runs, including 12 byte-identical repeated
-message runs. Both avx10 and naamah pass 21/21 CTest tests. The full A1–E4 matrix,
-recorded-band noise and soak were not rerun. Combined quick selections exceed
-two minutes; the report retains each invocation's duration.
+The result set includes the three modulation families, two coding choices, both bandwidths, quiet/moderate/disturbed presets, component comparisons and matched-power diversity controls. These finite simulated channels do not establish route availability. No live recording or soak result is claimed.

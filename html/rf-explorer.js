@@ -38,7 +38,7 @@
       ["Bit-exact RF frame survival", spread(row.survival, 100) + "%", "Range across three seeds"],
       ["Conditional BER", spread(row.ber, 1, 5), "Errors / compared bits"],
       ["Observed-bit fraction", spread(row.observed, 100) + "%", "Compared / transmitted bits"],
-      ["Measured TX sample power", spread(row.measured_power, 1, 4), "Before fading; uncalibrated noise reference"]
+      ["Measured TX sample power", spread(row.measured_power, 1, 4), "Before fading; calibrated noise reference"]
     ];
     fields.forEach(([label, value, unit], i) => {
       put(`rf-metric-label-${i}`, label); put(`rf-metric-${i}`, value);

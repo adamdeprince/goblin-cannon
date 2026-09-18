@@ -164,10 +164,10 @@ def encode_bank_symbol_delta(bank: int, radio_symbol: int, delta_units: int) -> 
     return bytes((bank, radio_symbol)) + encode_base254_varuint(zigzag_encode_i64(delta_units))
 
 
-def radio_billable_bytes(payload: bytes) -> int:
+def radio_billable_bytes(payload: bytes, compact: bool = False) -> int:
     # Match authenticated_message_wire_bytes: bank is in the 25-byte header,
     # followed by ciphertext, a 16-byte tag, and the conservative COBS bound.
-    record_bytes = len(payload) - 1 + 25 + 16
+    record_bytes = len(payload) - 1 + (13 if compact else 25) + 16
     return record_bytes + record_bytes // 254 + 2
 
 
@@ -260,6 +260,7 @@ async def stream_feed_once(
     bidder: ShadowBidder,
     publisher: MarketDataPublisher,
     auth_timeout: float,
+    compact_message_header: bool = False,
 ) -> None:
     if websockets is None:
         raise RuntimeError("websockets is required. Install with: python3 -m pip install websockets")
@@ -304,7 +305,7 @@ async def stream_feed_once(
                 if bidder.state[instrument.radio_symbol].last_sent_units == units:
                     bidder.record_received(instrument, units, now_ms)
                     continue
-                bid_cents = bidder.compute_bid_cents(instrument, units, radio_billable_bytes(payload), now_ms)
+                bid_cents = bidder.compute_bid_cents(instrument, units, radio_billable_bytes(payload, compact_message_header), now_ms)
                 accepted = publisher.publish(payload, bid_cents)
                 bidder.record_received(instrument, units, now_ms)
                 if accepted:
@@ -328,6 +329,7 @@ async def stream_feed_forever(
                 bidder,
                 publisher,
                 args.auth_timeout,
+                args.compact_message_header,
             )
         except Exception as exc:  # noqa: BLE001 - reconnect unless the process is stopped.
             print(f"{spec.name}: websocket disconnected: {exc}", file=sys.stderr)
@@ -437,6 +439,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--http-timeout", type=float, default=3.0, help="Massive REST timeout for front futures")
     parser.add_argument("--grpc-timeout", type=float, default=0.05, help="bank-control gRPC timeout in seconds")
     parser.add_argument("--auth-timeout", type=float, default=10.0, help="websocket auth timeout in seconds")
+    parser.add_argument("--compact-message-header", action="store_true", help="Match the transmitter's fiber-selected AEAD header format")
     parser.add_argument("--bank-refresh-seconds", type=float, default=1.0, help="bank snapshot polling interval")
     parser.add_argument("--reconnect-seconds", type=float, default=1.0, help="delay before websocket reconnect")
     return parser.parse_args()

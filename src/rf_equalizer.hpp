@@ -17,6 +17,7 @@ public:
   explicit RfEqualizer(const RfStreamConfig& config)
       : carrier_enabled_(config.carrier_correction),
         adaptive_(config.adaptive_equalization),
+        elapsed_time_tracking_(config.elapsed_time_tracking),
         spacing_(config.fractionally_spaced_equalization ? 2U : 1U),
         delay_(config.equalizer_delay_symbols * spacing_),
         reselect_interval_(config.equalizer_reselect_interval),
@@ -94,6 +95,9 @@ public:
   }
 
   Complex filter(Complex sample, Complex half_sample = {}) {
+    // Prediction proceeds even when the observation will be rejected. The
+    // measurement update below uses lambda=1 in this mode to avoid double aging.
+    if (recursive_ && elapsed_time_tracking_) age_uncertainty(1);
     const float power = std::norm(sample);
     fast_power_ += 0.125F * (power-fast_power_);
     slow_power_ += 0.002F * (power-slow_power_);
@@ -148,8 +152,8 @@ public:
     return observed;
   }
 
-  // Always record a decision for causal feedback. Low confidence freezes both
-  // loops rather than teaching the equalizer errors during a fade.
+  // Always record a decision for causal feedback. Low confidence rejects the
+  // measurement; elapsed-time prediction can still increase uncertainty.
   void update(Complex desired, Complex observed, float step, bool reliable, bool known = false) {
     bool phase_reliable = reliable;
     if (recursive_ && !known) {
@@ -241,13 +245,21 @@ public:
   }
 
 private:
+  void age_uncertainty(std::size_t symbols) {
+    double largest = 0;
+    for (std::size_t i = 0; i < active_.size(); ++i)
+      largest = std::max(largest, covariance_[i * active_.size() + i].real());
+    if (largest <= 0 || largest >= 1.0) return;
+    const auto factor = std::min(symbols == 1 ? 1.0 / 0.985 : std::pow(0.985, -static_cast<double>(symbols)), 1.0 / largest);
+    for (auto& value : covariance_) value *= factor;
+  }
   void reset_covariance() {
     std::fill(covariance_.begin(), covariance_.end(), std::complex<double>{});
     for (std::size_t i = 0; i < active_.size(); ++i) covariance_[i*active_.size()+i] = 0.1;
   }
 
   void update_recursive(Complex error) {
-    constexpr double forgetting = 0.985;
+    const double forgetting = elapsed_time_tracking_ ? 1.0 : 0.985;
     const auto n = active_.size();
     for (std::size_t i = 0; i < n; ++i) {
       const auto index = active_[i];
@@ -296,6 +308,7 @@ private:
   Complex last_forward_{};
   Complex output_phase_ = {1.0F, 0.0F};
   bool adaptive_;
+  bool elapsed_time_tracking_;
   std::size_t spacing_ = 1;
   std::size_t delay_ = 0;
   std::size_t reselect_interval_ = 0, selection_updates_ = 0;

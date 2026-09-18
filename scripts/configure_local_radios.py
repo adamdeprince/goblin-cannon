@@ -84,6 +84,9 @@ def make_restart_request(pb2: object, args: argparse.Namespace) -> object:
     request.equalizer_feedforward_taps = args.equalizer_feedforward_taps
     request.equalizer_feedback_taps = args.equalizer_feedback_taps
     request.compact_header = args.compact_header
+    request.warm_recovery = args.warm_recovery
+    request.elapsed_time_tracking = args.elapsed_time_tracking
+    request.compact_message_header = args.compact_message_header
     request.header_modulation = modulation_value(pb2, args.header_modulation)
     request.differential_mapping = getattr(pb2, {
         "none": "DIFFERENTIAL_NONE", "dbpsk": "DIFFERENTIAL_DBPSK",
@@ -269,6 +272,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--equalizer-feedforward-taps", type=int, default=3)
     parser.add_argument("--equalizer-feedback-taps", type=int, default=4)
     parser.add_argument("--compact-header", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--warm-recovery", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--elapsed-time-tracking", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--compact-message-header", action=argparse.BooleanOptionalAction, default=False,
+                        help="Select 13-byte authenticated header on both ends over fiber")
     parser.add_argument("--fec", choices=("1/2", "k9-1/2", "k9-1/3"), default="1/2")
     parser.add_argument("--soft-demapping", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--bch-payload", action=argparse.BooleanOptionalAction, default=False)

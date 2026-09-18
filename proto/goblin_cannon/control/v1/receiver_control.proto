@@ -136,6 +136,9 @@ message RestartRequest {
   optional double diversity_branch_bandwidth_hz = 46; // Zero: half total bandwidth.
   optional double diversity_separation_hz = 47; // Zero: half total bandwidth.
   optional uint32 diversity_branch_mask = 48; // 1 lower, 2 upper, 3 both; fixed total power.
+  optional bool warm_recovery = 49;
+  optional bool elapsed_time_tracking = 50;
+  optional bool compact_message_header = 51; // Fiber-negotiated AEAD format; full 128-bit tag.
 }
 
 message BankUpdate {

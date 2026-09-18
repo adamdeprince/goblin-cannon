@@ -1,0 +1,81 @@
+{
+  "byte_identical_repeats": 3,
+  "diversity_power_statuses": {
+    "pass": 72
+  },
+  "fullband_power_statuses": {
+    "pass": 36
+  },
+  "git_commit": "d2ab901f56d69037298eb698385f1a7e474664ec",
+  "groups": {
+    "A2": {
+      "characterized": 360
+    },
+    "A4": {
+      "THRESHOLD_TBD": 1,
+      "xfail": 1
+    },
+    "A8": {
+      "pass": 3
+    },
+    "B1": {
+      "pass": 4,
+      "xfail": 1
+    },
+    "B4": {
+      "pass": 3
+    },
+    "B5": {
+      "pass": 24
+    },
+    "C2": {
+      "THRESHOLD_TBD": 9,
+      "pass": 1,
+      "xfail": 1
+    },
+    "C4": {
+      "pass": 37
+    },
+    "D3": {
+      "xfail": 1
+    },
+    "D4": {
+      "pass": 97
+    },
+    "D6": {
+      "pass": 1,
+      "xfail": 1
+    },
+    "E1": {
+      "pass": 3
+    },
+    "E2": {
+      "characterized": 360
+    }
+  },
+  "host_latency_statuses": {
+    "pass": 24
+  },
+  "latency_configurations": 24,
+  "power_statuses": {
+    "characterized": 16,
+    "pass": 881
+  },
+  "recorded_runs": 908,
+  "remaining_assertions": 5,
+  "remaining_cases": 5,
+  "report_header": "simulated channel disturbed recovery validation",
+  "seeds": [
+    7446529,
+    7446530,
+    7446531
+  ],
+  "source_tree_sha256": "bc8baf1d34eb61216f9949c8b3a22e6e225b6c4d80a912df3a380a9b4125b6b1",
+  "statuses": {
+    "THRESHOLD_TBD": 10,
+    "characterized": 720,
+    "pass": 173,
+    "xfail": 5
+  },
+  "unique_case_seed_profiles": 905
+}

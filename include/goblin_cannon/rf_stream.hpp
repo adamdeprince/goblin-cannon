@@ -105,6 +105,11 @@ struct RfStreamConfig {
   // Revisit sparse RLS support after this many reliable updates; zero freezes
   // the initial selection. Inactive taps receive shadow NLMS updates.
   std::uint32_t equalizer_reselect_interval = 0;
+  // Fiber-selected recovery experiment: reuse learned echo support, assess
+  // recent training residuals, and use varied known payload startup symbols.
+  bool warm_recovery = false;
+  // Age RLS uncertainty in symbol time, including unreliable observations.
+  bool elapsed_time_tracking = false;
   // Conventional per-bit Euclidean metrics; receiver-only, no wire change.
   bool soft_demapping = false;
   AudioWaveform waveform = AudioWaveform::single_carrier;

@@ -95,6 +95,59 @@ source events that slip across their aligned audio tick.
 
 ## Read simulated channel results
 
+### Current disturbed simulated channel recovery
+
+The current [report](results/disturbed-recovery/SUMMARY.md) compares freshly
+calibrated baselines with four authorized changes. Carrier correction is off.
+No acceptance threshold changed. New controls are opt-in and configured at
+both ends over fiber:
+
+- `--warm-recovery`: reuse learned echo support, train amplitudes/phases on
+  known symbols, and use varied startup symbols in the payload constellation.
+  Three warm passes fall back to the existing cold training on failure. EVM is
+  scored over the final 64 symbols after the history guard; its limit stays 0.45.
+- `--elapsed-time-tracking`: predict bounded RLS covariance on every processed
+  symbol, even when its decision is rejected. Accepted observations do not
+  apply forgetting a second time. Training passes reuse the received block;
+  this is not a carrier-frequency tracker.
+- `--compact-message-header`: use the 13-byte authenticated header described
+  in [AEAD.md](AEAD.md), retaining the full 16-byte tag and durable nonce epoch.
+- Frequency diversity: existing BPSK+BCH branches now match single-carrier
+  measured transmit power. Compare full-power lower/upper controls to both
+  copies, using the same Watterson realization and source stream.
+
+The combined recipe uses training length `max(128, ceil(1.4 * feedforward_taps))`
+and recovery every eight frames. All spans, pilot settings, SNRs and channel
+parameters are in each result; use those exact configurations for replication.
+The receiver never receives simulator tap positions or fading coefficients.
+
+```sh
+# Supply the originating revision and source_digest() for a remote source copy.
+python3 scripts/disturbed_campaign.py security --git-commit COMMIT --source-digest SHA256
+python3 scripts/disturbed_campaign.py polar --git-commit COMMIT --source-digest SHA256
+python3 scripts/disturbed_campaign.py diversity --git-commit COMMIT --source-digest SHA256
+python3 scripts/disturbed_campaign.py repeat --git-commit COMMIT --source-digest SHA256
+python3 scripts/validate_disturbed_diversity.py --tier quick --git-commit COMMIT --source-digest SHA256
+# On naamah, serially, after other validation finishes:
+python3 scripts/disturbed_campaign.py latency --git-commit COMMIT --source-digest SHA256
+python3 scripts/disturbed_results.py
+```
+
+`--campaign disturbed_quick|disturbed_screen|disturbed_followup|disturbed_diversity|disturbed_delay|disturbed_latency`
+selects the corresponding declared cases in the standard runner. Every case
+has one kind and one tier. Three seeds retain 300/300/100-second authenticated
+quiet/moderate/disturbed traces; off-preset diversity tests retain 100 seconds
+at both 6.75 and 7.25 ms. Raw RF screens last ten seconds. Baseline, individual
+changes and combined changes use the same seeds and corrected power reference.
+Runtime reports retain every invocation, including overruns.
+
+Noise power now uses `tx_gain²`, consistent with the symbol-time RRC amplitudes.
+FSK and diversity use that same transmit-power convention. Result observations
+record actual finite-stream transmit power; `POWER.json` audits calibration and
+matched copies against the pre-existing 2% numerical tolerance. Earlier
+uncalibrated results remain historical artifacts and are not used as the new
+baseline. No waveform or fade is rescaled after observing the channel.
+
 ### BCH, diversity and cadence simulated channel comparison
 
 The [refinement report](results/refinement/REPORT.md) compares coherent
@@ -132,10 +185,11 @@ The copies must not overlap or extend outside the configured audio bandwidth.
 `--diversity-branch both|lower|upper` selects two equal-power copies or a
 single full-power control at exactly the same symbol rate and framing.
 Total nominal power is held constant as width or copy count changes.
-The power audit found that this nominal convention disagrees with measured
+The historical power audit found that this nominal convention disagreed with measured
 RRC power: at width 0.4B, diversity emits about 2.5× full-band BPSK power.
 Lower/upper/both controls match each other. The noise reference also misstates
-actual pre-fade SNR. `python3 scripts/validate_refinement_power.py` retains six
+actual pre-fade SNR. The current disturbed campaign fixes both errors.
+`python3 scripts/validate_refinement_power.py` retains six historical
 exact-source xfails and 54 matched-control assertions using the existing RF
 measurements. Do not interpret these or earlier cross-family runs as equal
 actual power; see [the calibration audit](results/refinement/power-audit/SUMMARY.md).

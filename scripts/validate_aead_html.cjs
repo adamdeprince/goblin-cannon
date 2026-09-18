@@ -55,7 +55,7 @@ const spread = (values, scale = 1, places = 2) => {
         }
       }
     const rows = page.locator("#current-latency-table tbody tr");
-    assert.equal(await rows.count(), 12);
+    assert.equal(await rows.count(), data.latency.length);
     for (const [i, r] of data.latency.filter(r => r.profile === "naamah-latency").entries()) {
       const host = read(r.source).observations, record = read(r.record);
       assert.deepEqual(await rows.nth(i).locator("td").allInnerTexts(), [
@@ -66,12 +66,20 @@ const spread = (values, scale = 1, places = 2) => {
     }
     assert.equal(await page.locator("#current-defect-table tbody tr").count(), data.manifest.remaining_assertions);
     assert.equal(await page.locator("#current-auth-table tbody tr").count(), 3);
+    await page.locator("#rf-simulation details summary").click();
+    const diversityRows = page.locator("#current-diversity-table tbody tr");
+    assert.equal(await diversityRows.count(), data.diversity.length);
+    for (const [i, row] of data.diversity.entries()) {
+      const expected = ["lower", "upper", "both"].map(branch =>
+        spread(row.branches[branch].sources.map(source => read(source).metrics.fresh_goodput_bps)));
+      assert.deepEqual(await diversityRows.nth(i).locator("td").allInnerTexts(), expected);
+    }
     assert.equal(await page.locator("#current-delivery-table tbody tr").count(), 6);
     assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('a[href^="#"]')].map(a => a.hash.slice(1)).filter(id => id && !document.getElementById(id))), []);
     assert.equal(await page.evaluate(() => [globalThis.GoblinPskResults, globalThis.GoblinEncodingResults, globalThis.GoblinRefinementResults].every(x => x === undefined)), true);
     assert.equal(await page.locator("#encoding-results, #psk-results, #refinement-controls").count(), 0);
-    await page.selectOption("#rf-bandwidth", "24000"); await page.selectOption("#rf-modulation", "bpsk");
-    await page.selectOption("#rf-preset", "moderate"); await page.selectOption("#rf-layer", "messages");
+    await page.selectOption("#rf-bandwidth", "24000"); await page.selectOption("#rf-modulation", "qpsk");
+    await page.selectOption("#rf-preset", "disturbed"); await page.selectOption("#rf-layer", "messages");
     if (output) await page.locator("#rf-explorer").screenshot({ path: output.replace(/\.json$/, "-desktop.png") });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator("#test-results details").evaluateAll(nodes => nodes.forEach(n => n.open = true));
@@ -83,9 +91,10 @@ const spread = (values, scale = 1, places = 2) => {
     assert.equal(await nojs.locator("#current-delivery-table tbody tr").count(), 6);
     assert.equal(await nojs.locator("#rf-controls").isVisible(), false);
     assert.deepEqual(errors, []);
-    const report = { report_header: "simulated channel current AEAD HTML verification", url: target,
+    const report = { report_header: "simulated channel disturbed recovery HTML verification", url: target,
       status: "pass", source_tree_sha256: data.manifest.source_tree_sha256, explorer_views: views, source_links: sourceLinks,
-      latency_rows: 12, defects: data.manifest.remaining_assertions, no_javascript_rows: 6, mobile_width: 390, page_errors: errors };
+      latency_rows: data.latency.length, diversity_rows: data.diversity.length,
+      defects: data.manifest.remaining_assertions, no_javascript_rows: 6, mobile_width: 390, page_errors: errors };
     if (output) fs.writeFileSync(output, JSON.stringify(report, null, 2) + "\n");
     console.log(JSON.stringify(report));
   } finally { await browser.close(); }

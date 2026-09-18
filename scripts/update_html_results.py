@@ -4,7 +4,7 @@ import argparse
 import hashlib
 from pathlib import Path
 import re
-from aead_html import build
+from disturbed_html import build
 
 ROOT=Path(__file__).resolve().parents[1]
 WEB=ROOT/"html"

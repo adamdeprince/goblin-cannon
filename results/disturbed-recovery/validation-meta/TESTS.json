@@ -1,0 +1,48 @@
+{
+  "report_header": "simulated channel regression and host validation",
+  "parameters": {
+    "report_header": "simulated channel measurement source",
+    "git_commit": "d2ab901f56d69037298eb698385f1a7e474664ec",
+    "source_tree_sha256": "bc8baf1d34eb61216f9949c8b3a22e6e225b6c4d80a912df3a380a9b4125b6b1"
+  },
+  "kind": "assert",
+  "tier": "quick",
+  "seed": 7446529,
+  "ctest": {
+    "avx10": {
+      "passed": 21,
+      "total": 21,
+      "log": "avx10-ctest.log",
+      "require_avx512": true
+    },
+    "naamah": {
+      "passed": 21,
+      "total": 21,
+      "log": "naamah-ctest.log",
+      "require_avx512": false
+    }
+  },
+  "python_harness": {
+    "passed": 15,
+    "total": 15
+  },
+  "python_grpc": {
+    "passed": 19,
+    "total": 19,
+    "record": "PYTHON_GRPC.json"
+  },
+  "sanitizers": {
+    "host": "naamah",
+    "passed": 3,
+    "total": 3,
+    "flags": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+    "ASAN_OPTIONS": "detect_leaks=0",
+    "UBSAN_OPTIONS": "halt_on_error=1",
+    "scope": "Address and undefined behavior checks; not a leak-sanitizer audit. Run after all paced B5 observations completed.",
+    "log": "naamah-sanitize.log"
+  },
+  "remote_source_digests": {
+    "avx10": "bc8baf1d34eb61216f9949c8b3a22e6e225b6c4d80a912df3a380a9b4125b6b1",
+    "naamah": "bc8baf1d34eb61216f9949c8b3a22e6e225b6c4d80a912df3a380a9b4125b6b1"
+  }
+}

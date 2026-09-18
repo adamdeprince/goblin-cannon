@@ -3,6 +3,7 @@
 #include "goblin_cannon/message_stream.hpp"
 #include "goblin_cannon/integer_codec.hpp"
 #include "channel_simulator.hpp"
+#include "../src/rf_equalizer.hpp"
 
 #include <algorithm>
 #include <array>
@@ -44,10 +45,11 @@ std::vector<Complex> encode(const RfStreamConfig& c, const std::vector<std::uint
   return audio;
 }
 
-void rf_chunks() {
+void rf_chunks(bool warm) {
   for(const auto bandwidth:{10000,24000}) for(const auto mode:{Modulation::qpsk,Modulation::qam16,Modulation::qam64})
       for(const bool fractional:{false,true}) {
-    const auto c=config(mode,bandwidth,fractional);
+    auto c=config(mode,bandwidth,fractional);
+    c.warm_recovery=warm;c.elapsed_time_tracking=warm;
     std::mt19937 random(seed);
     std::vector<std::uint32_t> data(2048);
     for(auto& s:data)s=random()&((1U<<bits_per_symbol(mode))-1);
@@ -109,6 +111,7 @@ void messages() {
                           PuncturedConvolutionalCodeConfig::rate_3_4()}) {
     RealtimePipelineConfig c;c.rf=config(mode,bandwidth,true);c.convolutional=fec;c.frame_counter_start=100;
     c.sync_timestamp.enabled=false;
+    c.compact_message_header=true;c.rf.warm_recovery=true;c.rf.elapsed_time_tracking=true;
     SpscRingBuffer<DelimitedMessage> input(256),output(256);
     RealtimeTransmitter tx(c,input);RealtimeReceiver rx(tx.config(),output);
     std::array<Complex,48> audio{};
@@ -139,9 +142,29 @@ void messages() {
   }
 }
 }
+void uncertainty_after_fade() {
+  // A predictor must learn more from the first returned pilot when 1000
+  // rejected observations have elapsed. This compares responses, not a new
+  // channel acceptance threshold. The fixture is a known amplitude step.
+  std::array<float,2> error{};
+  for(unsigned elapsed=0;elapsed<2;++elapsed) {
+    auto c=config(Modulation::qpsk,24000,false);c.equalizer_feedforward_taps=1;
+    c.equalizer_feedback_taps=0;c.elapsed_time_tracking=elapsed;
+    detail::RfEqualizer equalizer(c);equalizer.start_recursive_tracking();
+    for(unsigned i=0;i<2000;++i) {
+      const auto observed=equalizer.filter({1,0});equalizer.update({1,0},observed,.08F,true,true);
+    }
+    for(unsigned i=0;i<1000;++i) {
+      const auto observed=equalizer.filter({1,0});equalizer.update({1,0},observed,.08F,false);
+    }
+    const auto pilot=equalizer.filter({1.2F,0});equalizer.update({1,0},pilot,.08F,true,true);
+    error[elapsed]=std::abs(equalizer.filter({1.2F,0})-Complex{1,0});
+  }
+  require(error[1]<error[0],"elapsed uncertainty failed to improve response after rejected observations");
+}
 int main() {
   goblin_cannon::test::EpochFixture epoch_fixture;
   std::cout<<"simulated channel recovery regressions; kind=assert tier=quick seed="<<seed<<'\n';
-  try {seek_and_resume();rf_chunks();messages();}
+  try {seek_and_resume();rf_chunks(false);rf_chunks(true);messages();uncertainty_after_fade();}
   catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

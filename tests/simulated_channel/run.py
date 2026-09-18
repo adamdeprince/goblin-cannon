@@ -471,7 +471,7 @@ def report(output,all_cases):
               "- Total source-to-sink latency includes startup and audio buffering. B5 applies 2.1 ms to per-message added processing/buffering above a matched one-sample intrinsic reference. Its separate paced host observations include CPU/OS scheduling. Transmission and modem residence estimates are also reported. Physical audio devices and network sockets are outside this simulated loopback.",
               "- Usable-time is an explicitly labeled local one-second delivery-window proxy. Exact STAC comparability is unavailable pending audit definitions/standby instrumentation.",
               "- Conditional unsupported features, missing recordings, unrun soak cases, and open thresholds are never counted as passes.",
-              "- D6 cannot count AEAD authentication failures at A1 error rates because production exposes AES-CTR/CRC only. Its replay check exercises captured framed messages at the deframer; it does not claim an encrypted RF replay audit with wall-clock timestamp validation.",
+              "- D6 audits production AES-256-GCM tampering, replay and persisted restart epochs. A8 measures authentication rejection through the simulated RF path. Full A1-rate coverage and coordinated key rotation remain open.",
               "- D1 includes both isolated auction service and a null-channel auction-to-radio-to-sink overload fixture at 10 kHz/QPSK/rate-1/2. D3 isolates auction service. Per-key newest-message and chronological-window latency observations are retained; unapproved delay margins remain open.",
               "", f"See [TESTING.md]({os.path.relpath(REPO/'TESTING.md',output.resolve())}) and [source audit/questions]({os.path.relpath(REPO/'tests/simulated_channel/QUESTIONS.md',output.resolve())})."]
     executions=sorted(output.glob("EXECUTION-*.json"))
@@ -518,8 +518,8 @@ def main():
     parser.add_argument("--jobs",type=int,default=4)
     parser.add_argument("--seed",type=int,default=None)
     parser.add_argument("--seeds",type=int,nargs="+",help="independent seeds; full declared duration for each")
-    parser.add_argument("--profile",choices=("legacy","recovery"),default="legacy")
-    parser.add_argument("--campaign",choices=("matrix","polar_screen","polar_long","psk_quick","psk_screen","psk_followup","psk_snr","psk_latency","encoding_quick","encoding_screen","encoding_followup","encoding_snr","encoding_latency","refinement_quick","refinement_screen","refinement_followup","refinement_snr","refinement_latency","refinement_delay"))
+    parser.add_argument("--profile",choices=("legacy","recovery","disturbed"),default="legacy")
+    parser.add_argument("--campaign",choices=("matrix","polar_screen","polar_long","psk_quick","psk_screen","psk_followup","psk_snr","psk_latency","encoding_quick","encoding_screen","encoding_followup","encoding_snr","encoding_latency","refinement_quick","refinement_screen","refinement_followup","refinement_snr","refinement_latency","refinement_delay","disturbed_quick","disturbed_screen","disturbed_followup","disturbed_diversity","disturbed_delay","disturbed_latency"))
     parser.add_argument("--git-commit")
     parser.add_argument("--source-digest")
     parser.add_argument("--resume",action="store_true",help="reuse only parameter-identical records")
@@ -534,11 +534,15 @@ def main():
     if args.seeds and (len(args.seeds)!=len(set(args.seeds)) or any(not 0<=s<2**32 for s in args.seeds)):
         parser.error("--seeds must be distinct unsigned 32-bit integers")
     all_cases=matrix()
-    if args.profile=="recovery":
+    if args.profile in ("recovery","disturbed"):
         for c in all_cases:
             if c.parameters.get("campaign","matrix")=="matrix":
                 c.parameters.update(RECOVERY_PROFILE)
-                c.parameters["rf_profile"]="recovery"
+                c.parameters["rf_profile"]=args.profile
+                if args.profile=="disturbed":
+                    from math import ceil
+                    c.parameters.update(warm_recovery=1,elapsed_time_tracking=1,compact_message_header=1,
+                        recovery_interval_frames=8,training_symbols=max(128,ceil(1.4*c.parameters["equalizer_feedforward_taps"])))
     if args.recordings:
         manifest=json.loads(args.recordings.read_text())
         all_cases=[c for c in all_cases if c.group!="E4"]

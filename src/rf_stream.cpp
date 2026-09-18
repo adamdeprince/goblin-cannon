@@ -26,6 +26,17 @@ std::uint32_t startup_pilot_symbols(const RfStreamConfig& config) {
       config.equalizer_feedforward_taps + config.equalizer_feedback_taps));
 }
 
+std::uint32_t startup_symbol(const RfStreamConfig& config, std::size_t index) {
+  if (!config.warm_recovery) return config.pilot_sequence[index % config.pilot_sequence.size()];
+  // Known, varied symbols excite the echo span; a repeating two-point pattern
+  // cannot distinguish long echoes. All choices come from fiber configuration.
+  const auto bits = bits_per_symbol(config.modem.modulation);
+  std::uint32_t value = 0;
+  for (std::size_t i = 0; i < (bits + 1U) / 2U; ++i)
+    value = (value << 2U) | config.equalizer_training_sequence[(index * 5U + i) % config.equalizer_training_sequence.size()];
+  return value & ((1U << bits) - 1U);
+}
+
 std::uint32_t modulation_id(Modulation modulation) {
   switch (modulation) {
   case Modulation::qpsk:
@@ -570,8 +581,8 @@ public:
       if (result.produced_samples == out.size()) break;
 
       if (startup_pilots_remaining_ != 0) {
-        const auto idx = (startup_pilot_symbols(config_) - startup_pilots_remaining_) % config_.pilot_sequence.size();
-        push_modulation_symbol(config_.pilot_sequence[idx], out.subspan(result.produced_samples), result);
+        const auto idx = startup_pilot_symbols(config_) - startup_pilots_remaining_;
+        push_modulation_symbol(startup_symbol(config_, idx), out.subspan(result.produced_samples), result);
         --startup_pilots_remaining_;
         if (result.produced_samples == out.size()) {
           break;
@@ -780,6 +791,7 @@ public:
     noise_variance_ = 1.0F;
     pilot_group_bad_ = false;
     equalizer_.reset();
+    warm_available_ = false;
     header_ = std::nullopt;
     sync_ = {};
     carrier_origin_sample_ = 0;
@@ -921,11 +933,16 @@ private:
     Constellation qpsk(Modulation::qpsk);
     Constellation header_constellation(config_.header_modulation);
     const auto training_count = config_.equalizer_training_sequence.size();
-    equalizer_.reset();
     const auto guard = std::max(equalizer_.memory_symbols(), config_.modem.filter_span_symbols / 2U);
     double error_power = 0.0;
     std::size_t error_count = 0;
-    const std::size_t passes = config_.adaptive_equalization ? (config_.recursive_equalization ? 13 : 12) : 1;
+    const bool warm = config_.warm_recovery && config_.recursive_equalization && warm_available_;
+    if (!warm) equalizer_.reset();
+    const auto train = [&](bool reuse) {
+    error_power = 0; error_count = 0;
+    const std::size_t passes = reuse ? 3 : config_.adaptive_equalization ? (config_.recursive_equalization ? 13 : 12) : 1;
+    if (reuse) equalizer_.start_recursive_tracking();
+    const auto score_start = config_.warm_recovery ? std::max(guard, training_count + delay > 64 ? training_count + delay - 64 : 0) : guard;
     for (std::size_t pass = 0; pass < passes; ++pass) {
       // Reuse the already received training block; no extra RF symbols or
       // steady-state buffering are introduced by these convergence passes.
@@ -934,12 +951,20 @@ private:
       for (std::size_t i = 0; i < training_count + delay; ++i) {
         const auto observed = equalizer_.filter(symbols[i], halves.empty() ? Complex{} : halves[i]);
         const auto desired = i >= delay ? qpsk.map_symbol(config_.equalizer_training_sequence[i-delay]) : Complex{};
-        if (pass + 1 == passes && i >= guard) {
+        if (pass + 1 == passes && i >= score_start) {
           error_power += std::norm(desired - observed);
           ++error_count;
         }
         equalizer_.update(desired, observed, equalizer_step, i >= guard, true);
       }
+    }
+    };
+    train(warm);
+    // A stale support estimate must not prevent a fresh acquisition. Retry the
+    // same received block with cold training; no extra symbols are transmitted.
+    if (warm && (!error_count || !std::isfinite(error_power) || error_power / error_count > 0.45 * 0.45)) {
+      equalizer_.reset();
+      train(false);
     }
     sync_.training_evm = static_cast<float>(std::sqrt(error_power / std::max<std::size_t>(error_count, 1U)));
     noise_variance_ = std::max(1.0e-4F, sync_.training_evm * sync_.training_evm);
@@ -1010,6 +1035,7 @@ private:
     }
 
     header_ = *parsed;
+    warm_available_ = true;
     recent_audio_.clear();
     frame_counter_ = parsed->frame_counter_start;
     frame_symbol_offset_ = 0;
@@ -1068,7 +1094,7 @@ private:
         const auto elapsed = startup_pilot_symbols(config_) - startup_pilots_remaining_;
         if (elapsed >= equalizer_.memory_symbols())
           observed = equalizer_.track_pilot_gain(data_constellation_.map_symbol(
-              config_.pilot_sequence[elapsed % config_.pilot_sequence.size()]), observed);
+              startup_symbol(config_, elapsed)), observed);
       }
       const bool payload = startup_discard_symbols_ == 0 && startup_pilots_remaining_ == 0 && symbols_until_pilot_ != 0;
       const auto rotation = payload ? differential_.physical_rotation() : Complex{1, 0};
@@ -1095,8 +1121,8 @@ private:
     }
 
     if (startup_pilots_remaining_ != 0) {
-      const auto index = (startup_pilot_symbols(config_) - startup_pilots_remaining_) % config_.pilot_sequence.size();
-      equalizer_.update(data_constellation_.map_symbol(config_.pilot_sequence[index]), observed, equalizer_step,
+      const auto index = startup_pilot_symbols(config_) - startup_pilots_remaining_;
+      equalizer_.update(data_constellation_.map_symbol(startup_symbol(config_, index)), observed, equalizer_step,
                         startup_pilot_symbols(config_) - startup_pilots_remaining_ >= equalizer_.memory_symbols(), true);
       --startup_pilots_remaining_;
       differential_.observe_pilot(observed);
@@ -1173,7 +1199,7 @@ private:
     data_decoder_.reset();
     bad_pilots_ = 0;
     pilot_group_bad_ = false;
-    equalizer_.reset();
+    if (!(config_.warm_recovery && warm_available_)) equalizer_.reset();
     pending_symbols_.clear();
     pending_symbol_offset_ = 0;
     header_ = std::nullopt;
@@ -1211,6 +1237,7 @@ private:
   Constellation data_constellation_;
   detail::DifferentialPsk differential_;
   detail::RfEqualizer equalizer_;
+  bool warm_available_ = false;
   float noise_variance_ = 1.0F;
   std::size_t bad_pilots_ = 0;
   bool pilot_group_bad_ = false;

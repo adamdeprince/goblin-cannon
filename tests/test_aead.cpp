@@ -54,32 +54,44 @@ void epoch_storage() {
   failed=false;try {(void)message_nonce(1,0);}catch(const std::invalid_argument&){failed=true;}
   aead_require(failed,"zero sequence accepted");
 }
-void bounds_and_context() {
+void bounds_and_context(bool compact) {
   test::EpochFixture state;Aes256Key key{};
-  MessageStreamFramer tx;tx.set_sequence_numbers(true);tx.authenticate(key,1,TransmitterEpoch::reserve(state.path));
-  MessageStreamDeframer rx;rx.set_sequence_numbers(true);rx.authenticate(key,1,1);
+  MessageStreamFramer tx;tx.set_sequence_numbers(true);tx.authenticate(key,1,TransmitterEpoch::reserve(state.path),compact);
+  MessageStreamDeframer rx;rx.set_sequence_numbers(true);rx.authenticate(key,1,1,compact);
   const std::array<std::uint8_t,8> timestamp{42};tx.set_authentication_context(timestamp);rx.set_authentication_context(timestamp);
   SpscRingBuffer<DelimitedMessage> input(4),output(4);
   DelimitedMessage largest{.bytes=std::vector<std::uint8_t>(maximum_message_bytes,255)};largest.bytes[0]=1;
   (void)input.try_push(largest);(void)input.try_push(DelimitedMessage{.bytes={0,2}});
-  std::vector<std::uint8_t> wire(authenticated_message_wire_bytes(maximum_message_bytes)+100);
+  std::vector<std::uint8_t> wire(authenticated_message_wire_bytes(maximum_message_bytes,compact)+100);
   (void)tx.next_payload_frame(input,wire);
   for (std::size_t at=0;at<wire.size();at+=17) (void)rx.push_payload_frame(std::span(wire).subspan(at,std::min<std::size_t>(17,wire.size()-at)),output);
   DelimitedMessage got;
   aead_require(output.try_pop(got) && got.bytes==largest.bytes,"maximum AEAD message lost");
   aead_require(output.try_pop(got) && got.bytes==std::vector<std::uint8_t>{0,2} && output.empty(),"minimum AEAD message lost");
-  MessageStreamDeframer changed;changed.set_sequence_numbers(true);changed.authenticate(key,1,1);
+  MessageStreamDeframer changed;changed.set_sequence_numbers(true);changed.authenticate(key,1,1,compact);
   (void)changed.push_payload_frame(wire,output);
   aead_require(output.empty() && changed.authentication_failures()==2,"unauthenticated timestamp accepted");
+  for(unsigned mismatch=0;mismatch<3;++mismatch) {
+    MessageStreamDeframer wrong;
+    wrong.set_sequence_numbers(mismatch!=0);
+    wrong.authenticate(key,1,mismatch==1?2:1,mismatch==2?!compact:compact);
+    wrong.set_authentication_context(timestamp);
+    (void)wrong.push_payload_frame(wire,output);
+    aead_require(output.empty(),"mismatched negotiated authentication context accepted");
+  }
 }
 }
 int main() {
   try {
-    known_answer();epoch_storage();bounds_and_context();
-    const auto audit=test::audit_aead(0x71A001);
+    known_answer();epoch_storage();
+    for(bool compact:{false,true}) {
+    bounds_and_context(compact);
+    const auto audit=test::audit_aead(0x71A001,compact);
     aead_require(audit.nonces==16 && audit.reused_nonces==0,"nonce reuse after process restart");
     aead_require(audit.authentication_failures==audit.tamper_attempts && !audit.unverified_deliveries,"tamper reached sink or lacked counter");
-    aead_require(audit.valid_deliveries==16 && audit.replay_rejections==16,"replay/session boundary failed");
+    aead_require(audit.valid_deliveries==16 && audit.replay_rejections+audit.old_epoch_authentication_failures==16,"replay/session boundary failed");
+    aead_require(audit.tamper_attempts==(compact?31:43),"authenticated header did not shrink by 12 bytes");
+    }
     std::cout<<"simulated channel: AES-256-GCM assert/quick seed=7446529; restart, AD, tag, replay, bounds and persistence pass\n";
   } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }

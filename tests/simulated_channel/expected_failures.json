@@ -23,5 +23,9 @@
   "recovery::C2_24000_acquire_3dB.acquired": null,
   "recovery::A9_dropout_2s.no_stale_messages": null,
   "recovery::A9_dropout_30s.no_stale_messages": null,
-  "recovery::A9_dropout_300s.no_stale_messages": null
+  "recovery::A9_dropout_300s.no_stale_messages": null,
+  "disturbed::A4_10000_64qam_drift_10min.sync_held": "With warm recovery and elapsed-time prediction, 10 kHz 64-QAM loses lock 1112 times in the ten-minute residual-drift trace; first loss is at 304 s. Carrier correction remains off.",
+  "disturbed::B1_24000_64qam_-20dB_1_100.sync_held": "With warm recovery and elapsed-time prediction, 24 kHz 64-QAM loses lock once in the -20 dB / 1 ms attack / 100 ms decay trace.",
+  "disturbed::C2_24000_acquire_3dB.acquired": null,
+  "disturbed::D6_key_rotation.rotation_supported": "Both 25-byte and fiber-selected 13-byte authenticated headers retain key IDs, full GCM tags and durable epochs; two-key overlap and coordinated mid-stream retirement remain unimplemented."
 }

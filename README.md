@@ -148,6 +148,14 @@ Application messages retain their bank byte (`0` or `1`) and body bytes in `[2,2
 
 Every production record has mandatory nonce/replay sequencing. Optional application sequencing suppresses duplicate and older per-key serials and handles application-counter wraparound. RF reacquisition retains both high-water marks. The frame counter never wraps: exhaustion stops transmission until a fresh epoch is reserved. The standalone default CRC framer and AES-128-CTR helpers remain for legacy codec fixtures; the realtime classes always enable GCM and have no downgrade path. RF-header CRCs remain solely for acquisition/framing screening; they do not authenticate messages.
 
+The opt-in disturbed-channel profile uses a **13-byte authenticated header**:
+bank, key ID, mandatory frame sequence and application sequence. Epoch, format,
+sequencing mode and length remain authenticated context, with the epoch and
+format selected over fiber. The tag stays 16 bytes. It also enables warm
+equalizer recovery and elapsed-symbol uncertainty prediction. See the
+[current simulated channel report](results/disturbed-recovery/SUMMARY.md) and
+[configuration/testing instructions](TESTING.md#current-disturbed-simulated-channel-recovery).
+
 See [AEAD deployment and nonce lifecycle](AEAD.md) before starting a transmitter. This is a wire-format and control-API break: upgrade both ends together. Authenticated key IDs provide the basis for a future two-key receiver, but coordinated mid-stream rotation and old-key retirement remain unimplemented.
 
 The transmitter also publishes the original application message sequence over every active `ReceiverSession` gRPC stream. Canonical messages are batched up to 128 payloads; if a batch does not fill, it is flushed within 100 ms. Receivers use this stream for accounting. A decoded message missing from that stream after the configured timeout emits a distinct bad-message UDP packet; this accounting check is separate from mandatory GCM verification before delivery.

@@ -41,7 +41,7 @@ inline std::vector<std::vector<std::uint8_t>> split_records(std::span<const std:
   }
   return records;
 }
-inline std::vector<std::uint8_t> sender_process(const Aes256Key& key, const std::string& path) {
+inline std::vector<std::uint8_t> sender_process(const Aes256Key& key, const std::string& path, bool compact=false) {
   int channel[2];aead_require(pipe(channel)==0,"audit pipe");
   const auto pid=fork();aead_require(pid>=0,"audit fork");
   if (!pid) {
@@ -51,7 +51,7 @@ inline std::vector<std::uint8_t> sender_process(const Aes256Key& key, const std:
       for (unsigned i=0;i<8;++i) (void)input.try_push(DelimitedMessage{.bytes={0,2,static_cast<std::uint8_t>(2+i)}});
       MessageStreamFramer framer;
       framer.set_sequence_numbers(true);
-      framer.authenticate(key,71,TransmitterEpoch::reserve(path));
+      framer.authenticate(key,71,TransmitterEpoch::reserve(path),compact);
       std::array<std::uint8_t,2048> bytes{};
       const auto result=framer.next_payload_frame(input,bytes);
       const auto size=result.payload_bytes+1;
@@ -67,20 +67,28 @@ inline std::vector<std::uint8_t> sender_process(const Aes256Key& key, const std:
 struct AeadAudit {
   unsigned nonces=0, reused_nonces=0, tamper_attempts=0;
   std::uint64_t authentication_failures=0,replay_rejections=0,unverified_deliveries=0;
+  std::uint64_t old_epoch_authentication_failures=0;
   unsigned valid_deliveries=0;
 };
-inline AeadAudit audit_aead(std::uint32_t seed) {
+inline AeadAudit audit_aead(std::uint32_t seed, bool compact=false) {
   EpochFixture state;std::mt19937 random(seed);Aes256Key key;
   for (auto& b:key.bytes)b=static_cast<std::uint8_t>(random());
-  const auto first=sender_process(key,state.path),second=sender_process(key,state.path);
+  const auto first=sender_process(key,state.path,compact),second=sender_process(key,state.path,compact);
   const auto records=split_records(first),restarted=split_records(second);
   aead_require(records.size()==8 && restarted.size()==8,"sender lost records");
   AeadAudit audit;std::set<GcmNonce> nonces;
   for (const auto* group:{&records,&restarted}) for (const auto& record:*group) {
-    GcmNonce nonce{};std::copy_n(record.begin()+7,12,nonce.begin());
+    GcmNonce nonce{};
+    if (compact) {
+      // These fresh fixture journals reserve epochs 1 and 2 in separate
+      // processes. In format 2 the epoch is supplied over fiber, not radio.
+      std::uint32_t sequence=0;
+      for(unsigned i=5;i<9;++i)sequence=(sequence<<8)|record[i];
+      nonce=message_nonce(group==&records?1:2,sequence);
+    } else std::copy_n(record.begin()+7,12,nonce.begin());
     ++audit.nonces;audit.reused_nonces+=!nonces.insert(nonce).second;
   }
-  MessageStreamDeframer receiver;receiver.set_sequence_numbers(true);receiver.authenticate(key,71,1);
+  MessageStreamDeframer receiver;receiver.set_sequence_numbers(true);receiver.authenticate(key,71,1,compact);
   SpscRingBuffer<DelimitedMessage> output(32);
   // Every authenticated header byte, every ciphertext byte and every tag byte
   // is mutated, including key ID, epoch, frame/app sequence, bank and length.
@@ -98,10 +106,11 @@ inline AeadAudit audit_aead(std::uint32_t seed) {
   (void)receiver.push_payload_frame(first,output);
   audit.unverified_deliveries+=output.size_approx();
   audit.replay_rejections=receiver.replay_rejections();
-  MessageStreamDeframer next_session;next_session.set_sequence_numbers(true);next_session.authenticate(key,71,2);
+  MessageStreamDeframer next_session;next_session.set_sequence_numbers(true);next_session.authenticate(key,71,2,compact);
   (void)next_session.push_payload_frame(first,output);
   audit.unverified_deliveries+=output.size_approx();
   audit.replay_rejections+=next_session.replay_rejections();
+  audit.old_epoch_authentication_failures=next_session.authentication_failures();
   (void)next_session.push_payload_frame(second,output);
   audit.valid_deliveries+=output.size_approx();
   return audit;

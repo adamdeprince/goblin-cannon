@@ -61,8 +61,7 @@ void waveform_test(const RfStreamConfig& c, unsigned symbols = 128) {
   double power = 0;
   for (auto s : audio)
     power += std::norm(s);
-  const auto nominal =
-      c.modem.tx_gain * c.modem.tx_gain * c.modem.bandwidth_hz / 1.25 / c.modem.sample_rate_hz;
+  const auto nominal = c.modem.tx_gain * c.modem.tx_gain;
   // Finite RRC sequences have startup/tail power; the steady noncoherent tone
   // waveform must have the same nominal power to floating-point precision.
   if (c.waveform == AudioWaveform::fsk4 || c.waveform == AudioWaveform::fsk8)
@@ -186,6 +185,11 @@ void diversity_controls_test() {
     }
     require(std::abs(power[0] / power[1] - 1) < 1e-6, "single-copy controls have unequal power");
     require(std::abs(power[2] / power[0] - 1) < .02, "diversity changes total finite-waveform power");
+    auto single = config(AudioWaveform::single_carrier, band);
+    const auto single_power = test::mean_power(encode(single, payload, 257));
+    require(std::abs(power[2] / single_power - 1) < .02, "diversity changes power relative to single carrier");
+    require(std::abs(single_power / (single.modem.tx_gain * single.modem.tx_gain) - 1) < .02,
+            "RRC sample power calibration differs from measured waveform");
     require(samples[0] != samples[1], "diversity controls did not select different frequencies");
     auto legacy = config(AudioWaveform::bpsk_frequency_diversity, band);
     auto explicit_defaults = legacy;

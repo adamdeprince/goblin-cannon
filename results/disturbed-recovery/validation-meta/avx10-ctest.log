@@ -1,0 +1,64 @@
+Test project /tmp/goblin-cannon-disturbed.lp7etI/build
+      Start  2: goblin_cannon_tests
+      Start 17: goblin_cannon_channel_coding
+ 1/21 Test #17: goblin_cannon_channel_coding ..............   Passed    5.64 sec
+      Start 18: goblin_cannon_psk
+ 2/21 Test  #2: goblin_cannon_tests .......................   Passed    6.66 sec
+      Start 19: goblin_cannon_recovery
+ 3/21 Test #18: goblin_cannon_psk .........................   Passed    1.95 sec
+      Start 21: goblin_cannon_simulated_channel_harness
+ 4/21 Test #19: goblin_cannon_recovery ....................   Passed    1.89 sec
+      Start 16: goblin_cannon_audio_waveform
+ 5/21 Test #21: goblin_cannon_simulated_channel_harness ...   Passed    1.89 sec
+      Start  9: goblin_cannon_channel_equalization
+ 6/21 Test  #9: goblin_cannon_channel_equalization ........   Passed    0.42 sec
+      Start  5: goblin_cannon_channel_phase
+ 7/21 Test #16: goblin_cannon_audio_waveform ..............   Passed    1.44 sec
+      Start  4: goblin_cannon_channel_noise
+ 8/21 Test  #4: goblin_cannon_channel_noise ...............   Passed    0.12 sec
+      Start  7: goblin_cannon_channel_combined
+ 9/21 Test  #7: goblin_cannon_channel_combined ............   Passed    0.07 sec
+      Start  6: goblin_cannon_channel_fading
+10/21 Test  #6: goblin_cannon_channel_fading ..............   Passed    0.06 sec
+      Start  8: goblin_cannon_channel_recovery
+11/21 Test  #8: goblin_cannon_channel_recovery ............   Passed    0.06 sec
+      Start 14: goblin_cannon_channel_decision_delay
+12/21 Test  #5: goblin_cannon_channel_phase ...............   Passed    0.40 sec
+      Start 10: goblin_cannon_channel_streaming
+13/21 Test #14: goblin_cannon_channel_decision_delay ......   Passed    0.05 sec
+      Start 13: goblin_cannon_channel_profiles
+14/21 Test #10: goblin_cannon_channel_streaming ...........   Passed    0.05 sec
+      Start 15: goblin_cannon_channel_transmit_chunks
+15/21 Test #15: goblin_cannon_channel_transmit_chunks .....   Passed    0.02 sec
+      Start  1: goblin_cannon_aead_tests
+16/21 Test #13: goblin_cannon_channel_profiles ............   Passed    0.04 sec
+      Start 20: goblin_cannon_data_path
+17/21 Test  #1: goblin_cannon_aead_tests ..................   Passed    0.02 sec
+      Start  3: goblin_cannon_channel_acquisition
+18/21 Test #20: goblin_cannon_data_path ...................   Passed    0.01 sec
+      Start 11: goblin_cannon_channel_config
+19/21 Test #11: goblin_cannon_channel_config ..............   Passed    0.01 sec
+      Start 12: goblin_cannon_channel_sample_support
+20/21 Test  #3: goblin_cannon_channel_acquisition .........   Passed    0.01 sec
+21/21 Test #12: goblin_cannon_channel_sample_support ......   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 21
+
+Label Time Summary:
+A2                   =   1.95 sec*proc (1 test)
+A9                   =   3.33 sec*proc (2 tests)
+B4                   =   0.01 sec*proc (1 test)
+C3                   =   1.89 sec*proc (1 test)
+C4                   =   9.03 sec*proc (3 tests)
+D1                   =   0.01 sec*proc (1 test)
+D3                   =   0.01 sec*proc (1 test)
+D4                   =   0.01 sec*proc (1 test)
+D6                   =   0.02 sec*proc (1 test)
+E1                   =   1.89 sec*proc (1 test)
+assert               =  20.81 sec*proc (21 tests)
+channel              =   1.32 sec*proc (13 tests)
+legacy               =   7.86 sec*proc (10 tests)
+quick                =  20.81 sec*proc (21 tests)
+simulated_channel    =  12.95 sec*proc (11 tests)
+
+Total Test time (real) =  10.41 sec

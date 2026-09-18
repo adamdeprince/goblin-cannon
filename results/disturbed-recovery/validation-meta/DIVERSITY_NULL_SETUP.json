@@ -1,0 +1,6 @@
+{
+  "report_header": "simulated channel integration fixture correction",
+  "error": "All 54 first attempts were rejected before simulation: Watterson spread must be positive.",
+  "correction": "Set the inactive Doppler-spread parameter to the existing null-fixture default of 1 Hz; the channel model remains null.",
+  "scope": "No production, channel-stage behavior, assertion threshold, seed or duration changed. The complete 54-case selection is rerun."
+}

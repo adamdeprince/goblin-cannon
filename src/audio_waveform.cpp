@@ -117,8 +117,8 @@ public:
   RfStreamEncodeResult push_symbols(std::span<const std::uint32_t> symbols, std::span<Complex> out) override {
     RfStreamEncodeResult result;
     // Equal nominal total mean power to the original full-band RRC waveform.
-    const auto amplitude =
-        c_.modem.tx_gain * std::sqrt(c_.modem.bandwidth_hz / 1.25 / c_.modem.sample_rate_hz);
+    const double amplitude =
+        c_.modem.tx_gain;
     while (active_ && result.produced_samples < out.size()) {
       if (!remaining_) {
         if (payload_ == c_.symbols_per_frame) {
@@ -355,9 +355,9 @@ RfStreamConfig diversity_branch(const RfStreamConfig& c) {
       c.diversity_branch_mask < 1 || c.diversity_branch_mask > 3)
     throw std::invalid_argument("diversity copies must be nonoverlapping, fit the audio bandwidth, and select mask 1, 2 or 3");
   b.modem.symbol_rate_hz = b.modem.bandwidth_hz / 1.25;
-  // Preserve total nominal power as branch width changes. The mixer splits
-  // this power equally when both copies are selected.
-  b.modem.tx_gain = c.modem.tx_gain * std::sqrt(static_cast<float>(c.modem.bandwidth_hz / b.modem.bandwidth_hz));
+  // RRC amplitudes use symbol-time normalization: mean sample power is gain^2,
+  // independent of symbol rate. The mixer splits that power across two copies.
+  b.modem.tx_gain = c.modem.tx_gain;
   b.soft_demapping = true;
   return b;
 }

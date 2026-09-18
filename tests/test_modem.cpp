@@ -1641,6 +1641,9 @@ pb::RestartRequest make_restart_request(const ReceiverRestartConfig& restart) {
   request.set_recursive_equalization(rf.recursive_equalization);
   request.set_equalizer_delay_symbols(rf.equalizer_delay_symbols);
   request.set_compact_header(rf.compact_header);
+  request.set_warm_recovery(rf.warm_recovery);
+  request.set_elapsed_time_tracking(rf.elapsed_time_tracking);
+  request.set_compact_message_header(pipeline.compact_message_header);
   request.set_header_modulation(to_proto_modulation(rf.header_modulation));
   request.set_differential_mapping(static_cast<pb::DifferentialMapping>(rf.differential_mapping));
   request.set_soft_demapping(rf.soft_demapping);
@@ -1838,6 +1841,9 @@ void test_receiver_control_grpc_server() {
   restart.pipeline.rf.recursive_equalization = false;
   restart.pipeline.rf.equalizer_delay_symbols = 2;
   restart.pipeline.rf.compact_header = true;
+  restart.pipeline.rf.warm_recovery = true;
+  restart.pipeline.rf.elapsed_time_tracking = true;
+  restart.pipeline.compact_message_header = true;
   restart.pipeline.rf.header_modulation = Modulation::bpsk;
   restart.pipeline.rf.recovery_interval_frames = 16;
   restart.pipeline.rf.fractionally_spaced_equalization = true;
@@ -1853,6 +1859,8 @@ void test_receiver_control_grpc_server() {
   check(ack.ok() && ack.generation() == 1U, "gRPC restart ack mismatch");
   const auto pending = control->take_pending_restart();
   check(pending.has_value(), "gRPC restart did not schedule pending receiver");
+  check(pending->pipeline.rf.warm_recovery && pending->pipeline.rf.elapsed_time_tracking &&
+        pending->pipeline.compact_message_header, "gRPC restart lost disturbed-channel options");
   check(pending->pipeline.rf.compact_header && pending->pipeline.rf.recovery_interval_frames == 16 &&
         pending->pipeline.rf.header_modulation == Modulation::bpsk &&
         pending->pipeline.rf.fractionally_spaced_equalization && pending->pipeline.rf.equalizer_reselect_interval == 256,
@@ -1898,6 +1906,9 @@ void test_receiver_control_grpc_server() {
   legacy_restart.clear_recursive_equalization();
   legacy_restart.clear_equalizer_delay_symbols();
   legacy_restart.clear_compact_header();
+  legacy_restart.clear_warm_recovery();
+  legacy_restart.clear_elapsed_time_tracking();
+  legacy_restart.clear_compact_message_header();
   legacy_restart.clear_header_modulation();
   legacy_restart.clear_differential_mapping();
   legacy_restart.clear_recovery_interval_frames();

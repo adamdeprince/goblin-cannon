@@ -55,6 +55,7 @@ DEFAULTS = dict(
     compact_header=0, header_modulation="qpsk", differential_mapping="none",
     recovery_interval_frames=0, fractionally_spaced_equalization=0,
     equalizer_reselect_interval=0, aggregate_metrics=0,
+    warm_recovery=0, elapsed_time_tracking=0, compact_message_header=0,
     direct_survival=1.0, soak=0, noise_file="",host_timing=0,auction_intake=0,source_load_factor=0,
 )
 OPEN_THRESHOLDS = {
@@ -254,6 +255,8 @@ def matrix():
     cases.extend(psk_campaign())
     cases.extend(encoding_campaign())
     cases.extend(refinement_campaign())
+    from disturbed import campaign
+    cases.extend(campaign())
     return cases
 
 
@@ -541,8 +544,13 @@ def full_parameters(c, revision, source_digest):
               rf_payload_budget="requested audio seconds times complete-waveform payload duty; finite payload completed including partial-segment startup/tail",
               header_embedded_training=dict(interval_data_symbols=16,length_symbols=4,source="equalizer training sequence") if p["compact_header"] else None,
               training_seed=0x5A5A0002,
+              recovery_training=dict(warm_support=bool(p["warm_recovery"]), warm_passes=3,
+                  cold_passes=(13 if p["recursive_equalization"] else 12) if p["adaptive_equalization"] else 1, evm_window="last 64 after history guard" if p["warm_recovery"] else "all after history guard",
+                  evm_limit=.45, cold_fallback="same received block on failed warm training",
+                  startup="varied known payload symbols from training sequence" if p["warm_recovery"] else "repeated pilot pair"),
               equalizer=dict(enabled=bool(p["adaptive_equalization"]), feedforward_taps=p["equalizer_feedforward_taps"], feedback_taps=p["equalizer_feedback_taps"],
                              recursive_tracking=bool(p["recursive_equalization"]), rls_forgetting_factor=0.985,
+                             uncertainty_clock="every observed symbol; capped at existing covariance bound" if p["elapsed_time_tracking"] else "reliable measurement updates only",
                              samples_per_symbol=2 if p["fractionally_spaced_equalization"] else 1,
                              actual_feedforward_coefficients=(2*p["equalizer_feedforward_taps"]-1) if p["fractionally_spaced_equalization"] else p["equalizer_feedforward_taps"],
                              support_reselection_reliable_updates=p["equalizer_reselect_interval"],
@@ -577,8 +585,10 @@ def full_parameters(c, revision, source_digest):
               impulse_arrivals="periodic at declared rate; Gaussian burst RMS relative to Gaussian floor",
               crypto="OpenSSL AES-256-GCM before FEC; 128-bit tag; COBS record delimiter", sync_timestamp_enabled=False,
               aes_key_generation="32 low bytes of mt19937(seed)" if p["mode"]=="crypto" else "32 zero bytes (simulated channel fixture only)",
-              aead_key_id=71 if p["mode"]=="crypto" else 1, aead_header_bytes=25, aead_tag_bytes=16,
+              aead_key_id=71 if p["mode"]=="crypto" else 1, aead_header_bytes=13 if p["compact_message_header"] else 25, aead_tag_bytes=16,
               aead_nonce="big-endian uint64 durable epoch || uint32 frame sequence starting at 1",
+              aead_format=2 if p["compact_message_header"] else 1,
+              aead_context="fixed domain/version, fiber-negotiated epoch and sequence mode, implicit ciphertext length" if p["compact_message_header"] else "all format fields in transmitted header",
               aead_epoch_policy="Fresh isolated TEST journal per probe; production journals persist across restarts",
               aead_initial_epoch="1" if p["mode"] in ("crypto","semantics","erasure") else str(0x1020304050607080),
               crypto_scope="Production message records; raw RF symbol/coding screens exclude encryption",
@@ -596,7 +606,7 @@ def full_parameters(c, revision, source_digest):
              coding_stage_order=["AES-256-GCM (production messages only)","FEC","Walsh" if p["walsh_bits"] else "no spreading","rectangular interleaver" if p["interleaver_rows"] else "no interleaving"],
              bit_metric="noncoherent tone energy max-log" if fsk else "fixed-constellation Euclidean max-log" if p["soft_demapping"] or diversity else "legacy symbol confidence",
              soft_metric_parameters=dict(complex_variance_floor=1e-4,pilot_residual_ema=1/32,llr_limit=64,decoder_output="Viterbi hard decisions; production message integrity checked by AES-256-GCM"),
-             nominal_sample_power=(.65*p["tx_gain_multiplier"])**2*p["bandwidth_hz"]/1.25/p["sample_rate_hz"]*(p["symbol_rate_fraction"] if not (fsk or diversity) else 1),
+             nominal_sample_power=(.65*p["tx_gain_multiplier"])**2,
              diversity=dict(branches=2 if p["diversity_branch_mask"]==3 else 1,
                             centers_hz=[f for i,f in enumerate([-separation/2,separation/2]) if p["diversity_branch_mask"] & (1<<i)],
                             branch_bandwidth_hz=branch_width,center_separation_hz=separation,
@@ -612,7 +622,7 @@ def full_parameters(c, revision, source_digest):
         p["diversity"].update(channel_delay_samples=delay_samples,
             center_response_correlation_magnitude=rho if p["channel_model"]=="watterson" else None,
             correlation_scope="Analytical ensemble complex-gain correlation at the two centers, using the simulator's rounded delay; not independent branches or a measured diversity gain")
-    if p.get("rf_profile")=="refinement":
+    if p.get("rf_profile") in ("refinement","disturbed"):
         n=p["recovery_interval_frames"]*p["frame_symbols"]
         startup=max(8,p["equalizer_feedforward_taps"]+p["equalizer_feedback_taps"])
         pilots=n//p["pilot_interval_symbols"]*2

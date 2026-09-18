@@ -6,7 +6,7 @@ Open `index.html` directly, or serve this directory:
 python3 -m http.server 8000 --directory html
 ```
 
-The report publishes current `results/aead` measurements. Historical performance
+The report publishes current `results/disturbed-recovery` measurements. Historical performance
 panels are removed. The browser selects saved results; it does not simulate RF.
 Static tables remain readable without JavaScript.
 
@@ -14,12 +14,13 @@ The main explorer includes BPSK, QPSK and 8-PSK, each with convolutional or BCH
 payload coding, both bandwidths and the three polar presets. Three seeds cover
 each configuration. Authenticated-message traces last 300/300/100 seconds for
 quiet/moderate/disturbed; raw RF screens remain ten seconds. The latency table
-shows the twelve current recovery-profile configurations measured on naamah.
-The report links the separately requested twelve-case before/after comparison.
+shows the twelve original configurations and twelve additional PSK/coding
+configurations using the 7 ms equalizer span, measured serially on naamah.
+Matched lower/upper/both diversity controls have their own table.
 
 Authentication failures, foreign/corrupt deliveries, nonce-restart checks and
-remaining expected failures have explicit tables. The configured noise reference
-is still uncalibrated; measured RF sample power is visible. None of these finite
+remaining expected failures have explicit tables. The noise reference and
+diversity power are corrected; measured RF sample power is visible. None of these finite
 simulated channels establishes availability on the 71-degree route.
 
 ## Simulated channel publication
@@ -27,30 +28,30 @@ simulated channels establishes availability on the 71-degree route.
 After collecting the completed selections, regenerate and check the publication:
 
 ```sh
-python3 scripts/aead_results.py --snapshot
+python3 scripts/disturbed_results.py --snapshot
+python3 scripts/disturbed_results.py
 python3 scripts/update_html_results.py
 python3 scripts/update_html_results.py --check
 ```
 
-`aead_results.py` validates all selected records against the current tested source
+`disturbed_results.py` validates all selected records against the current tested source
 hash, pairs latency records with host sidecars, and verifies byte-identical
 repeat runs. It writes the current report, validation manifest and compact
 presentation dataset. The snapshot preserves the tested files independently of
 the enclosing commit. Run it before committing; the recorded base commit and
 source hash describe the tested worktree.
-When descriptive metadata is corrected after measurement, the original snapshot
-and measured-source IDs are retained. `METADATA_CORRECTION.json` audits the
-correction; `REPORT_SOURCE.json` captures the corrected formatter separately.
+The fresh calibrated baseline is measured with the same source and channel
+parameters; older uncalibrated measurements are not its control group.
 
 `update_html_results.py` renders the marked region of `index.html` and
-`simulated-channel.js` through `scripts/aead_html.py`. Edit presentation in
-`evidence.css` and `rf-explorer.js`; edit generated copy in `aead_html.py`.
+`simulated-channel.js` through `scripts/disturbed_html.py`. Edit presentation in
+`evidence.css` and `rf-explorer.js`; edit generated copy in `disturbed_html.py`.
 Asset URLs include content hashes. A check rejects publication data that differs
 from the validated records.
 
 `scripts/validate_aead_html.cjs` uses Playwright and accepts a local or public URL
 and an optional result JSON path. It checks all 72 explorer views, 216 source
-links, twelve latency rows, the defect table, mobile layout and the static
+links, all latency and diversity rows, the defect table, mobile layout and the static
 fallback. Set `CHROME_PATH` when using an installed Chrome binary.
 
 Keep unobserved BER distinct from zero, raw RF survival distinct from application
