@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate and publish current AEAD simulated channel evidence, without rerunning it."""
 from __future__ import annotations
+from channel_description import compact_markdown
 import argparse
 from collections import Counter, defaultdict
 import gzip
@@ -17,6 +18,7 @@ DIRECTORY = ROOT / "results/aead"
 sys.path.insert(0, str(ROOT / "tests/simulated_channel"))
 from run import source_digest
 from catalog import OPEN_THRESHOLDS
+from channel_metadata import normalize_record
 
 SEEDS = (7446529, 7446530, 7446531)
 LABELS = {"bpsk_soft": "BPSK · convolutional", "bpsk_bch": "BPSK · BCH",
@@ -25,7 +27,8 @@ LABELS = {"bpsk_soft": "BPSK · convolutional", "bpsk_bch": "BPSK · BCH",
 
 
 def read(path):
-    return json.loads(path.read_text())
+    value = json.loads(path.read_text())
+    return normalize_record(value, warn=False) if isinstance(value, dict) and "parameters" in value else value
 
 
 def save(path, value):
@@ -206,7 +209,7 @@ def build():
 
 def report(data):
     m=data["manifest"]
-    lines=["# Goblin Cannon simulated channel AEAD results", "",
+    lines=["# Goblin Cannon simulated channel AEAD results", "", compact_markdown(), "",
         "OpenSSL AES-256-GCM authenticates production messages before sink delivery. The tag replaces message CRC integrity; RF-header CRCs screen framing only.", "",
         f"{m['recorded_runs']} recorded runs / {m['unique_case_seed_profiles']} unique case/seed/profile combinations. {m['remaining_assertions']} expected-failing assertions across {m['remaining_cases']} cases remain in the current recovery-profile security selection. Six crypto assertions are fixed.", "",
         "## Simulated channel scope and defect count", "", m["latency_baseline_note"], "",

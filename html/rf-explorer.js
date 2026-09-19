@@ -64,7 +64,7 @@
     }
     comparison.hidden = false;
     const p = row.parameters;
-    put("rf-parameters", `Configured SNR ${p.snr_db} dB · delay ${p.delay_spread_ms} ms · Doppler spread ${p.doppler_spread_hz} Hz · paths ${p.path_gains_db.join(" / ")} dB. ` +
+    put("rf-parameters", `Configured SNR ${p.snr_db} dB · delay spread ${p.delay_spread_ms} ms · Doppler spread ${p.doppler_spread_hz} Hz (2σ) · per-path Doppler shift ${p.doppler_shift_hz.join(" / ")} Hz · residual carrier frequency offset ${p.residual_offset_hz} Hz · paths ${p.path_gains_db.join(" / ")} dB. ` +
       `Equalizer ${p.equalizer_feedforward_taps}/${p.equalizer_feedback_taps} taps, ${p.equalizer_delay_symbols}-symbol delay; ${p.training_symbols} training symbols. ` +
       (messages ? `Fresh goodput ${spread(row.fresh_goodput)} bit/s; authentication failures ${spread(row.auth_failures, 1, 0)}; corrupt deliveries ${spread(row.corrupt, 1, 0)}. ` : "") +
       "Seed ranges are not confidence intervals.");

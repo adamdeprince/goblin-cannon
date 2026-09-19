@@ -1,5 +1,15 @@
 # Goblin Cannon simulated channel — conventional encoding comparison
 
+<!-- BEGIN CHANNEL CONTRACT -->
+
+For the recorded acceptance profile:
+
+The modem assumes the radio hands it audio with the carrier frequency offset already removed to within 10 Hz. It performs no Doppler-shift correction. Delay spread, Doppler spread, fading, phase rotation, multipath and noise are the modem's problem, and are what the recorded runs measure.
+
+This boundary describes the recorded acceptance profile. The carrier-offset sweep uses 24 kHz QPSK+BCH, the combined recovery settings, the high-latitude quiet preset, 30 dB nominal SNR and three 300-second traces per offset. The tolerance applies to that measured configuration and the tested offset grid. Other modes and historical receiver versions have no tolerance established by this sweep. The library retains an optional carrier-correction loop, enabled by default; the recorded acceptance profile explicitly disables it. Equalizer phase tracking does not estimate a mean carrier frequency offset or perform AFC.
+
+<!-- END CHANNEL CONTRACT -->
+
 Implemented and measured: fixed-constellation soft bit metrics, K9 convolutional rates 1/2 and 1/3, plain Walsh-8 spreading, shortened BCH(58,40,7), rectangular interleaving, noncoherent 4/8-FSK and fixed-power two-subband BPSK diversity. All are opt-in; existing defaults remain compatible. Both endpoints receive coding and waveform settings over fiber/gRPC.
 
 The [patent screen](PATENT_SCREEN.md) excludes modern CROW, specialized LDPC constructions/decoders, adaptive constellation learning and unresolved Walsh-specific equalizers. It documents the conventional implementations and their historical basis; it is not worldwide legal clearance.
@@ -240,7 +250,7 @@ Fresh goodput counts only useful bits whose key has no newer source-created valu
 
 ## Simulated channel — E: sustained polar delivery and determinism
 
-Each configuration runs quiet/moderate/disturbed for 300/300/100 seconds per seed: **24.500 simulated hours** in total. Delay/Doppler spreads are 1 ms/0.5 Hz, 3 ms/10 Hz and 7 ms/30 Hz. The equalizer spans and training follow the prior PSK campaign; half-band branches scale spans to the same physical delay. All path gains are 0/0 dB, normalized in mean power. All runs use 30 dB nominal SNR.
+Each configuration runs quiet/moderate/disturbed for 300/300/100 seconds per seed: **24.500 simulated hours** in total. Delay spread and Doppler spread are 1 ms/0.5 Hz, 3 ms/10 Hz and 7 ms/30 Hz. The equalizer spans and training follow the prior PSK campaign; half-band branches scale spans to the same physical delay. All path gains are 0/0 dB, normalized in mean power. All runs use 30 dB nominal SNR.
 
 The 71.53°N great-circle geometry is unchanged. These fixed-SNR traces do not predict route availability. The earlier 6,000-second quiet campaign stays separate. The 24 kHz Watterson use remains a bandwidth extrapolation beyond the recommendation's validation scope.
 

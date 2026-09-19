@@ -1,3 +1,4 @@
+from channel_description import context_html
 """Render recorded simulated channel recovery evidence. No synthetic results."""
 from collections import Counter, defaultdict
 from html import escape
@@ -173,12 +174,13 @@ def build(root, start, end, *, allow_incomplete=False):
       <h3>Simulated channel · before and after, every polar configuration</h3>
       <p class="evidence-provenance">Useful application bits/s after FEC and framing. Each range spans the same three seeds, ten seconds per run, at 30 dB nominal SNR. Both profiles use the same delay-spanning equalizer geometry. Updated includes the compact protected header, recurring markers, tap reselection and T/2 input. Improved seeds count paired increases in useful bits/s; these characterizations have no acceptance threshold.</p>
       <div class="table-scroll" role="region" aria-label="Simulated channel polar before and after" tabindex="0"><table class="evidence-table"><caption>Simulated channel · legacy startup versus complete recovery profile</caption><thead><tr><th>Configuration / preset</th><th>Before bit/s</th><th>Updated bit/s</th><th>Improved seeds</th><th>Seed records</th></tr></thead><tbody>{''.join(comparison_rows)}</tbody></table></div>
-      <div class="model-assumptions"><span>Two Rayleigh paths</span><span>Gaussian Doppler spectrum</span><span>30 dB nominal SNR</span><span>Carrier correction off</span></div>
+      {context_html(historical=True)}
+      <div class="model-assumptions"><span>Two Rayleigh paths</span><span>Doppler spread: Gaussian spectrum per tap (2σ)</span><span>30 dB nominal SNR</span><span>Carrier correction off</span></div>
       <div id="rf-explorer" class="rf-explorer" hidden><div class="rf-controls">
         <label for="rf-bandwidth">Bandwidth<select id="rf-bandwidth"><option value="24000">24 kHz</option><option value="10000">10 kHz</option></select></label>
         <label for="rf-modulation">Constellation<select id="rf-modulation">{''.join(f'<option value="{m}">{label}</option>' for m,label in modes.items())}</select></label>
         <label for="rf-span">Receiver configuration<select id="rf-span">{''.join(f'<option value="{v}"'+(' selected' if v=='fractional' else '')+f'>{label}</option>' for v,label in variants.items())}</select></label>
-        <label for="rf-preset">High-latitude preset<select id="rf-preset"><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="disturbed">Disturbed · 7 ms / 30 Hz</option></select></label>
+        <label for="rf-preset">Delay spread / Doppler spread<select id="rf-preset"><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="disturbed">Disturbed · 7 ms / 30 Hz</option></select></label>
         <label for="rf-layer">Measurement<select id="rf-layer"><option value="messages">Useful messages after FEC</option><option value="rf">Raw RF frames before FEC</option></select></label></div>
         <div id="rf-output" aria-live="polite" aria-atomic="true"><div class="rf-outcome"><p class="section-label">Recorded simulated channel result</p><h3 id="rf-outcome-title"></h3><p id="rf-outcome-note"></p></div>
           <div class="rf-metrics"><div><span id="rf-survival-label"></span><strong id="rf-survival"></strong><small id="rf-frames"></small></div>

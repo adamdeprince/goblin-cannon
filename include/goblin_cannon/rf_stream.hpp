@@ -39,7 +39,7 @@ struct AcquisitionResult {
 
 struct RfSyncEstimate {
   double symbol_timing_offset_samples = 0.0;
-  double carrier_frequency_offset_hz = 0.0;
+  double carrier_frequency_offset_hz = 0.0; // Mean carrier offset, not Doppler spread.
   float carrier_phase_rad = 0.0F;
   // Forward complex channel gain at the start of the acquisition preamble.
   Complex channel = {1.0F, 0.0F};
@@ -85,6 +85,9 @@ struct RfStreamConfig {
   float pilot_confidence_threshold = 0.20F;
   float symbol_confidence_threshold = 0.18F;
   std::size_t acquisition_sidelobe_guard_samples = 32;
+  // Legacy library option. The recorded acceptance profile sets this false:
+  // the radio owns carrier frequency offset correction; the equalizer tracks
+  // delay spread, Doppler spread, fading, phase rotation and multipath.
   bool carrier_correction = true;
   bool adaptive_equalization = true;
   // Alternative to NLMS. Configure over the control path; keep NLMS as the

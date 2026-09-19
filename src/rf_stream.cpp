@@ -877,7 +877,7 @@ private:
         }
       }
       // Pulse shaping makes the two halves' energy centroids differ from their
-      // geometric centers. Using those centroids removes the coarse CFO bias.
+      // geometric centers. Using those centroids removes the coarse carrier-frequency-offset bias.
       const double time_delta = (late_time / std::max(late_energy, 1.0e-12) -
                                  early_time / std::max(early_energy, 1.0e-12)) / config_.modem.sample_rate_hz;
       sync_.carrier_frequency_offset_hz = time_delta > 0.0

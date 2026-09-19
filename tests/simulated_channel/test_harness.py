@@ -2,10 +2,16 @@
 import copy
 import json
 import unittest
+import hashlib
+from pathlib import Path
+import subprocess
 
 from catalog import matrix, full_parameters, DEFAULTS, OPEN_THRESHOLDS
 from metrics import summarize, percentiles, latency_above_reference
 from run import canonical, evaluate
+from channel_metadata import normalize_parameters, normalize_record, DOPPLER_SPREAD_DEFINITION
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class SimulatedChannelHarness(unittest.TestCase):
@@ -34,6 +40,53 @@ class SimulatedChannelHarness(unittest.TestCase):
                          "seed","git_commit","source_tree_sha256","stage_order"):
                 self.assertIn(name,p)
             self.assertEqual(json.loads(canonical(p)),p)
+
+    def test_all_908_published_records_parse_without_changes(self):
+        manifest=json.loads(Path(__file__).with_name("recorded_runs.json").read_text())
+        self.assertEqual(len(manifest),908)
+        watterson=offsets=drifts=0
+        for name,digest in manifest.items():
+            raw=(ROOT/name).read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(),digest,name)
+            original=json.loads(raw)
+            record=normalize_record(original,warn=False)
+            self.assertEqual(record["metrics"],original["metrics"],name)
+            p=record["parameters"]
+            self.assertEqual(p["carrier_correction"],0,name)
+            self.assertEqual(p["doppler_spread_hz"],original["parameters"]["doppler_spread_hz"],name)
+            self.assertEqual(p["doppler_spread_definition"],DOPPLER_SPREAD_DEFINITION,name)
+            self.assertIn("doppler_definition",original["parameters"],name)
+            offsets+=bool(p["residual_offset_hz"])
+            drifts+=bool(p["residual_drift_hz_per_second"])
+            if p["channel_model"]=="watterson":
+                watterson+=1
+                self.assertEqual(p["doppler_shift_hz"],[0,0],name)
+                self.assertEqual(p["residual_offset_hz"],0,name)
+                self.assertEqual(p["residual_drift_hz_per_second"],0,name)
+        self.assertEqual((watterson,offsets,drifts),(722,1,1))
+
+    def test_deprecated_channel_aliases_and_conflicts(self):
+        for name in ("doppler","doppler_hz"):
+            with self.assertWarns(DeprecationWarning):
+                self.assertEqual(normalize_parameters({name:30}),{"doppler_spread_hz":30})
+            with self.assertRaises(ValueError):
+                normalize_parameters({name:30,"doppler_spread_hz":15})
+        with self.assertWarns(DeprecationWarning):
+            self.assertEqual(normalize_parameters({"itu_doppler_duration_s":100}),
+                             {"itu_doppler_spread_duration_s":100})
+
+    def test_probe_deprecated_spread_inputs_match_canonical(self):
+        binary=ROOT/"build/goblin_cannon_simulated_channel_probe"
+        if not binary.exists():
+            self.skipTest("compiled C++ simulation probe is not available on this host")
+        base=[str(binary),"mode=model","channel_model=watterson","duration_s=0.1","require_avx512=0"]
+        canonical_result=subprocess.run(base+["doppler_spread_hz=30"],capture_output=True,check=True,text=True)
+        for name in ("doppler","doppler_hz"):
+            alias_result=subprocess.run(base+[f"{name}=30"],capture_output=True,check=True,text=True)
+            self.assertEqual(alias_result.stdout,canonical_result.stdout)
+            self.assertIn("deprecated",alias_result.stderr)
+            conflict=subprocess.run(base+[f"{name}=30","doppler_spread_hz=15"],capture_output=True,text=True)
+            self.assertNotEqual(conflict.returncode,0)
 
     def test_unobserved_bits_are_not_zero_ber(self):
         m=summarize(dict(bits_sent=1000,bits_compared=0,bit_errors=0,frames_sent=10,frames_survived=0))
@@ -95,7 +148,7 @@ class SimulatedChannelHarness(unittest.TestCase):
         self.assertEqual(len(cases),18)
         for c in cases:
             p=c.parameters
-            self.assertGreaterEqual(p["duration_s"],p["itu_doppler_duration_s"])
+            self.assertGreaterEqual(p["duration_s"],p["itu_doppler_spread_duration_s"])
             self.assertGreaterEqual(p["duration_s"],p["itu_bit_duration_s"])
             self.assertEqual(p["carrier_correction"],0)
             self.assertEqual(c.kind,"characterize")

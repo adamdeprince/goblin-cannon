@@ -1,5 +1,31 @@
 # Goblin Cannon
 
+<!-- BEGIN CHANNEL CONTRACT -->
+
+For the recorded acceptance profile:
+
+The modem assumes the radio hands it audio with the carrier frequency offset already removed to within 10 Hz. It performs no Doppler-shift correction. Delay spread, Doppler spread, fading, phase rotation, multipath and noise are the modem's problem, and are what the recorded runs measure.
+
+This boundary describes the recorded acceptance profile. The carrier-offset sweep uses 24 kHz QPSK+BCH, the combined recovery settings, the high-latitude quiet preset, 30 dB nominal SNR and three 300-second traces per offset. The tolerance applies to that measured configuration and the tested offset grid. Other modes and historical receiver versions have no tolerance established by this sweep. The library retains an optional carrier-correction loop, enabled by default; the recorded acceptance profile explicitly disables it. Equalizer phase tracking does not estimate a mean carrier frequency offset or perform AFC.
+
+Doppler shift: a mean frequency offset of the received signal relative to the transmitted carrier; a translation of the whole spectrum. Hz. Caused by bulk ionospheric motion plus transmitter/receiver LO error. Removing it is a frequency-tracking (AFC) problem.
+
+Doppler spread: the width of the Doppler power spectrum of a propagation path, i.e. the fading rate. Hz. In the Watterson / ITU-R F.1487 model it is the width of the Gaussian spectrum applied to each tap. It is not an offset and no AFC removes it; it appears as fast fading and phase rotation the equalizer must track. 30 Hz means a coherence time on the order of tens of milliseconds.
+
+| High-latitude preset | Delay spread (ms) | Doppler spread (Hz) | F.1487 Annex 3 |
+| --- | ---: | ---: | --- |
+| Quiet | 1 | 0.5 | §4.1 |
+| Moderate | 3 | 10 | §4.2 |
+| Disturbed | 7 | 30 | §4.3 |
+
+Gaussian spectrum per tap; Doppler spread is the 2-sigma width, not sigma. Thus 30 Hz means σ = 15 Hz. The two taps fade independently; delay spread is their differential delay. Mean per-path Doppler shift is a separate parameter; these presets use zero. [Recommendation, Annex 1 §2 and Annex 3 §§1, 4.1–4.3](https://www.itu.int/dms_pubrec/itu-r/rec/f/R-REC-F.1487-0-200005-I!!PDF-E.pdf).
+
+The original 908 recorded runs all disable carrier correction. All 722 Watterson runs use zero mean per-path Doppler shift and zero injected residual carrier frequency offset or drift. Across all 908 runs, 906 configure zero residual offset and drift; the two null-channel exceptions are a +5 Hz carrier frequency offset test and a +1 Hz/minute carrier-frequency drift test.
+
+The carrier-offset sweep and its individual records are published in [the measurement report](https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/SUMMARY.md). Historical results retain their original receiver versions and measurements.
+
+<!-- END CHANNEL CONTRACT -->
+
 Goblin Cannon is an open-source radio stack for transmitting market data across continents by HF skywave, with an intended RF target near 13.5 MHz. It is designed to exploit near-light-speed atmospheric propagation and direct over-the-horizon paths to deliver compact market updates ahead of longer undersea-fiber routes when propagation conditions permit. This repository contains the baseband HF modem: BPSK, QPSK and 8-PSK with convolutional or BCH coding, RLS equalization and audio-clock recovery.
 
 The `goblin_cannon` C++23 complex-baseband library supports WBHF-style links at 48 kHz and other configured sample rates. It includes QPSK, 8PSK, 16QAM, 64QAM, 256QAM, 1024QAM, 16QCI, 64QCI, 256QCI, and 1024QCI, adjustable occupied bandwidth, streaming encode/decode APIs, carrier gating, framed payload flow, RF stream acquisition, and raw IQ stream adapters suitable for SDR pipelines.
@@ -96,7 +122,7 @@ at both endpoints, regardless of the selected waveform or payload code.
 - With carrier correction enabled, the receiver estimates gain, phase and frequency from the preamble and tracks residual carrier drift. Acceptance tests disable this frequency/phase loop; the radio owns carrier frequency correction.
 - After acquisition the receiver trains a configurable decision-feedback equalizer on the known QPSK sequence, decodes a repeated QPSK stream header, validates CRC-32 on that header only, and checks `schedule_epoch_low`.
 - The header carries `schedule_epoch_low`, `frame_counter_start`, frame symbol count, pilot interval, and modulation.
-- Once locked, frame boundaries are derived from decoded symbol count. Pilots and confident decisions update the equalizer and carrier loop; unreliable decisions freeze adaptation. Pilots also monitor lock.
+- Once locked, frame boundaries are derived from decoded symbol count. Pilots and confident decisions update the equalizer and, when carrier correction is enabled, the carrier loop; unreliable decisions freeze adaptation. Pilots also monitor lock.
 - Sustained pilot disagreement reports lock loss. With recurring markers configured, the receiver waits for a later marker and rebuilds confidence before resuming payload delivery.
 
 For simulated polar-channel validation, the fiber control interface also exposes

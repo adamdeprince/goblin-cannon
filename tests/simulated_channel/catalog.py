@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from itertools import product
 from math import ceil, floor, cos, pi, sqrt
 from pathlib import Path
+from channel_metadata import (DOPPLER_SHIFT_DEFINITION, DOPPLER_SPREAD_DEFINITION,
+                              SPREAD_CONVENTION, normalize_parameters)
 
 SEED = 0x71A001
 SNR_GRID = tuple(range(0, 31, 2))
@@ -14,7 +16,9 @@ BITS = dict(zip(MODULATIONS, (2, 3, 4, 6, 8, 10, 4, 6, 8, 10)))
 BITS["bpsk"] = 1
 RATES = ("1/2", "2/3", "3/4")
 PROFILES = (10000, 24000)
-# Verified against F.520-2 Annex 1 and F.1487 Annex 3. Spread is 2*sigma.
+# (Delay spread in ms, Doppler spread in Hz). F.1487 Annex 3 sections 4.1-4.3
+# specify the high-latitude rows. Doppler spread is 2*sigma of each tap's
+# Gaussian power spectrum; these Watterson paths have zero Doppler shift.
 PRESETS = {
     "ccir_good": (0.5, 0.1), "ccir_poor": (2.0, 1.0),
     "mid_lat_quiet": (0.5, 0.1), "mid_lat_moderate": (1.0, 0.5),
@@ -87,14 +91,14 @@ class Case:
 
 
 def case(group, name, kind, tier, *, checks=(), thresholds=(), unavailable=None, notes=(), **kwargs):
-    parameters = DEFAULTS | kwargs
+    parameters = DEFAULTS | normalize_parameters(kwargs)
     return Case(f"{group}_{name}", group, kind, tier, parameters,
                 tuple(checks), tuple(thresholds), unavailable, list(notes))
 
 
 def preset(name):
-    delay, doppler = PRESETS[name]
-    return dict(channel_model="watterson", delay_spread_ms=delay, doppler_spread_hz=doppler)
+    delay_spread_ms, doppler_spread_hz = PRESETS[name]
+    return dict(channel_model="watterson", delay_spread_ms=delay_spread_ms, doppler_spread_hz=doppler_spread_hz)
 
 
 def matrix():
@@ -111,9 +115,11 @@ def matrix():
         add(case("A2", f"{mod}_{delay}ms_{gain}dB", "characterize", "full", modulation=mod,
                  channel_model="watterson", delay_spread_ms=delay, doppler_spread_hz=1,
                  path1_db=gain, snr_db=30, duration_s=10))
-    for spread, mod in product((0.1, 0.5, 1, 3, 10, 30), ("qpsk", "16qam", "64qam")):
-        add(case("A3", f"{mod}_{spread}Hz", "characterize", "full", modulation=mod,
-                 channel_model="watterson", delay_spread_ms=2, doppler_spread_hz=spread, snr_db=30, duration_s=10))
+    for doppler_spread_hz, mod in product((0.1, 0.5, 1, 3, 10, 30), ("qpsk", "16qam", "64qam")):
+        # Keep historical case IDs; parameters and descriptions identify the quantity.
+        add(case("A3", f"{mod}_{doppler_spread_hz}Hz", "characterize", "full", modulation=mod,
+                 channel_model="watterson", delay_spread_ms=2, doppler_spread_hz=doppler_spread_hz, snr_db=30, duration_s=10,
+                 notes=["Doppler spread sweep (2-sigma Gaussian spectrum per tap); zero per-path Doppler shift."]))
     # Fiber-configured equalizer spans, including a short-filter control. These
     # supplement the original A1/A2/A3 grids; none of their points are replaced.
     for bw, mod, channel, span in product(PROFILES, ("qpsk", "16qam", "64qam"),
@@ -285,7 +291,7 @@ def polar_campaign():
                     campaign="polar_screen",rf_profile=variant,
                     notes=["Matched-seed simulated channel A/B screen; raw RF results and production post-FEC message results are separate measurements."]))
         # This is a statistical planning target, not an acceptance threshold.
-        # Even after marker overhead, 100/(1e-3*rate) is below the Doppler term
+        # Even after marker overhead, 100/(1e-3*rate) is below the Doppler spread term
         # for these configurations. Report the exact two terms in the manifest.
         n=16*64;rate=bw*.8;sps=48000/rate;half=4
         controls=floor((64-1+half)*sps)+1+floor((span["training_symbols"]+166-1+half)*sps)+1
@@ -296,7 +302,7 @@ def polar_campaign():
         cases.append(case("E2",f"polar_long_{bw}_{mod}_{channel}","characterize","full",**common,**RECOVERY_PROFILE,
             mode="messages",chunk_samples=48,duration_s=duration,aggregate_metrics=1,auction_intake=1,
             campaign="polar_long",rf_profile="fractional",planning_ber=1e-3,
-            planned_user_bit_rate_bps=planned_rate,itu_doppler_duration_s=3000/PRESETS[channel][1],
+            planned_user_bit_rate_bps=planned_rate,itu_doppler_spread_duration_s=3000/PRESETS[channel][1],
             itu_bit_duration_s=100/(1e-3*planned_rate),
             notes=["F.1487 Annex 3 duration planning at BER 1e-3; production message delivery characterization, not a BER certification or a 1e-5-duration claim.",
                    "Independent seeds must be reported individually; aggregation counts every delivered message.",
@@ -496,10 +502,10 @@ def refinement_campaign():
                     notes=["Same-seed fixed-power comparison; quiet/moderate/disturbed 300/300/100 seconds.",
                            "Carrier correction off; no route availability or patent-clearance claim."]))
             if settings["experiment"]=="diversity":
-                for delay,doppler in ((2.75,10),(3.25,10),(6.75,30),(7.25,30)):
+                for delay,doppler_spread_hz in ((2.75,10),(3.25,10),(6.75,30),(7.25,30)):
                     cases.append(case("A2",f"refinement_delay_{bw}_{variant}_{delay}ms","characterize","full",
                         **common,**refinement_span(bw,common,delay),channel_model="watterson",
-                        delay_spread_ms=delay,doppler_spread_hz=doppler,snr_db=30,mode="messages",
+                        delay_spread_ms=delay,doppler_spread_hz=doppler_spread_hz,snr_db=30,mode="messages",
                         duration_s=10,chunk_samples=48,auction_intake=1,campaign="refinement_delay",
                         notes=["Off-preset delay sensitivity screen, not a new ITU preset; no independently fading copies."]))
             if settings["experiment"]=="coding":
@@ -510,7 +516,7 @@ def refinement_campaign():
 
 
 def full_parameters(c, revision, source_digest):
-    p=c.parameters.copy()
+    p=normalize_parameters(c.parameters)
     bits=BITS[p["modulation"]]
     fsk=p["audio_waveform"].startswith("fsk")
     diversity=p["audio_waveform"]=="bpsk_frequency_diversity"
@@ -525,7 +531,11 @@ def full_parameters(c, revision, source_digest):
               waveform="Goblin Cannon "+p["audio_waveform"]+"; not a certified Appendix D waveform",
               symbol_rate_hz=symbol_rate, raw_bit_rate_bps=symbol_rate*bits,
               snr_definition="nominal unit-mean-constellation complex-sample signal/noise power before fading; not 3 kHz SNR or Eb/N0",
-              doppler_definition="2*sigma of Gaussian power spectrum; zero path carrier shifts",
+              doppler_spread_definition=DOPPLER_SPREAD_DEFINITION,
+              doppler_spread_convention=SPREAD_CONVENTION,
+              doppler_shift_definition=DOPPLER_SHIFT_DEFINITION,
+              doppler_shift_hz=[0.0,0.0] if p["channel_model"]=="watterson" else None,
+              carrier_offset_stage="Constant residual carrier frequency offset and frequency drift are applied at channel output; independent of Doppler spread and per-path Doppler shift.",
               path_gains_db=[p["path0_db"],p["path1_db"]],
               stage_seeds=dict(gaussian_noise=p["seed"],impulses=p["seed"]^0x192734AF,
                                rayleigh_path0=p["seed"]^0x638AD923,rayleigh_path1=p["seed"]^0xC94F216B,
@@ -580,7 +590,7 @@ def full_parameters(c, revision, source_digest):
               source_event_clock="Integral sample periods derived from event index; variable overload periods accumulated; source tick misses checked for aligned B5 events",
               sample_clock_resampler="linear fractional interpolation", audio_filter="129-tap Hamming-window FIR + two first-order edge allpasses",
               audio_jitter_model="Seeded block delay begins at audio_event_s; monotonic arrivals; production deadline check rejects arrivals beyond declared playout slack",
-              gaussian_fading_filter="129 taps at 32*spread Hz; stationary initialized history; linear audio interpolation",
+              gaussian_fading_filter="129 taps at 32*doppler_spread_hz; stationary initialized history; linear audio interpolation",
               agc_envelope="linear dB attack to requested step; 50 ms hold; linear dB decay to baseline",
               impulse_arrivals="periodic at declared rate; Gaussian burst RMS relative to Gaussian floor",
               crypto="OpenSSL AES-256-GCM before FEC; 128-bit tag; COBS record delimiter", sync_timestamp_enabled=False,

@@ -24,7 +24,7 @@ def main():
         if c.parameters.get('campaign')!='disturbed_diversity' or c.parameters['delay_spread_ms']!=7:continue
         for seed in (7446529,7446530,7446531):
             p=copy.deepcopy(c.parameters)
-            # Keep the existing harness's positive spread default even though
+            # Keep the existing harness's positive Doppler spread default even though
             # the fading stage is disabled; its constructor validates it.
             p.update(channel_model='null',delay_spread_ms=0,doppler_spread_hz=1,snr_db=None,duration_s=3,seed=seed,campaign='disturbed_diversity_null')
             name=c.name.replace('E2_','D4_',1).replace('_high_lat_disturbed','_null')

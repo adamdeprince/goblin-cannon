@@ -1,5 +1,25 @@
 # Goblin Cannon simulated channel — disturbed recovery
 
+<!-- BEGIN CHANNEL CONTRACT -->
+
+For the recorded acceptance profile:
+
+The modem assumes the radio hands it audio with the carrier frequency offset already removed to within 10 Hz. It performs no Doppler-shift correction. Delay spread, Doppler spread, fading, phase rotation, multipath and noise are the modem's problem, and are what the recorded runs measure.
+
+This boundary describes the recorded acceptance profile. The carrier-offset sweep uses 24 kHz QPSK+BCH, the combined recovery settings, the high-latitude quiet preset, 30 dB nominal SNR and three 300-second traces per offset. The tolerance applies to that measured configuration and the tested offset grid. Other modes and historical receiver versions have no tolerance established by this sweep. The library retains an optional carrier-correction loop, enabled by default; the recorded acceptance profile explicitly disables it. Equalizer phase tracking does not estimate a mean carrier frequency offset or perform AFC.
+
+<!-- END CHANNEL CONTRACT -->
+
+| High-latitude preset | Delay spread (ms) | Doppler spread (Hz) | F.1487 Annex 3 |
+| --- | ---: | ---: | --- |
+| Quiet | 1 | 0.5 | §4.1 |
+| Moderate | 3 | 10 | §4.2 |
+| Disturbed | 7 | 30 | §4.3 |
+
+Gaussian spectrum per tap; Doppler spread is the 2-sigma width, not sigma. Thus 30 Hz means σ = 15 Hz. The two taps fade independently; delay spread is their differential delay. Mean per-path Doppler shift is a separate parameter; these presets use zero. [Recommendation, Annex 1 §2 and Annex 3 §§1, 4.1–4.3](https://www.itu.int/dms_pubrec/itu-r/rec/f/R-REC-F.1487-0-200005-I!!PDF-E.pdf).
+
+The original 908 recorded runs all disable carrier correction. All 722 Watterson runs use zero mean per-path Doppler shift and zero injected residual carrier frequency offset or drift. Across all 908 runs, 906 configure zero residual offset and drift; the two null-channel exceptions are a +5 Hz carrier frequency offset test and a +1 Hz/minute carrier-frequency drift test.
+
 All four experiments are implemented and measured: warm equalizer recovery with varied known startup symbols and shorter recurring training; uncertainty prediction through rejected decisions; a fiber-selected 13-byte authenticated header; and frequency diversity with matched measured power. Carrier correction remains off. The GCM tag remains 16 bytes.
 
 Fresh calibrated baselines use the same source, channel seeds and full durations as the changed receiver. The earlier noise reference underestimated RRC sample power and diversity width compensation increased transmit power. Those errors are corrected before these comparisons. No per-fade normalization is used.

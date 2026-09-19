@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Summarize the completed PSK simulated channel campaign from saved records."""
 from __future__ import annotations
+from channel_description import compact_markdown
 
 from collections import Counter
 import hashlib
@@ -27,7 +28,9 @@ LABELS = {
 
 
 def read(path):
-    return json.loads(path.read_text())
+    from channel_metadata import normalize_record
+    value = json.loads(path.read_text())
+    return normalize_record(value, warn=False) if isinstance(value, dict) and "parameters" in value else value
 
 
 def records(directory):
@@ -162,7 +165,7 @@ def write_report(data):
     disturbed_qpsk=indexed[24000,"disturbed","qpsk_reference"]
     added=[r["added"]["p99_9"] for r in data["latency"]]
     reference={r["variant"]:r["reference"]["p50"] for r in data["latency"] if r["bandwidth"]==24000 and r["span"]=="short"}
-    lines = ["# Goblin Cannon simulated channel PSK comparison", "",
+    lines = ["# Goblin Cannon simulated channel PSK comparison", "", compact_markdown(), "",
         "BPSK, BPSK-only header data, DBPSK, DQPSK and π/4-DQPSK are implemented. Existing 8-PSK is included in the matched comparison. Both endpoints configure the modes over fiber/gRPC. Carrier correction remains off; adaptive RLS equalization and sample-clock recovery remain on.", "",
         f"{m['main_cases']} AVX-512 cases; {m['latency_cases']} serial quiet-host latency cases; 18/18 CTest regressions on each host; 12 Python harness tests. Three representative canonical results repeat byte-for-byte. Full observations and parameters remain in [SUMMARY.md](SUMMARY.md) and [quiet-host SUMMARY.md](naamah-latency/SUMMARY.md).", "",
         "## Simulated channel: findings", "",

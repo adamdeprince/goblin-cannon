@@ -1,3 +1,4 @@
+from channel_description import context_html
 """Render the completed conventional-encoding simulated channel measurements."""
 import json
 from html import escape
@@ -40,11 +41,12 @@ def build():
         <h2 class="section-title">Simulated channel.<br>More ways through fading.</h2>
         <p class="section-intro">Soft bit metrics, stronger convolutional codes, Walsh spreading, BCH, interleaving, noncoherent FSK and BPSK frequency diversity face the same polar traces. The comparison covers 21 configurations, {m['main_cases']:,} AVX-512 cases and 42 quiet-host latency measurements.</p></header>
       <p class="section-intro">At 24 kHz in moderate fading, <strong>{escape(best['label'])}</strong> delivers the highest mean correct goodput: <strong>{spread(best['goodput'])} bit/s</strong>, versus <strong>{spread(baseline['goodput'])} bit/s</strong> for the BPSK reference. In disturbed fading, <strong>{escape(severe['label'])}</strong> leads at <strong>{spread(severe['goodput'])} bit/s</strong>, with longest delivery gaps of <strong>{spread(severe['silence'],.001,3)} seconds</strong>. Freshness and buffering costs remain visible below.</p>
+      {context_html(historical=True)}
       <p class="evidence-provenance">Carrier correction is off. Coherent modes retain RLS equalization and clock recovery; FSK uses tone-energy detection and per-frame acquisition. Diversity divides the existing total power between two subbands. Three-seed ranges are observations, not confidence intervals or route-availability forecasts.</p>
       <p class="evidence-provenance">The <a href="{url(DIRECTORY/'PATENT_SCREEN.md')}">public-record patent screen</a> documents the historical implementations and excludes modern CROW, specialized LDPC and unresolved adaptive designs. It is not worldwide patent clearance. Both endpoints receive settings over fiber/gRPC.</p>
       <div class="rf-controls" id="encoding-controls" hidden>
         <label for="encoding-bandwidth">Profile<select id="encoding-bandwidth"><option value="24000">24 kHz</option><option value="10000">10 kHz</option></select></label>
-        <label for="encoding-preset">Polar preset<select id="encoding-preset"><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="disturbed">Disturbed · 7 ms / 30 Hz</option></select></label>
+        <label for="encoding-preset">Delay spread / Doppler spread<select id="encoding-preset"><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="disturbed">Disturbed · 7 ms / 30 Hz</option></select></label>
         <label for="encoding-mode">Noise-curve configuration<select id="encoding-mode">{''.join(f'<option value="{v}">{escape(label)}</option>' for v,label in LABELS.items())}</select></label>
       </div>
       <p class="evidence-provenance" id="encoding-context">24 kHz · moderate · 300 seconds per seed · 30 dB nominal sample SNR.</p>

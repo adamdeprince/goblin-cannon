@@ -1,5 +1,15 @@
 # Simulated channel — power calibration audit
 
+<!-- BEGIN CHANNEL CONTRACT -->
+
+For the recorded acceptance profile:
+
+The modem assumes the radio hands it audio with the carrier frequency offset already removed to within 10 Hz. It performs no Doppler-shift correction. Delay spread, Doppler spread, fading, phase rotation, multipath and noise are the modem's problem, and are what the recorded runs measure.
+
+This boundary describes the recorded acceptance profile. The carrier-offset sweep uses 24 kHz QPSK+BCH, the combined recovery settings, the high-latitude quiet preset, 30 dB nominal SNR and three 300-second traces per offset. The tolerance applies to that measured configuration and the tested offset grid. Other modes and historical receiver versions have no tolerance established by this sweep. The library retains an optional carrier-correction loop, enabled by default; the recorded acceptance profile explicitly disables it. Equalizer phase tracking does not estimate a mean carrier frequency offset or perform AFC.
+
+<!-- END CHANNEL CONTRACT -->
+
 The transmitter-power observations reveal two defects: the nominal SNR reference is not the actual pre-channel signal power, and diversity width compensation changes actual power relative to full-band BPSK. Production behavior and the original measurements are retained. Matched lower/upper/both diversity controls do have equal measured power within the existing 2% finite-waveform tolerance.
 
 | Assertion | Seed | Power ratio(s) | Status |

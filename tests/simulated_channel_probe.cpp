@@ -29,6 +29,20 @@ using Arguments = std::map<std::string,std::string>;
 double number(const Arguments& a,const std::string& name,double fallback=0) {
   const auto i=a.find(name); return i==a.end()?fallback:std::stod(i->second);
 }
+double doppler_spread_parameter(const Arguments& a) {
+  auto value=number(a,"doppler_spread_hz",1);
+  bool specified=a.contains("doppler_spread_hz");
+  for (const auto* alias : {"doppler", "doppler_hz"}) {
+    if (!a.contains(alias)) continue;
+    const auto legacy=number(a,alias);
+    if (specified && value!=legacy)
+      throw std::invalid_argument("conflicting Doppler spread parameters");
+    std::cerr << alias << " is deprecated; use doppler_spread_hz\n";
+    value=legacy;
+    specified=true;
+  }
+  return value;
+}
 std::string word(const Arguments& a,const std::string& name,std::string fallback="") {
   const auto i=a.find(name); return i==a.end()?fallback:i->second;
 }
@@ -127,7 +141,7 @@ Impairments impairments(const Arguments& a) {
   c.legacy.phase_rad=number(a,"phase_rad");
   c.watterson=word(a,"channel_model","null")=="watterson";
   c.delay_spread_ms=number(a,"delay_spread_ms");
-  c.doppler_spread_hz=number(a,"doppler_spread_hz",1);
+  c.doppler_spread_hz=doppler_spread_parameter(a);
   c.path_gains_db={number(a,"path0_db"),number(a,"path1_db")};
   c.pure_noise=number(a,"pure_noise")!=0;
   c.cw_hz=number(a,"cw_hz");

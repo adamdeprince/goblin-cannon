@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate the conventional-encoding simulated channel report from saved results."""
 from __future__ import annotations
+from channel_description import compact_markdown
 
 from collections import Counter
 import hashlib
@@ -206,7 +207,7 @@ def load():
 
 def report(data):
     m=data["manifest"];rows=data["rows"]
-    lines=["# Goblin Cannon simulated channel — conventional encoding comparison","",
+    lines=["# Goblin Cannon simulated channel — conventional encoding comparison","", compact_markdown(), "",
         "Implemented and measured: fixed-constellation soft bit metrics, K9 convolutional rates 1/2 and 1/3, plain Walsh-8 spreading, shortened BCH(58,40,7), rectangular interleaving, noncoherent 4/8-FSK and fixed-power two-subband BPSK diversity. All are opt-in; existing defaults remain compatible. Both endpoints receive coding and waveform settings over fiber/gRPC.","",
         "The [patent screen](PATENT_SCREEN.md) excludes modern CROW, specialized LDPC constructions/decoders, adaptive constellation learning and unresolved Walsh-specific equalizers. It documents the conventional implementations and their historical basis; it is not worldwide legal clearance.","",
         f"{m['main_cases']} AVX-512 cases, {m['latency_cases']} serial quiet-host latency cases, 20/20 CTest regressions on both hosts, 13 harness checks and three byte-identical repeats. Carrier correction is off. Coherent modes retain RLS and clock recovery; FSK uses tone-energy acquisition and per-frame timing reacquisition, with no RLS, Gardner or carrier-frequency loop.","",
@@ -264,7 +265,7 @@ def report(data):
         f"| Maximum observed source queue depth | {max(max(r['queue']) for r in rows)} |","",
         "Fresh goodput counts only useful bits whose key has no newer source-created value at delivery. It is stricter than correct goodput. This is a simulator observation, not a receiver-side oracle or a change to application delivery semantics.","",
         "## Simulated channel — E: sustained polar delivery and determinism","",
-        f"Each configuration runs quiet/moderate/disturbed for 300/300/100 seconds per seed: **{m['simulated_followup_hours']:.3f} simulated hours** in total. Delay/Doppler spreads are 1 ms/0.5 Hz, 3 ms/10 Hz and 7 ms/30 Hz. The equalizer spans and training follow the prior PSK campaign; half-band branches scale spans to the same physical delay. All path gains are 0/0 dB, normalized in mean power. All runs use 30 dB nominal SNR.","",
+        f"Each configuration runs quiet/moderate/disturbed for 300/300/100 seconds per seed: **{m['simulated_followup_hours']:.3f} simulated hours** in total. Delay spread and Doppler spread are 1 ms/0.5 Hz, 3 ms/10 Hz and 7 ms/30 Hz. The equalizer spans and training follow the prior PSK campaign; half-band branches scale spans to the same physical delay. All path gains are 0/0 dB, normalized in mean power. All runs use 30 dB nominal SNR.","",
         "The 71.53°N great-circle geometry is unchanged. These fixed-SNR traces do not predict route availability. The earlier 6,000-second quiet campaign stays separate. The 24 kHz Watterson use remains a bandwidth extrapolation beyond the recommendation's validation scope.","",
         "| Band | Preset | Configuration | Correct bit/s | Fresh bit/s | Delivered / framed | Freshness p99.9 ms | Longest silence s | Seeds |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]

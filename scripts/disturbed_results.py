@@ -16,15 +16,22 @@ DIRECTORY=ROOT/"results/disturbed-recovery"
 sys.path.insert(0,str(ROOT/"tests/simulated_channel"))
 from catalog import OPEN_THRESHOLDS
 from run import source_digest
+from measurement_source import verify_snapshot
+from channel_description import compact_markdown, RECORDED_OFFSETS, preset_markdown
 
 
 def build():
     source=read(DIRECTORY/"MEASUREMENT_SOURCE.json")
-    if source["source_tree_sha256"]!=source_digest():raise ValueError("Source changed after measurements")
+    measured=verify_snapshot(DIRECTORY)
+    if source["source_tree_sha256"]!=measured["source_tree_sha256"]:
+        raise ValueError("Measurement source does not match the saved tested archive")
     selections={name:records(DIRECTORY/name) for name in ("security","polar","diversity","diversity-null","naamah-latency","repeat")}
     for name,count in (("security",35),("polar",576),("diversity",216),("diversity-null",54),("naamah-latency",24),("repeat",3)):
         if len(selections[name])!=count:raise ValueError(f"Incomplete {name}: {len(selections[name])}/{count}")
     all_records=[row for rows in selections.values() for row in rows]
+    inventory=read(ROOT/"tests/simulated_channel/recorded_runs.json")
+    actual={str(path.relative_to(ROOT)):hashlib.sha256(path.read_bytes()).hexdigest() for path,_ in all_records}
+    if actual!=inventory:raise ValueError("The original 908 published records changed")
     for path,r in all_records:
         if r["parameters"]["source_tree_sha256"]!=source["source_tree_sha256"]:raise ValueError(f"Mixed source: {path}")
         if r["parameters"]["carrier_correction"]:raise ValueError(f"Carrier correction enabled: {path}")
@@ -39,7 +46,7 @@ def build():
                 rs=list(map(read,chosen));rr=list(map(read,rf));p=rs[0]["parameters"]
                 rows.append(dict(bandwidth=band,variant=variant,label=label,preset=preset,
                     modulation=p["modulation"],bch=bool(p["bch_payload"]),duration=p["duration_s"],
-                    parameters={k:p[k] for k in ("delay_spread_ms","doppler_spread_hz","snr_db","frame_symbols",
+                    parameters={k:p[k] for k in ("delay_spread_ms","doppler_spread_hz","doppler_spread_convention","doppler_shift_hz","residual_offset_hz","residual_drift_hz_per_second","snr_db","frame_symbols",
                         "training_symbols","equalizer_feedforward_taps","equalizer_feedback_taps","equalizer_delay_symbols",
                         "pilot_interval_symbols","recovery_interval_frames","sample_rate_hz","path_gains_db")},
                     goodput=[r["metrics"]["goodput_bps"] for r in rs],fresh_goodput=[r["metrics"]["fresh_goodput_bps"] for r in rs],
@@ -166,7 +173,7 @@ def report(data):
     aging=next(r for r in data['ablation'] if r['bandwidth']==24000 and r['variant']=='qpsk_bch' and r['change']=='time')
     quiet=next(r for r in data['comparisons'] if r['bandwidth']==24000 and r['variant']=='8psk_bch' and r['preset']=='quiet')
     diversity_severe=[v for r in data['diversity'] if r['bandwidth']==24000 and r['preset']=='disturbed' for v in r['branches']['both']['fresh_goodput']]
-    lines=["# Goblin Cannon simulated channel — disturbed recovery", "",
+    lines=["# Goblin Cannon simulated channel — disturbed recovery", "", compact_markdown(), "", preset_markdown(), "", RECORDED_OFFSETS, "",
         "All four experiments are implemented and measured: warm equalizer recovery with varied known startup symbols and shorter recurring training; uncertainty prediction through rejected decisions; a fiber-selected 13-byte authenticated header; and frequency diversity with matched measured power. Carrier correction remains off. The GCM tag remains 16 bytes.", "",
         "Fresh calibrated baselines use the same source, channel seeds and full durations as the changed receiver. The earlier noise reference underestimated RRC sample power and diversity width compensation increased transmit power. Those errors are corrected before these comparisons. No per-fade normalization is used.","",
         f"At 24 kHz on the disturbed preset, QPSK+BCH fresh goodput changes from {span(qpsk['baseline'])} to {span(qpsk['combined'])} bit/s. Longest delivery silences change from {span(qpsk['baseline_silence'],.001,3)} to {span(qpsk['combined_silence'],.001,3)} seconds. This is useful but still intermittent delivery. Uncertainty aging alone produces {span(aging['fresh_goodput'])} bit/s; it is not a standalone improvement on these traces.","",
@@ -224,7 +231,7 @@ def main():
     data=build();save(DIRECTORY/"DATA.json",data);save(DIRECTORY/"VALIDATION.json",data['manifest'])
     (DIRECTORY/"SUMMARY.md").write_text(report(data))
     m=data['manifest'];worst=max(r['added']['p99_9'] for r in data['latency'])
-    lines=["# Goblin Cannon simulated channel current results", "",
+    lines=["# Goblin Cannon simulated channel current results", "", compact_markdown(), "", RECORDED_OFFSETS, "",
         "Warm recovery, elapsed-symbol RLS uncertainty, a 13-byte authenticated header and calibrated frequency diversity are implemented and tested. Carrier correction is off; the full 16-byte AES-GCM tag and persisted nonce epochs remain.","",
         "[Current report and open thresholds](disturbed-recovery/SUMMARY.md) · [Validation](disturbed-recovery/VALIDATION.json) · [Measured power](disturbed-recovery/POWER.json)","",
         "## Simulated channel — 24 kHz disturbed fresh useful bit/s", "",

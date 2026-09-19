@@ -59,7 +59,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -89,7 +89,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -119,7 +119,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 12.8,
       "goodput": 12.8,
@@ -149,7 +149,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 2.4,
       "goodput": 2.4,
@@ -179,7 +179,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -209,7 +209,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -239,7 +239,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -269,7 +269,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -299,7 +299,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -329,7 +329,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -359,7 +359,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -389,7 +389,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -418,7 +418,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -447,7 +447,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -476,7 +476,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -505,7 +505,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 2.4,
       "goodput": 2.4,
@@ -534,7 +534,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -563,7 +563,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -592,7 +592,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -621,7 +621,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -650,7 +650,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -679,7 +679,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -708,7 +708,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -737,7 +737,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -766,7 +766,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -795,7 +795,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -824,7 +824,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -853,7 +853,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 2.4,
       "goodput": 2.4,
@@ -882,7 +882,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -911,7 +911,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -940,7 +940,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -969,7 +969,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -998,7 +998,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1027,7 +1027,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1056,7 +1056,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1085,7 +1085,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1115,7 +1115,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 4.8,
       "goodput": 4.8,
@@ -1145,7 +1145,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1175,7 +1175,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 12.8,
       "goodput": 12.8,
@@ -1205,7 +1205,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -1235,7 +1235,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1265,7 +1265,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -1295,7 +1295,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1325,7 +1325,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1355,7 +1355,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1385,7 +1385,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1415,7 +1415,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1445,7 +1445,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1474,7 +1474,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1503,7 +1503,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1532,7 +1532,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -1561,7 +1561,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -1590,7 +1590,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1619,7 +1619,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -1648,7 +1648,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1677,7 +1677,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1706,7 +1706,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1735,7 +1735,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1764,7 +1764,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1793,7 +1793,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1822,7 +1822,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 4.8,
       "goodput": 4.8,
@@ -1851,7 +1851,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1880,7 +1880,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 12.8,
       "goodput": 12.8,
@@ -1909,7 +1909,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1938,7 +1938,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -1967,7 +1967,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -1996,7 +1996,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2025,7 +2025,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2054,7 +2054,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2083,7 +2083,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2112,7 +2112,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2141,7 +2141,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2171,7 +2171,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2201,7 +2201,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2231,7 +2231,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 12.8,
       "goodput": 12.8,
@@ -2261,7 +2261,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 12.0,
       "goodput": 12.0,
@@ -2291,7 +2291,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2321,7 +2321,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -2351,7 +2351,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2381,7 +2381,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2411,7 +2411,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2441,7 +2441,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2471,7 +2471,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2501,7 +2501,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2530,7 +2530,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2559,7 +2559,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2588,7 +2588,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -2617,7 +2617,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -2646,7 +2646,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2675,7 +2675,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -2704,7 +2704,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2733,7 +2733,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2762,7 +2762,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2791,7 +2791,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2820,7 +2820,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2849,7 +2849,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2878,7 +2878,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 2.4,
       "goodput": 2.4,
@@ -2907,7 +2907,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2936,7 +2936,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -2965,7 +2965,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -2994,7 +2994,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3023,7 +3023,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 6.4,
       "goodput": 6.4,
@@ -3052,7 +3052,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3081,7 +3081,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3110,7 +3110,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3139,7 +3139,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3168,7 +3168,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3197,7 +3197,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3227,7 +3227,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 164.0,
       "goodput": 164.0,
@@ -3257,7 +3257,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 130.4,
       "goodput": 130.4,
@@ -3287,7 +3287,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 166.4,
       "goodput": 166.4,
@@ -3317,7 +3317,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 248.8,
       "goodput": 248.8,
@@ -3347,7 +3347,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 190.4,
       "goodput": 190.4,
@@ -3377,7 +3377,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 215.2,
       "goodput": 215.2,
@@ -3407,7 +3407,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3437,7 +3437,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3467,7 +3467,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3497,7 +3497,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3527,7 +3527,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3557,7 +3557,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -3586,7 +3586,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 128.8,
       "goodput": 128.8,
@@ -3615,7 +3615,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 124.0,
       "goodput": 124.0,
@@ -3644,7 +3644,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 145.6,
       "goodput": 145.6,
@@ -3673,7 +3673,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 186.4,
       "goodput": 186.4,
@@ -3702,7 +3702,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 146.4,
       "goodput": 146.4,
@@ -3731,7 +3731,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 166.4,
       "goodput": 166.4,
@@ -3760,7 +3760,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3789,7 +3789,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3818,7 +3818,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3847,7 +3847,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3876,7 +3876,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -3905,7 +3905,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -3934,7 +3934,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 138.4,
       "goodput": 138.4,
@@ -3963,7 +3963,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 114.4,
       "goodput": 114.4,
@@ -3992,7 +3992,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 157.6,
       "goodput": 157.6,
@@ -4021,7 +4021,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 187.2,
       "goodput": 187.2,
@@ -4050,7 +4050,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 156.0,
       "goodput": 156.0,
@@ -4079,7 +4079,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 169.6,
       "goodput": 169.6,
@@ -4108,7 +4108,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4137,7 +4137,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4166,7 +4166,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4195,7 +4195,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4224,7 +4224,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4253,7 +4253,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -4283,7 +4283,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 172.8,
       "goodput": 172.8,
@@ -4313,7 +4313,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 123.2,
       "goodput": 123.2,
@@ -4343,7 +4343,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 162.4,
       "goodput": 162.4,
@@ -4373,7 +4373,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 133.6,
       "goodput": 133.6,
@@ -4403,7 +4403,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 108.0,
       "goodput": 108.0,
@@ -4433,7 +4433,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 179.2,
       "goodput": 179.2,
@@ -4463,7 +4463,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4493,7 +4493,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4523,7 +4523,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4553,7 +4553,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4583,7 +4583,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4613,7 +4613,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -4642,7 +4642,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 111.2,
       "goodput": 111.2,
@@ -4671,7 +4671,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 130.4,
       "goodput": 130.4,
@@ -4700,7 +4700,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 127.2,
       "goodput": 127.2,
@@ -4729,7 +4729,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 128.8,
       "goodput": 128.8,
@@ -4758,7 +4758,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 95.2,
       "goodput": 95.2,
@@ -4787,7 +4787,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 105.6,
       "goodput": 105.6,
@@ -4816,7 +4816,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4845,7 +4845,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4874,7 +4874,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4903,7 +4903,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4932,7 +4932,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -4961,7 +4961,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -4990,7 +4990,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 163.2,
       "goodput": 163.2,
@@ -5019,7 +5019,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 104.0,
       "goodput": 104.0,
@@ -5048,7 +5048,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 103.2,
       "goodput": 103.2,
@@ -5077,7 +5077,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 136.8,
       "goodput": 136.8,
@@ -5106,7 +5106,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 130.4,
       "goodput": 130.4,
@@ -5135,7 +5135,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 124.8,
       "goodput": 124.8,
@@ -5164,7 +5164,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5193,7 +5193,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5222,7 +5222,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5251,7 +5251,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5280,7 +5280,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5309,7 +5309,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -5339,7 +5339,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 198.4,
       "goodput": 198.4,
@@ -5369,7 +5369,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 145.6,
       "goodput": 145.6,
@@ -5399,7 +5399,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 189.6,
       "goodput": 189.6,
@@ -5429,7 +5429,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 164.0,
       "goodput": 164.0,
@@ -5459,7 +5459,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 130.4,
       "goodput": 130.4,
@@ -5489,7 +5489,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 155.2,
       "goodput": 155.2,
@@ -5519,7 +5519,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5549,7 +5549,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5579,7 +5579,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5609,7 +5609,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5639,7 +5639,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5669,7 +5669,7 @@
         "per_branch_power_fraction": 0.5,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -5698,7 +5698,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 215.2,
       "goodput": 215.2,
@@ -5727,7 +5727,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 107.2,
       "goodput": 107.2,
@@ -5756,7 +5756,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 125.6,
       "goodput": 125.6,
@@ -5785,7 +5785,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 141.6,
       "goodput": 141.6,
@@ -5814,7 +5814,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 117.6,
       "goodput": 117.6,
@@ -5843,7 +5843,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 116.8,
       "goodput": 116.8,
@@ -5872,7 +5872,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5901,7 +5901,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5930,7 +5930,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5959,7 +5959,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -5988,7 +5988,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -6017,7 +6017,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 3.2,
       "goodput": 3.2,
@@ -6046,7 +6046,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 104.8,
       "goodput": 104.8,
@@ -6075,7 +6075,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 120.8,
       "goodput": 120.8,
@@ -6104,7 +6104,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 139.2,
       "goodput": 139.2,
@@ -6133,7 +6133,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 165.6,
       "goodput": 165.6,
@@ -6162,7 +6162,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 111.2,
       "goodput": 111.2,
@@ -6191,7 +6191,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 10,
+      "doppler_spread_hz": 10,
       "duration": 10,
       "fresh_goodput": 160.0,
       "goodput": 160.0,
@@ -6220,7 +6220,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -6249,7 +6249,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -6278,7 +6278,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -6307,7 +6307,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,
@@ -6336,7 +6336,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 0.0,
       "goodput": 0.0,
@@ -6365,7 +6365,7 @@
         "per_branch_power_fraction": 1,
         "wait_quantization_max_samples": 48
       },
-      "doppler_hz": 30,
+      "doppler_spread_hz": 30,
       "duration": 10,
       "fresh_goodput": 9.6,
       "goodput": 9.6,

@@ -1,3 +1,4 @@
+from channel_description import context_html
 """Render the completed BCH/diversity/cadence simulated channel evidence."""
 import json
 from html import escape
@@ -41,11 +42,12 @@ def build():
         <h2 class="section-title">Simulated channel.<br>Testing the next three changes.</h2>
         <p class="section-intro">QPSK and 8-PSK with BCH, three frequency separations with matched single-copy controls, and five pilot/retraining schedules. {m['cases']:,} AVX-512 cases cover 23 configurations per bandwidth; 46 serial latency measurements use the longer moderate-channel equalizer on naamah.</p></header>
       <p class="section-intro">At 24 kHz in moderate fading, the highest mean fresh goodput comes from <strong>{escape(best['label'])}</strong>: <strong>{spread(best['fresh_goodput'])} bit/s</strong>. The previous BPSK+BCH configuration delivers <strong>{spread(baseline['fresh_goodput'])} bit/s</strong> in the matched rerun. In disturbed fading, the strongest measured configuration is <strong>{escape(severe['label'])}</strong>, at <strong>{spread(severe['fresh_goodput'])} fresh bit/s</strong>, with maximum delivery gaps of <strong>{spread(severe['silence'],.001,3)} seconds</strong>.</p>
+      {context_html(historical=True)}
       <p class="evidence-provenance">Carrier correction is off. All variants retain RLS and clock recovery. Settings travel over fiber/gRPC, and the three seeds are paired across configurations. These simulated channels use the unchanged legacy noise reference and do not predict route availability near 71°N.</p>
       <p class="section-intro"><strong>Calibration finding:</strong> measured waveform power exceeds the harness's nominal noise reference, so configured 30 dB is not actual 30 dB. Diversity also uses about 2.5× full-band BPSK's measured power. Its lower/upper/both controls match, but cross-family results are not equal-power comparisons. This affects the interpretation of earlier campaigns below. <a href="{url(DIRECTORY/'power-audit/SUMMARY.md')}">Power audit: 54 matched-control passes and six retained xfails →</a></p>
       <div class="rf-controls" id="refinement-controls" hidden>
         <label for="refinement-bandwidth">Profile<select id="refinement-bandwidth"><option value="24000">24 kHz</option><option value="10000">10 kHz</option></select></label>
-        <label for="refinement-preset">Polar preset<select id="refinement-preset"><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="disturbed">Disturbed · 7 ms / 30 Hz</option></select></label>
+        <label for="refinement-preset">Delay spread / Doppler spread<select id="refinement-preset"><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="disturbed">Disturbed · 7 ms / 30 Hz</option></select></label>
         <label for="refinement-family">Experiment<select id="refinement-family"><option value="coding">BCH combinations</option><option value="diversity">Frequency diversity</option><option value="cadence">Pilot and retraining cadence</option></select></label>
       </div>
       <p class="evidence-provenance" id="refinement-context">24 kHz · moderate · 300 seconds per seed · BCH replaces rate-1/2 payload coding with rate 40/58. Gains include the changed code rate.</p>

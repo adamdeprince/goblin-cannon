@@ -2,6 +2,7 @@
 import json
 from html import escape
 from disturbed_results import DIRECTORY, read, span, url
+from channel_description import context_html, sweep_html
 
 
 def number(value):
@@ -31,12 +32,14 @@ def build(start, end):
       <header class="evidence-head"><p class="section-label">Current waveform and authenticated delivery</p><h2 class="section-title">Simulated channel.<br>The 71°N problem.</h2>
         <p class="section-intro">BPSK, QPSK and 8-PSK with convolutional or BCH coding, measured with faster recovery, equalizer uncertainty prediction and a compact authenticated header. Three seeds cover each bandwidth and high-latitude preset; quiet and moderate traces last 300 seconds, disturbed traces 100 seconds.</p></header>
       <p class="evidence-provenance">The transmit-power and noise reference are now calibrated. Carrier correction is off; RLS equalization and audio-clock recovery are on. The header is 13 bytes and retains the full 16-byte GCM tag. Parameters and nonce epochs travel over fiber. These finite simulated channels do not establish availability for the route that reaches 71.534°N.</p>
+      {context_html()}
+      {sweep_html()}
       <div class="rf-explorer" id="rf-explorer">
         <div class="rf-controls" id="rf-controls" hidden>
           <label for="rf-bandwidth">Profile<select id="rf-bandwidth"><option value="24000">24 kHz</option><option value="10000">10 kHz</option></select></label>
           <label for="rf-modulation">Modulation<select id="rf-modulation"><option value="bpsk">BPSK</option><option value="qpsk" selected>QPSK / 4-QAM</option><option value="8psk">8-PSK</option></select></label>
           <label for="rf-coding">Payload FEC<select id="rf-coding"><option value="bch">BCH · 40/58</option><option value="soft">Convolutional · 1/2</option></select></label>
-          <label for="rf-preset">Polar preset<select id="rf-preset"><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="disturbed" selected>Disturbed · 7 ms / 30 Hz</option></select></label>
+          <label for="rf-preset">Delay spread / Doppler spread<select id="rf-preset"><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="disturbed" selected>Disturbed · 7 ms / 30 Hz</option></select></label>
           <label for="rf-layer">Measurement<select id="rf-layer"><option value="messages">Authenticated messages after FEC</option><option value="rf">Raw RF decisions · before message FEC</option></select></label>
         </div>
         <div class="rf-outcome" data-reception="limited"><p class="section-label">Simulated channel · current receiver</p><h3 id="rf-outcome-title">Useful messages delivered after FEC.</h3><p id="rf-outcome-note">24 kHz · QPSK · BCH · high-latitude disturbed. Only complete, authenticated records reach the message sink.</p></div>
@@ -47,7 +50,7 @@ def build(start, end):
           <div><span id="rf-metric-label-3">Longest delivery silence</span><strong id="rf-metric-3">{span(default['silence'],.001,3)}</strong><small id="rf-unit-3">Seconds, including terminal silence</small></div>
         </div>
         <div class="rf-comparison" id="rf-comparison" hidden></div>
-        <p class="rf-parameters" id="rf-parameters">Configured SNR 30 dB; equal-gain two-path Watterson channel. Ranges are seed ranges, not confidence intervals.</p>
+        <p class="rf-parameters" id="rf-parameters">Configured SNR 30 dB; equal-gain two-path Watterson channel; delay spread 7 ms; Doppler spread 30 Hz (2σ); per-path Doppler shift 0 Hz; residual carrier frequency offset 0 Hz. Ranges are seed ranges, not confidence intervals.</p>
         <div class="evidence-links rf-source-links" id="rf-sources">{' · '.join(f'<a href="{s}">Seed {seed} parameters + metrics</a>' for seed,s in zip(m['seeds'],default['sources']))}</div>
       </div>
       <p class="evidence-provenance">The RF view reports measured sample power; the <a href="{url(DIRECTORY/'POWER.json')}">power audit</a> checks the corrected noise reference and matched diversity controls using the existing 2% finite-waveform tolerance. The 24 kHz model extends beyond the Recommendation’s validated bandwidth scope. No live recordings or soak results are available.</p>

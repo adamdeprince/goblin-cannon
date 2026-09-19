@@ -1,0 +1,653 @@
+{
+  "baseline_seed_range_percentage_points": 0.03339567192091408,
+  "collapse_magnitude_hz": 320,
+  "criterion": "Every seed and both offset signs stay within 0.1 percentage points of the paired 0 Hz delivery value, at every tested magnitude up to the reported bound.",
+  "duration_s": 300,
+  "git_commit": "87172c30",
+  "profile": "24 kHz QPSK+BCH, combined recovery, high-latitude quiet, 30 dB nominal SNR",
+  "records_sha256": {
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-0.5Hz/7446529.json": "e28148b81e349733fd333e43213b8da59d1fbf9de7337cf4aeb7057213bcd6e3",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-0.5Hz/7446530.json": "2d767377785683ce8a37dbb0f6f8d82de3d065921d5d431447af897dd00dc0c3",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-0.5Hz/7446531.json": "f0fadc7b0868cad6828dc844e5c9395ba1864e87ea453ee58cfb006d60714d0a",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-10Hz/7446529.json": "c6dfe1bcb456501f4e79aed1303392901215b3ad05da502fb0f779766bc4eacb",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-10Hz/7446530.json": "d49ad2e19664a9f31205b07d12923e7a16eaf5fdba7d065a58e668183355d82c",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-10Hz/7446531.json": "184b50f1d8971ea4cd6a88be441168abb5223c2f8514591282c32c63020720b3",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-160Hz/7446529.json": "2e227b41512348c5e4542eb0a218c6627364c0988e017327787a44d4d47e265b",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-160Hz/7446530.json": "7491d6dd454f1436a424c5d12d88ede268e0aa1241fda85c896c323aa1a47f18",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-160Hz/7446531.json": "7316f151fb2f58ce2724e53f9ac182b0749a7bab4bab21f70145b10591b7f290",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-1Hz/7446529.json": "d82dd3efba867da7ece0a2101b7472e19b24bc5b8189734aec3ea237d54de8aa",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-1Hz/7446530.json": "74217e4b5a0f8056bdcc4a6469d79cbdd644f05e84cfc34902a8c9a222a9d08b",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-1Hz/7446531.json": "eed9f6c19d0c367a4822afad82fdb82488759ce5213e0c883c9682a2bc7a7d85",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-20Hz/7446529.json": "016505bf1e56d5f5b65627a3da0aeacb05a2a74d02f4ff287c092a34fd23a540",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-20Hz/7446530.json": "73fbc5fdba2b976af8f392a66068c1fc0edfd588311ca8bd7581940b2fa5005c",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-20Hz/7446531.json": "f4879ba96e8a99606916faab3fa7deeed92f2a6f9ac33f9c204a73b53241101d",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-2Hz/7446529.json": "5d1c32271c008a8efba7cea990110fd61ea01b3776748ae89fbfecfaa92b68f4",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-2Hz/7446530.json": "2ff77825c74a5471e17a969e77de8598cefd82e58b5ce995bda7317ca3011801",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-2Hz/7446531.json": "a308adce3d9db76163924508e6071d895fe1a50b8247684abe06a58f100364b8",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-320Hz/7446529.json": "04261e9e12f6b917cf8bcb0cb929184847c6fe2b8444b9b3b9caedc18d270537",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-320Hz/7446530.json": "360e81398087775d9441abb59b6f6d1103d212cfdbc07373da29c36960ce09ef",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-320Hz/7446531.json": "0ada23f288244858c6bd1f232f791314e3d3281e339618dc8501ba2cc2b11bfd",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-40Hz/7446529.json": "fb63096282fae6fa79ff55f4a83f19422d81b3bc0d7fc3c228f09407f6da37ae",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-40Hz/7446530.json": "7cea7ea174f00062291b2765166cbd6cb4b1a0e4f03d54857e4b1b5ef261a372",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-40Hz/7446531.json": "5d63ee05815c6c82b02049627f05e700ce4fa45b665da88a21ba962c05985132",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-5Hz/7446529.json": "d5626ab2533aa58a6a7de528ebe3434ec06bced8c776ecff8d9071f8d88dda57",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-5Hz/7446530.json": "621e8a99c23ac8658577044fb8ff3ffc0533ff58974734b81f078b391e255913",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-5Hz/7446531.json": "47e058703e5a946504f7fd398010a75f3d07f868124717538fa08a76ab84e727",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-80Hz/7446529.json": "1948c40b6d4bf7846b2ae1365e0ddff07cc0de2259583aaf2547b1a5abb84388",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-80Hz/7446530.json": "e72facc813af1e540a5def331621bd23e0abef00de5329810b320323714b8ca3",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-80Hz/7446531.json": "26b97d659562ab6c30d6ed12e4e379949d9cc2594b8ed293647d73f104ee36b0",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0.5Hz/7446529.json": "e6019b4f82710bae1537545801b7bc171c2de9297361ce3b1b26ddce05496ff2",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0.5Hz/7446530.json": "b0e5b2dd7d0df5818fec9ebc6f4794ae5a1c0589f6974d4fdfce8df0c5160c87",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0.5Hz/7446531.json": "87d873cd9c2b36b235e53c04a31c2839e76800b96e0f691d4d31938f1be7e9bb",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0Hz/7446529.json": "3636fe41cd8f2cc5ba8244055da0f9cc8bd32e620a07197f6a3460856f4c8146",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0Hz/7446530.json": "de39384fa8d7e4f38bd74e514023b041c63f887446e09ebc6188c3abc2a0284a",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0Hz/7446531.json": "126ee31c7d8c7f4bc07b33b92156c34e48f7cefe1032c5311f614128a5818aa3",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_10Hz/7446529.json": "72ef9e468219116a8a273b8ee476769e106f4ccf41acd0217f14fa3b2217a9c8",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_10Hz/7446530.json": "2ee141b29cc4cdc04adcfcd90bc4ace2ac04d6fe39d0e25a47e1bd28f41c2cb5",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_10Hz/7446531.json": "6e6725d217016407d9068819cf63c35bd9d670282e50c01a60bcec4d646b14b7",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_160Hz/7446529.json": "6cc9d815b1590ef05d2ccbb7b12e386ef606acaed3fa7dbccb3a6f75a11ff7a5",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_160Hz/7446530.json": "2e9d42bb4e38165068289bd8d8fee03b917029ad67ce40eac2d5b9f7790bbf52",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_160Hz/7446531.json": "a801cc910964ec5290c8d5a1ce3820c6524e7469baaae52c7aab1d8334feee3a",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_1Hz/7446529.json": "0a9e3bd123a86464b563f552d2bfe3c5a1a26043f0973493c98a947203e74c2a",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_1Hz/7446530.json": "dddbba01a16efdfc52350fe8530187d876fc8f57fecb5237a4eca843ccaf4188",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_1Hz/7446531.json": "5aa46ead2d54864173a9460be8fb81796fa55427e26585292d27d90e01530577",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_20Hz/7446529.json": "675cdc8a79aac4e17c4b9fa78cd912f15e3b50370e070577db04c88ca2320fca",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_20Hz/7446530.json": "1772de10ac1c0db887e5dcd7a3b5d00436b86658361219dcd620fc140ec6b82e",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_20Hz/7446531.json": "466bfd63afa2756b70a617b9229dde7e3664ea8f49739d4776fe608e622be2fa",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_2Hz/7446529.json": "6a75c0092ebe103827c738497c61f215980af6ed8e613934171199bdbc6a0e31",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_2Hz/7446530.json": "7ba5f1fb2b88a5cddb3037655e3f40670a812bd0c2db4980b1a921425a4c0c0c",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_2Hz/7446531.json": "eed3a3e4f0dbad7579912363a5f83c48ce8dfe70e746ebf20878379d2e5aeab6",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_320Hz/7446529.json": "e35cca81519fdf92583db65476c59289c3a7d7b189ef096f949b81f1ec00a1d9",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_320Hz/7446530.json": "cae74f135437959b35f7f3cf54b606471708ed5d5a8879d6c2fd158d39f7beb3",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_320Hz/7446531.json": "a3e3acdc844c64d184e77d34ae0170d565714224d5295046749a0d5ab58dc56c",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_40Hz/7446529.json": "ec04daa7876c4417b2d3c416e56c1871312443db075e41916f488c3ca8d5f9a9",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_40Hz/7446530.json": "dddda934dd10ffa422c319a85441bc3087b27e26a40d7952d5a46fd90138fea7",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_40Hz/7446531.json": "44324f17fc5de66e77babc2688088411061b773a5cc6f254b1f1315ae1632761",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_5Hz/7446529.json": "5ea1ec2d0b8316e07efdf020f701e3c75e87be4b47c5c143a340e2888bbe80e4",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_5Hz/7446530.json": "b1e46618da7cb6832916502252cb59ddc030e0ec60a1c18c8e998d627c6bcd39",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_5Hz/7446531.json": "0b68bba58b133e32bbafda9ae9bc99d543f0ddf7089b03ebdfebbff78925d195",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_80Hz/7446529.json": "5ddf134729dc377ee8bef106ecf219b4e1e2709a536ee2a2740fad762cbda54f",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_80Hz/7446530.json": "650d567f6d143ee122f9c97c72078ebc01e46df6a070385dd2d3c1bc5ea71558",
+    "results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_80Hz/7446531.json": "b0d94824a142cf923731f66c2e7a85ace89abdc037cbf5059e2357434e7e5c80"
+  },
+  "report_header": "Simulated channel carrier frequency offset tolerance",
+  "rows": [
+    {
+      "carrier_frequency_offset_hz": -320,
+      "delivery_percent": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fresh_goodput_bps": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max_absolute_paired_delta_percentage_points": 99.95324605931071,
+      "mean_delivery_percent": 0.0,
+      "mean_fresh_goodput_bps": 0.0,
+      "paired_delivery_delta_percentage_points": [
+        -99.9198503873898,
+        -99.93320865615816,
+        -99.95324605931071
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-320Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-320Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-320Hz/7446531.json"
+      ],
+      "within_tolerance": false
+    },
+    {
+      "carrier_frequency_offset_hz": -160,
+      "delivery_percent": [
+        24.10499599251937,
+        26.496126102057172,
+        29.38819129040876
+      ],
+      "fresh_goodput_bps": [
+        384.6666666666667,
+        422.1066666666667,
+        469.2266666666667
+      ],
+      "max_absolute_paired_delta_percentage_points": 75.81485439487042,
+      "mean_delivery_percent": 26.66310446166177,
+      "mean_fresh_goodput_bps": 425.3333333333333,
+      "paired_delivery_delta_percentage_points": [
+        -75.81485439487042,
+        -73.43708255410098,
+        -70.56505476890196
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-160Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-160Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-160Hz/7446531.json"
+      ],
+      "within_tolerance": false
+    },
+    {
+      "carrier_frequency_offset_hz": -80,
+      "delivery_percent": [
+        89.45364680737377,
+        89.86775313919317,
+        90.66924926529522
+      ],
+      "fresh_goodput_bps": [
+        1427.0933333333332,
+        1433.6266666666668,
+        1446.32
+      ],
+      "max_absolute_paired_delta_percentage_points": 10.466203580016032,
+      "mean_delivery_percent": 89.99688307062071,
+      "mean_fresh_goodput_bps": 1435.68,
+      "paired_delivery_delta_percentage_points": [
+        -10.466203580016032,
+        -10.065455516964994,
+        -9.283996794015504
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-80Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-80Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-80Hz/7446531.json"
+      ],
+      "within_tolerance": false
+    },
+    {
+      "carrier_frequency_offset_hz": -40,
+      "delivery_percent": [
+        99.27197435212396,
+        99.418915308576,
+        99.5057440555704
+      ],
+      "fresh_goodput_bps": [
+        1583.8133333333333,
+        1585.9733333333334,
+        1587.44
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.6478760352658375,
+      "mean_delivery_percent": 99.39887790542345,
+      "mean_fresh_goodput_bps": 1585.7422222222222,
+      "paired_delivery_delta_percentage_points": [
+        -0.6478760352658375,
+        -0.514293347582151,
+        -0.4475020037403188
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-40Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-40Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-40Hz/7446531.json"
+      ],
+      "within_tolerance": false
+    },
+    {
+      "carrier_frequency_offset_hz": -20,
+      "delivery_percent": [
+        99.95324605931071,
+        99.96660432807907,
+        99.96660432807907
+      ],
+      "fresh_goodput_bps": [
+        1594.5066666666667,
+        1594.72,
+        1594.72
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.03339567192092163,
+      "mean_delivery_percent": 99.96215157182296,
+      "mean_fresh_goodput_bps": 1594.648888888889,
+      "paired_delivery_delta_percentage_points": [
+        0.03339567192092163,
+        0.03339567192092163,
+        0.013358268768359771
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-20Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-20Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-20Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": -10,
+      "delivery_percent": [
+        99.96660432807907,
+        99.93320865615816,
+        99.94656692492653
+      ],
+      "fresh_goodput_bps": [
+        1594.72,
+        1594.2933333333333,
+        1594.4
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.046753940689281404,
+      "mean_delivery_percent": 99.94879330305459,
+      "mean_fresh_goodput_bps": 1594.4711111111112,
+      "paired_delivery_delta_percentage_points": [
+        0.046753940689281404,
+        0.0,
+        -0.006679134384190988
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-10Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-10Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-10Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": -5,
+      "delivery_percent": [
+        99.9599251936949,
+        99.8797755810847,
+        99.96660432807907
+      ],
+      "fresh_goodput_bps": [
+        1594.6133333333332,
+        1593.3333333333333,
+        1594.72
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.05343307507346129,
+      "mean_delivery_percent": 99.93543503428623,
+      "mean_fresh_goodput_bps": 1594.222222222222,
+      "paired_delivery_delta_percentage_points": [
+        0.04007480630510152,
+        -0.05343307507346129,
+        0.013358268768359771
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-5Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-5Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-5Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": -2,
+      "delivery_percent": [
+        99.89981298423724,
+        99.93988779054234,
+        99.95324605931071
+      ],
+      "fresh_goodput_bps": [
+        1593.6533333333334,
+        1594.2933333333333,
+        1594.5066666666667
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.02003740315255076,
+      "mean_delivery_percent": 99.9309822780301,
+      "mean_fresh_goodput_bps": 1594.151111111111,
+      "paired_delivery_delta_percentage_points": [
+        -0.02003740315255076,
+        0.006679134384190988,
+        0.0
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-2Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-2Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-2Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": -1,
+      "delivery_percent": [
+        99.8797755810847,
+        99.92652952177397,
+        99.8730964467005
+      ],
+      "fresh_goodput_bps": [
+        1593.3333333333333,
+        1594.08,
+        1593.2266666666667
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.08014961261021414,
+      "mean_delivery_percent": 99.89313384985307,
+      "mean_fresh_goodput_bps": 1593.5466666666664,
+      "paired_delivery_delta_percentage_points": [
+        -0.04007480630510152,
+        -0.006679134384179886,
+        -0.08014961261021414
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-1Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-1Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-1Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": -0.5,
+      "delivery_percent": [
+        99.92652952177397,
+        99.93320865615816,
+        99.97328346246327
+      ],
+      "fresh_goodput_bps": [
+        1594.08,
+        1594.1866666666667,
+        1594.8266666666666
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.02003740315255076,
+      "mean_delivery_percent": 99.94434054679846,
+      "mean_fresh_goodput_bps": 1594.3644444444444,
+      "paired_delivery_delta_percentage_points": [
+        0.006679134384179886,
+        0.0,
+        0.02003740315255076
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-0.5Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-0.5Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_-0.5Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": 0,
+      "delivery_percent": [
+        99.9198503873898,
+        99.93320865615816,
+        99.95324605931071
+      ],
+      "fresh_goodput_bps": [
+        1593.9733333333334,
+        1594.1866666666667,
+        1594.5066666666667
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.0,
+      "mean_delivery_percent": 99.93543503428623,
+      "mean_fresh_goodput_bps": 1594.2222222222224,
+      "paired_delivery_delta_percentage_points": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": 0.5,
+      "delivery_percent": [
+        99.9599251936949,
+        99.93320865615816,
+        99.95324605931071
+      ],
+      "fresh_goodput_bps": [
+        1594.6133333333332,
+        1594.1866666666667,
+        1594.5066666666667
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.04007480630510152,
+      "mean_delivery_percent": 99.94879330305459,
+      "mean_fresh_goodput_bps": 1594.4355555555555,
+      "paired_delivery_delta_percentage_points": [
+        0.04007480630510152,
+        0.0,
+        0.0
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0.5Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0.5Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_0.5Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": 1,
+      "delivery_percent": [
+        99.92652952177397,
+        99.93320865615816,
+        99.96660432807907
+      ],
+      "fresh_goodput_bps": [
+        1594.08,
+        1594.1866666666667,
+        1594.72
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.013358268768359771,
+      "mean_delivery_percent": 99.9421141686704,
+      "mean_fresh_goodput_bps": 1594.328888888889,
+      "paired_delivery_delta_percentage_points": [
+        0.006679134384179886,
+        0.0,
+        0.013358268768359771
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_1Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_1Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_1Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": 2,
+      "delivery_percent": [
+        99.94656692492653,
+        99.9131712530056,
+        99.8797755810847
+      ],
+      "fresh_goodput_bps": [
+        1594.4,
+        1593.8666666666666,
+        1593.3333333333333
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.07347047822602315,
+      "mean_delivery_percent": 99.91317125300561,
+      "mean_fresh_goodput_bps": 1593.8666666666668,
+      "paired_delivery_delta_percentage_points": [
+        0.026716537536730645,
+        -0.02003740315255076,
+        -0.07347047822602315
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_2Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_2Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_2Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": 5,
+      "delivery_percent": [
+        99.93320865615816,
+        99.93988779054234,
+        99.97328346246327
+      ],
+      "fresh_goodput_bps": [
+        1594.1866666666667,
+        1594.2933333333333,
+        1594.8266666666666
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.02003740315255076,
+      "mean_delivery_percent": 99.94879330305459,
+      "mean_fresh_goodput_bps": 1594.4355555555555,
+      "paired_delivery_delta_percentage_points": [
+        0.013358268768359771,
+        0.006679134384190988,
+        0.02003740315255076
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_5Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_5Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_5Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": 10,
+      "delivery_percent": [
+        99.92652952177397,
+        99.95324605931071,
+        99.93988779054234
+      ],
+      "fresh_goodput_bps": [
+        1594.08,
+        1594.5066666666667,
+        1594.2933333333333
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.02003740315256186,
+      "mean_delivery_percent": 99.93988779054234,
+      "mean_fresh_goodput_bps": 1594.2933333333333,
+      "paired_delivery_delta_percentage_points": [
+        0.006679134384179886,
+        0.02003740315256186,
+        -0.013358268768370873
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_10Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_10Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_10Hz/7446531.json"
+      ],
+      "within_tolerance": true
+    },
+    {
+      "carrier_frequency_offset_hz": 20,
+      "delivery_percent": [
+        99.94656692492653,
+        99.88645471546887,
+        99.8330216403954
+      ],
+      "fresh_goodput_bps": [
+        1594.4,
+        1593.44,
+        1592.64
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.12022441891531566,
+      "mean_delivery_percent": 99.88868109359693,
+      "mean_fresh_goodput_bps": 1593.4933333333336,
+      "paired_delivery_delta_percentage_points": [
+        0.026716537536730645,
+        -0.046753940689281404,
+        -0.12022441891531566
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_20Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_20Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_20Hz/7446531.json"
+      ],
+      "within_tolerance": false
+    },
+    {
+      "carrier_frequency_offset_hz": 40,
+      "delivery_percent": [
+        99.18514560512958,
+        99.01816724552498,
+        99.2118621426663
+      ],
+      "fresh_goodput_bps": [
+        1582.24,
+        1579.68,
+        1582.6666666666667
+      ],
+      "max_absolute_paired_delta_percentage_points": 0.9150414106331772,
+      "mean_delivery_percent": 99.13839166444029,
+      "mean_fresh_goodput_bps": 1581.528888888889,
+      "paired_delivery_delta_percentage_points": [
+        -0.7347047822602204,
+        -0.9150414106331772,
+        -0.7413839166444114
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_40Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_40Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_40Hz/7446531.json"
+      ],
+      "within_tolerance": false
+    },
+    {
+      "carrier_frequency_offset_hz": 80,
+      "delivery_percent": [
+        85.80016029922523,
+        87.5033395671921,
+        87.78386321132781
+      ],
+      "fresh_goodput_bps": [
+        1368.9066666666668,
+        1396.0,
+        1400.2933333333333
+      ],
+      "max_absolute_paired_delta_percentage_points": 14.119690088164571,
+      "mean_delivery_percent": 87.02912102591505,
+      "mean_fresh_goodput_bps": 1388.3999999999999,
+      "paired_delivery_delta_percentage_points": [
+        -14.119690088164571,
+        -12.429869088966061,
+        -12.169382847982902
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_80Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_80Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_80Hz/7446531.json"
+      ],
+      "within_tolerance": false
+    },
+    {
+      "carrier_frequency_offset_hz": 160,
+      "delivery_percent": [
+        29.354795618487845,
+        31.33181939620625,
+        34.38418380977825
+      ],
+      "fresh_goodput_bps": [
+        468.53333333333336,
+        499.14666666666665,
+        549.12
+      ],
+      "max_absolute_paired_delta_percentage_points": 70.56505476890196,
+      "mean_delivery_percent": 31.690266274824115,
+      "mean_fresh_goodput_bps": 505.59999999999997,
+      "paired_delivery_delta_percentage_points": [
+        -70.56505476890196,
+        -68.6013892599519,
+        -65.56906224953248
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_160Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_160Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_160Hz/7446531.json"
+      ],
+      "within_tolerance": false
+    },
+    {
+      "carrier_frequency_offset_hz": 320,
+      "delivery_percent": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fresh_goodput_bps": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max_absolute_paired_delta_percentage_points": 99.95324605931071,
+      "mean_delivery_percent": 0.0,
+      "mean_fresh_goodput_bps": 0.0,
+      "paired_delivery_delta_percentage_points": [
+        -99.9198503873898,
+        -99.93320865615816,
+        -99.95324605931071
+      ],
+      "sources": [
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_320Hz/7446529.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_320Hz/7446530.json",
+        "https://github.com/adamdeprince/goblin-cannon/blob/main/results/carrier-offset/E2_carrier_offset_24000_qpsk_bch_quiet_320Hz/7446531.json"
+      ],
+      "within_tolerance": false
+    }
+  ],
+  "schema_version": 1,
+  "seeds": [
+    7446529,
+    7446530,
+    7446531
+  ],
+  "source_tree_sha256": "587a33fcbe02ec7875cd68ec1a383340576f75c4a2d2e3cae2e0ddf9fbca797c",
+  "tolerance_hz": 10,
+  "tolerance_percentage_points": 0.1,
+  "zero_offset_matches_published_observations": true
+}

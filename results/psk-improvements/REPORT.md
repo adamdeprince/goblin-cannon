@@ -1,5 +1,15 @@
 # Goblin Cannon simulated channel PSK comparison
 
+<!-- BEGIN CHANNEL CONTRACT -->
+
+For the recorded acceptance profile:
+
+The modem assumes the radio hands it audio with the carrier frequency offset already removed to within 10 Hz. It performs no Doppler-shift correction. Delay spread, Doppler spread, fading, phase rotation, multipath and noise are the modem's problem, and are what the recorded runs measure.
+
+This boundary describes the recorded acceptance profile. The carrier-offset sweep uses 24 kHz QPSK+BCH, the combined recovery settings, the high-latitude quiet preset, 30 dB nominal SNR and three 300-second traces per offset. The tolerance applies to that measured configuration and the tested offset grid. Other modes and historical receiver versions have no tolerance established by this sweep. The library retains an optional carrier-correction loop, enabled by default; the recorded acceptance profile explicitly disables it. Equalizer phase tracking does not estimate a mean carrier frequency offset or perform AFC.
+
+<!-- END CHANNEL CONTRACT -->
+
 BPSK, BPSK-only header data, DBPSK, DQPSK and π/4-DQPSK are implemented. Existing 8-PSK is included in the matched comparison. Both endpoints configure the modes over fiber/gRPC. Carrier correction remains off; adaptive RLS equalization and sample-clock recovery remain on.
 
 968 AVX-512 cases; 44 serial quiet-host latency cases; 18/18 CTest regressions on each host; 12 Python harness tests. Three representative canonical results repeat byte-for-byte. Full observations and parameters remain in [SUMMARY.md](SUMMARY.md) and [quiet-host SUMMARY.md](naamah-latency/SUMMARY.md).

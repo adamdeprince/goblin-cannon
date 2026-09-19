@@ -45,25 +45,25 @@ inline double mean_power(std::span<const Complex> samples) {
 struct Channel {
   double gain = 1.0;
   double phase_rad = 0.0;
-  double frequency_offset_hz = 0.0;
+  double frequency_offset_hz = 0.0; // Common carrier frequency offset, not Doppler spread.
   double frequency_rate_hz_per_second = 0.0;
   double fade_depth_db = 0.0;
-  double fade_rate_hz = 0.0;
+  double fade_rate_hz = 0.0; // Sinusoidal attenuation rate in the deterministic legacy channel.
   double snr_db = std::numeric_limits<double>::infinity();
   double echo_delay_ms = 0.0;
   double echo_gain = 0.0;
-  double echo_frequency_offset_hz = 0.0;
+  double echo_frequency_offset_hz = 0.0; // Relative echo Doppler shift in the legacy channel.
 };
 
-// F.1487's spread is 2*sigma of the Gaussian POWER spectrum, not a carrier
-// shift. Independent complex white sequences pass through a Gaussian FIR at
-// 32*spread Hz, then are interpolated to the audio clock. Filling the history
+// Doppler spread is 2*sigma of the Gaussian POWER spectrum (F.1487 Annex 3).
+// Independent complex white sequences pass through a Gaussian FIR at
+// 32*doppler_spread_hz, then are interpolated to the audio clock. Filling the history
 // before the first output avoids a non-stationary startup fade.
 class RayleighPath {
 public:
-  RayleighPath(double spread, double sample_rate, std::uint32_t seed)
-      : noise_(seed), step_(32.0 * spread / sample_rate) {
-    if (spread <= 0.0) throw std::invalid_argument("Watterson spread must be positive");
+  RayleighPath(double doppler_spread_hz, double sample_rate, std::uint32_t seed)
+      : noise_(seed), step_(32.0 * doppler_spread_hz / sample_rate) {
+    if (doppler_spread_hz <= 0.0) throw std::invalid_argument("Watterson Doppler spread must be positive");
     double energy = 0;
     for (int i = -64; i <= 64; ++i) {
       const double value = std::exp(-std::pow(std::numbers::pi * i / 32.0, 2));
@@ -184,7 +184,7 @@ private:
 // One streaming implementation for both the original deterministic channel and
 // the extended simulated channel. State and PRNG draws do not depend on chunks.
 // Order: channel/noise, interferers, impulse, dropout, AGC, clipping, filtering,
-// sample clock, residual carrier, then audio delivery (owned by the runner).
+// sample clock, residual carrier frequency offset/drift, then audio delivery (owned by the runner).
 class SimulatedChannel {
 public:
   SimulatedChannel(double fs, double signal_power, Impairments config, std::uint32_t seed)
@@ -220,6 +220,8 @@ public:
       const auto echo = index_ >= delay_ ? delayed_[(index_-delay_)%delayed_.size()] : Complex{};
       Complex value{};
       if (c.watterson) {
+        // Both Gaussian tap spectra have zero mean Doppler shift. The output
+        // carrier frequency offset is an independent impairment in emit().
         value = gains_[0]*path0_.next()*input[j]+gains_[1]*path1_.next()*echo;
       } else {
         const double fade = old.fade_depth_db!=0 ? old.fade_depth_db*(1-std::cos(tau*old.fade_rate_hz*t))/2 : 0;
@@ -228,7 +230,7 @@ public:
       }
       if (c.pure_noise) value={};
       // Preserve the original regression channel's noise draw/order. Legacy
-      // phase is applied before AWGN; new residual offset is set separately.
+      // phase is applied before AWGN; residual carrier frequency offset is set separately.
       if(old.phase_rad!=0 || old.frequency_offset_hz!=0 || old.frequency_rate_hz_per_second!=0)
         value *= std::polar(1.0F, static_cast<float>(old.phase_rad + tau*(old.frequency_offset_hz*t +
                                          0.5*old.frequency_rate_hz_per_second*t*t)));
@@ -274,6 +276,8 @@ public:
     }
   }
 
+  // Carrier frequency offset at channel output, after filtering/resampling.
+  // This does not change either tap's Doppler spread.
   double residual_offset_hz=0, residual_drift_hz_per_second=0;
 private:
   void emit(Complex value,std::vector<Complex>& output) {

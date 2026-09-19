@@ -18,6 +18,7 @@ from pathlib import Path
 
 from catalog import (Case, DEFAULTS, OPEN_THRESHOLDS, PRESETS, RECOVERY_PROFILE, full_parameters, matrix)
 from metrics import METRIC_DEFINITIONS, check, percentiles, summarize, latency_above_reference
+from channel_metadata import normalize_parameters
 
 REPO=Path(__file__).resolve().parents[2]
 
@@ -46,6 +47,7 @@ def revision():
 
 
 def probe(binary, parameters):
+    parameters=normalize_parameters(parameters)
     args=[str(binary)]
     for key,value in sorted(parameters.items()):
         if key not in DEFAULTS:
@@ -209,8 +211,8 @@ def paired_survival(params,args):
     candidates=[]
     target=params["target_survival"]
     def measure(preset_name,snr):
-        delay,spread=PRESETS[preset_name]
-        trial=params|dict(mode="rf",channel_model="watterson",delay_spread_ms=delay,doppler_spread_hz=spread,
+        delay_spread_ms,doppler_spread_hz=PRESETS[preset_name]
+        trial=params|dict(mode="rf",channel_model="watterson",delay_spread_ms=delay_spread_ms,doppler_spread_hz=doppler_spread_hz,
                           bandwidth_hz=10000,fec="1/2",snr_db=snr,calibration_preset=preset_name)
         raw=probe(args.probe,trial)
         manifest=full_parameters(Case("D2_calibration","D2","characterize","full",trial),args.git_commit,args.source_digest)
@@ -324,7 +326,9 @@ def report(output,all_cases):
             persist(r,output)
     grouped=defaultdict(list)
     for r in records:grouped[r["group"]].append(r)
-    lines=["# Goblin Cannon simulated channel report", "",
+    sys.path.insert(0,str(REPO/"scripts"))
+    from channel_description import compact_markdown
+    lines=["# Goblin Cannon simulated channel report", "", compact_markdown(), "",
            "All results use simulated channels. No transmission or RF equipment measurement is represented.", "",
            "## Simulated channel execution summary", "",
            "| Status | Cases |", "| --- | ---: |"]

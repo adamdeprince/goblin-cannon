@@ -1,3 +1,4 @@
+from channel_description import context_html
 """Render the PSK simulated channel comparison from completed measurements."""
 import json
 from html import escape
@@ -42,11 +43,12 @@ def build():
       <header class="evidence-head"><p class="section-label">Earlier PSK comparison · three matched seeds</p>
         <h2 class="section-title">Simulated channel.<br>BPSK helps through moderate fading.</h2>
         <p class="section-intro">BPSK, 8-PSK, DBPSK, DQPSK and π/4-DQPSK face the same polar traces, with QPSK, 16-QAM and 64-QAM as controls. Header-only experiments separate the cost of a BPSK header from changing the payload. {m['main_cases']} AVX-512 cases and 44 quiet-host latency cases are complete.</p></header>
+      {context_html(historical=True)}
       <p class="evidence-provenance">Carrier correction stays off; adaptive RLS equalization and sample-clock recovery stay on. Both ends receive settings over fiber. Differential detection adds no frequency tracker or CMA. Ranges below span three seeds, not confidence intervals. The browser selects saved results.</p>
       <p class="section-intro">At 24 kHz under moderate fading, BPSK payload with the existing QPSK header delivers <strong>{spread(bpsk['goodput'])} bit/s</strong>, versus <strong>{spread(qpsk['goodput'])} bit/s</strong> for QPSK. All three seeds improve. BPSK header data and differential payload mappings reduce moderate-channel goodput in these tests.</p>
       <div class="rf-controls" id="psk-controls" hidden>
         <label for="psk-bandwidth">Profile<select id="psk-bandwidth"><option value="24000">24 kHz</option><option value="10000">10 kHz</option></select></label>
-        <label for="psk-preset">Polar preset<select id="psk-preset"><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="disturbed">Disturbed · 7 ms / 30 Hz</option></select></label>
+        <label for="psk-preset">Delay spread / Doppler spread<select id="psk-preset"><option value="moderate">Moderate · 3 ms / 10 Hz</option><option value="quiet">Quiet · 1 ms / 0.5 Hz</option><option value="disturbed">Disturbed · 7 ms / 30 Hz</option></select></label>
         <label for="psk-mode">Noise-curve configuration<select id="psk-mode">{''.join(f'<option value="{v}">{escape(label)}</option>' for v,label in LABELS.items())}</select></label>
       </div>
       <p class="evidence-provenance" id="psk-context">24 kHz · moderate · 300 seconds per seed · 30 dB nominal SNR.</p>

@@ -136,7 +136,7 @@ void check_payload(const RfStreamConfig& config, const Reception& reception,
                    std::span<const std::uint32_t> payload, std::uint64_t frame_start = 7000) {
   require(reception.acquired, "receiver did not acquire");
   require(reception.header_valid, "receiver did not validate header (training EVM=" +
-      std::to_string(reception.sync.training_evm) + ", CFO=" +
+      std::to_string(reception.sync.training_evm) + ", carrier frequency offset=" +
       std::to_string(reception.sync.carrier_frequency_offset_hz) + " Hz)");
   require(!reception.lock_lost, "receiver lost lock");
   require(reception.symbols.size() >= payload.size(), "receiver truncated payload");
@@ -359,13 +359,13 @@ void test_decoding(std::string_view family) {
         Case{"noise", "AWGN at 24 ksym/s", {.snr_db = mode.noise_snr_db}, 24000.0},
         Case{"phase", "positive small phase", {.phase_rad = small_phase}},
         Case{"phase", "negative small phase", {.phase_rad = -small_phase}},
-        Case{"phase", "+0.1 Hz drift", {.frequency_offset_hz = 0.1}},
-        Case{"phase", "-0.1 Hz drift", {.frequency_offset_hz = -0.1}},
-        Case{"phase", "+135 degrees, +30 Hz",
+        Case{"phase", "+0.1 Hz carrier frequency offset", {.frequency_offset_hz = 0.1}},
+        Case{"phase", "-0.1 Hz carrier frequency offset", {.frequency_offset_hz = -0.1}},
+        Case{"phase", "+135 degrees, +30 Hz carrier frequency offset",
              {.phase_rad = 3.0 * tau / 8.0, .frequency_offset_hz = 30.0, .snr_db = mode.tracking_snr_db}},
-        Case{"phase", "-135 degrees, -30 Hz",
+        Case{"phase", "-135 degrees, -30 Hz carrier frequency offset",
              {.phase_rad = -3.0 * tau / 8.0, .frequency_offset_hz = -30.0, .snr_db = mode.tracking_snr_db}},
-        Case{"phase", "180 degrees, frequency ramp 50 Hz/s",
+        Case{"phase", "180 degrees, carrier frequency drift 50 Hz/s",
              {.phase_rad = tau / 2.0, .frequency_offset_hz = 10.0, .frequency_rate_hz_per_second = 50.0,
               .snr_db = mode.tracking_snr_db}},
         Case{"fading", "smooth fade", {.fade_depth_db = mode.fade_depth_db, .fade_rate_hz = mode.fade_rate_hz}},

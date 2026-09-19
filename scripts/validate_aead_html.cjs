@@ -66,7 +66,7 @@ const spread = (values, scale = 1, places = 2) => {
     }
     assert.equal(await page.locator("#current-defect-table tbody tr").count(), data.manifest.remaining_assertions);
     assert.equal(await page.locator("#current-auth-table tbody tr").count(), 3);
-    await page.locator("#rf-simulation details summary").click();
+    await page.locator("#rf-simulation details").filter({ has: page.locator("#current-diversity-table") }).locator("summary").click();
     const diversityRows = page.locator("#current-diversity-table tbody tr");
     assert.equal(await diversityRows.count(), data.diversity.length);
     for (const [i, row] of data.diversity.entries()) {
@@ -74,6 +74,23 @@ const spread = (values, scale = 1, places = 2) => {
         spread(row.branches[branch].sources.map(source => read(source).metrics.fresh_goodput_bps)));
       assert.deepEqual(await diversityRows.nth(i).locator("td").allInnerTexts(), expected);
     }
+    const sweep = JSON.parse(fs.readFileSync(path.join(root, "results/carrier-offset/DATA.json"), "utf8"));
+    const sweepRows = page.locator("#carrier-offset-sweep tbody tr");
+    await page.locator("#carrier-offset-sweep summary").click();
+    assert.equal(await sweepRows.count(), sweep.rows.length);
+    const meanAndRange = (values, places) => `${(values.reduce((a, b) => a + b) / values.length).toFixed(places)}\n${Math.min(...values).toFixed(places)}–${Math.max(...values).toFixed(places)}`;
+    for (const [i, row] of sweep.rows.entries()) {
+      const records = row.sources.map(read);
+      for (const record of records) {
+        assert.equal(record.parameters.residual_offset_hz, row.carrier_frequency_offset_hz);
+        assert.equal(record.parameters.carrier_correction, 0);
+        assert.equal(record.parameters.source_tree_sha256, sweep.source_tree_sha256);
+      }
+      assert.equal(await sweepRows.nth(i).locator("td").nth(0).innerText(), meanAndRange(records.map(r => 100 * r.metrics.message_delivery_fraction_of_framed), 4));
+      assert.equal(await sweepRows.nth(i).locator("td").nth(1).innerText(), meanAndRange(records.map(r => r.metrics.fresh_goodput_bps), 2));
+      assert.deepEqual(await sweepRows.nth(i).locator("a").evaluateAll(nodes => nodes.map(n => n.href)), row.sources);
+    }
+    assert.ok((await page.locator(".channel-boundary").innerText()).includes(`already removed to within ${sweep.tolerance_hz} Hz. It performs no Doppler-shift correction.`));
     assert.equal(await page.locator("#current-delivery-table tbody tr").count(), 6);
     assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('a[href^="#"]')].map(a => a.hash.slice(1)).filter(id => id && !document.getElementById(id))), []);
     assert.equal(await page.evaluate(() => [globalThis.GoblinPskResults, globalThis.GoblinEncodingResults, globalThis.GoblinRefinementResults].every(x => x === undefined)), true);
@@ -82,19 +99,22 @@ const spread = (values, scale = 1, places = 2) => {
     await page.selectOption("#rf-preset", "disturbed"); await page.selectOption("#rf-layer", "messages");
     if (output) await page.locator("#rf-explorer").screenshot({ path: output.replace(/\.json$/, "-desktop.png") });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator("#test-results details").evaluateAll(nodes => nodes.forEach(n => n.open = true));
+    await page.locator("#test-results details, #rf-simulation details").evaluateAll(nodes => nodes.forEach(n => n.open = true));
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "Mobile overflow");
     if (output) await page.locator("#rf-explorer").screenshot({ path: output.replace(/\.json$/, "-mobile.png") });
     const nojs = await browser.newPage({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
     if (target.startsWith("file:")) await nojs.route(/^https?:/, request => request.abort());
     await nojs.goto(target);
     assert.equal(await nojs.locator("#current-delivery-table tbody tr").count(), 6);
+    assert.equal(await nojs.locator("#carrier-offset-sweep tbody tr").count(), sweep.rows.length);
     assert.equal(await nojs.locator("#rf-controls").isVisible(), false);
     assert.deepEqual(errors, []);
     const report = { report_header: "simulated channel disturbed recovery HTML verification", url: target,
       status: "pass", source_tree_sha256: data.manifest.source_tree_sha256, explorer_views: views, source_links: sourceLinks,
       latency_rows: data.latency.length, diversity_rows: data.diversity.length,
-      defects: data.manifest.remaining_assertions, no_javascript_rows: 6, mobile_width: 390, page_errors: errors };
+      defects: data.manifest.remaining_assertions, no_javascript_rows: 6,
+      carrier_offset_rows: sweep.rows.length, carrier_offset_tolerance_hz: sweep.tolerance_hz,
+      mobile_width: 390, page_errors: errors };
     if (output) fs.writeFileSync(output, JSON.stringify(report, null, 2) + "\n");
     console.log(JSON.stringify(report));
   } finally { await browser.close(); }

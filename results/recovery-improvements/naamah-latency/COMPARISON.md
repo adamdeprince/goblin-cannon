@@ -1,5 +1,15 @@
 # Goblin Cannon simulated channel quiet-host latency comparison
 
+<!-- BEGIN CHANNEL CONTRACT -->
+
+For the recorded acceptance profile:
+
+The modem assumes the radio hands it audio with the carrier frequency offset already removed to within 10 Hz. It performs no Doppler-shift correction. Delay spread, Doppler spread, fading, phase rotation, multipath and noise are the modem's problem, and are what the recorded runs measure.
+
+This boundary describes the recorded acceptance profile. The carrier-offset sweep uses 24 kHz QPSK+BCH, the combined recovery settings, the high-latitude quiet preset, 30 dB nominal SNR and three 300-second traces per offset. The tolerance applies to that measured configuration and the tested offset grid. Other modes and historical receiver versions have no tolerance established by this sweep. The library retains an optional carrier-correction loop, enabled by default; the recorded acceptance profile explicitly disables it. Equalizer phase tracking does not estimate a mean carrier frequency offset or perform AFC.
+
+<!-- END CHANNEL CONTRACT -->
+
 **12/12 configurations pass** the 2.1 ms added-processing/buffering limit on `naamah` (AVX2). Added p99.9 spans **0.962–1.110 ms**. All 17/17 CTest entries passed before timing began (9.93 s).
 
 ## Simulated channel method and provenance

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Freeze sources and report the BCH/diversity/cadence simulated channel campaign."""
 from __future__ import annotations
+from channel_description import compact_markdown
 
 import argparse
 from collections import Counter
@@ -122,7 +123,7 @@ def load():
                 survival=m["frame_survival_fraction"], measured_power=r["observations"]["tx_mean_sample_power"],
                 nominal_power=p["nominal_sample_power"], papr_db=r["observations"]["tx_papr_db"]))
         if p["campaign"] == "refinement_delay":
-            delays.append(item | dict(delay_ms=p["delay_spread_ms"], doppler_hz=p["doppler_spread_hz"],
+            delays.append(item | dict(delay_ms=p["delay_spread_ms"], doppler_spread_hz=p["doppler_spread_hz"],
                 goodput=m["goodput_bps"], fresh_goodput=m["fresh_goodput_bps"], silence=m["delivery_silence_ms"]["max"],
                 diversity=p["diversity"]))
     for path, r in main + latency:
@@ -234,7 +235,7 @@ def load():
 
 def report(data):
     m = data["manifest"]; rows = data["rows"]
-    lines = ["# Goblin Cannon simulated channel — BCH, frequency diversity and training cadence", "",
+    lines = ["# Goblin Cannon simulated channel — BCH, frequency diversity and training cadence", "", compact_markdown(), "",
         "QPSK and 8-PSK reuse the existing shortened BCH(58,40,7) payload code. Diversity now exposes branch width, center separation and full-power lower/upper controls through fiber/gRPC. Pilot spacing and periodic full retraining use the existing controls. Carrier correction is off; RLS and sample-clock recovery remain on.", "",
         f"{m['cases']} AVX-512 cases; {m['latency_cases']} serial quiet-host latency cases; 20/20 CTest tests on both hosts; 14 harness checks; three byte-identical repeats; {m['unchanged_baseline_comparisons']} unchanged prior-configuration comparisons. A separate audit of saved waveform power adds 60 quick assertions: 54 pass and six xfail.", "",
         "All primary comparisons use 10/24 kHz, the unchanged legacy 30 dB nominal noise reference, and three seeds. Quiet/moderate/disturbed traces last 300/300/100 seconds per seed. Ranges are seed observations, not confidence intervals. BCH changes the payload code rate from 1/2 to 40/58; goodput gain is not an equal-rate coding-gain claim.", "",
